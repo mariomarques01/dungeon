@@ -579,3 +579,9 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 @keyframes rigEnemySwing{0%,20%{transform:rotate(75deg)}60%{transform:rotate(-60deg)}80%{transform:rotate(-15deg)}100%{transform:rotate(-30deg)}}
 @keyframes rigRune{from{transform:scale(.75) rotate(-20deg);opacity:.45}to{transform:scale(1.2) rotate(20deg);opacity:1}}
 @media(prefers-reduced-motion:reduce){.rig-arm,.rig-rune{animation:none!important}}
+
+/* v2.8 — dynamic impact slash and spell crescents */
+.weapon-arc{position:fixed;z-index:112;width:clamp(90px,24vw,170px);height:clamp(90px,24vw,170px);border-radius:50%;pointer-events:none;border:solid transparent;border-width:8px 10px 0 0;border-top-color:#fff7c6;border-right-color:#f7bb69;box-shadow:9px -8px 15px -12px #fff6cf,12px -10px 28px -10px #ffc862;filter:drop-shadow(0 0 7px #ffd98c);will-change:transform,opacity}
+.weapon-arc.arc-magic{border-top-color:#8df3ff;border-right-color:#537fff;box-shadow:9px -8px 18px -12px #7fffff,12px -10px 30px -10px #467dff;filter:drop-shadow(0 0 10px #6bcaff)}
+.weapon-arc.arc-enemy{border-top-color:#ff9a91;border-right-color:#a33157;filter:drop-shadow(0 0 9px #ff5477)}
+@media(prefers-reduced-motion:reduce){.weapon-arc{display:none!important}}
