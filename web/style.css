@@ -614,3 +614,8 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 /* v3.1 — portraits move independently of the card frame */
 .character-frame img{transform-origin:50% 72%;backface-visibility:hidden;will-change:transform,filter}
 @media(prefers-reduced-motion:reduce){.character-frame img{will-change:auto}}
+
+/* v3.2 — battle playback speed control */
+.resources{position:relative}
+.battle-speed{position:absolute;right:6px;top:-30px;z-index:8;min-height:26px;padding:3px 11px;border:1px solid #eac687;border-radius:20px;background:#101a32ee;color:#ffe6a6;font:800 12px system-ui,sans-serif;box-shadow:0 2px 8px #0008;touch-action:manipulation}
+.battle-speed:active{transform:scale(.96)}
