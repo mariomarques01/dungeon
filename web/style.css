@@ -284,3 +284,25 @@ main:before{background:linear-gradient(180deg,#06091a55,transparent 20%,#07102c2
 #end:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,#ffffff55 49%,transparent 60%);transform:translateX(-140%);animation:goldSweep 4s ease-in-out infinite;pointer-events:none}
 @keyframes goldSweep{0%,65%{transform:translateX(-140%)}95%,100%{transform:translateX(140%)}}
 @media(max-height:740px){.card .art{min-height:26px}.card strong{font-size:clamp(7px,1.85vw,10px)}}
+
+/* 1.2 — premium illustrated skill cards, gold filigree, elemental rarity and detail preview */
+.card{isolation:isolate;transition:transform .18s ease,filter .18s ease;--element:#f7c979}
+.card:after{content:"";position:absolute;inset:-2px;z-index:-1;border-radius:10px;border:1px solid var(--element);box-shadow:0 0 9px var(--element),inset 0 0 7px var(--element);opacity:.6;pointer-events:none}
+.card-fire{--element:#ff632b}.card-ice{--element:#65dfff}.card-heal,.card-water{--element:#4ef49e}.card-shield{--element:#49bbff}.card-storm,.card-lightning{--element:#c878ff}.card-earth{--element:#d6a76e}
+.card .art:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(125deg,#fff9cc77,transparent 30%,transparent 70%,#ffc76a44);mix-blend-mode:screen}
+.card .art img{object-fit:cover!important;object-position:center!important;transform:scale(1.1);transition:transform .25s ease}
+.card:active:not(:disabled) .art img{transform:scale(1.2)}
+.card .cost{font-family:Georgia,serif;font-weight:900}
+.card-type{margin:1px auto 0;border-color:var(--element)!important;color:#fff1dd!important;background:linear-gradient(90deg,#0b1025,#30213d,#0b1025)!important}
+.card strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.card small{line-height:1.15}
+#cardDetails{position:fixed;z-index:120;inset:0;display:none;place-items:center;background:#050713cc;backdrop-filter:blur(7px);padding:24px}
+#cardDetails.open{display:grid}
+.detail-card{width:min(82vw,330px);max-height:85dvh;overflow:auto;border:4px ridge #ffce77;border-radius:15px;background:linear-gradient(155deg,#53334b,#0b132e 60%,#301d30);box-shadow:0 0 35px #ffbd5a77,inset 0 0 22px #000;padding:12px;text-align:center;display:flex;flex-direction:column;gap:8px}
+.detail-art{width:100%;max-height:42dvh;object-fit:contain;border:2px solid #e9ba6b;border-radius:9px;box-shadow:0 0 15px #000}
+.detail-title{font:bold 24px Georgia,serif;color:#ffe2a1;text-shadow:0 2px #422018}
+.detail-cost{font:bold 14px system-ui,sans-serif;color:#88e8ff}
+.detail-effect{font:bold 15px system-ui,sans-serif;color:#fff1d4}
+.detail-flavor{font:13px/1.45 system-ui,sans-serif;color:#e4d7e4}
+.detail-close{font:bold 15px Georgia,serif;background:linear-gradient(#ffe5a4,#d99c3b);border:2px ridge #ffe0a0;color:#422414;border-radius:8px;padding:10px}
+@media(max-height:700px){.card .art img{transform:scale(1.04)}}
