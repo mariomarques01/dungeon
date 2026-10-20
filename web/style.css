@@ -657,3 +657,6 @@ body.battle-active #collectionBtn{display:none!important}
 .home-setting{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 2px;color:#f0dec2;font:12px system-ui,sans-serif}
 .home-panel .home-setting button{width:auto;min-height:32px;margin:0;padding:5px 12px;font:700 12px system-ui,sans-serif;color:#fce4aa;border:1px solid #ac8556;background:#202b46}
 @media(max-height:740px){.home-panel{padding:14px 15px}.home-art{height:100px;margin:8px 0}.home-sigil{font-size:55px}.home-panel h2{margin:6px 0}}
+
+/* v3.5 sound control in combat */
+.battle-sound{position:absolute;left:6px;top:-30px;z-index:9;min-height:26px;padding:3px 10px;border:1px solid #eac687;border-radius:20px;background:#101a32ee;color:#ffe6a6;font:800 12px system-ui,sans-serif;touch-action:manipulation}
