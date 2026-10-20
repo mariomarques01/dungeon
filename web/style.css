@@ -601,3 +601,12 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .arena.arena-shake{animation:arenaImpactShake .28s ease-out}
 @keyframes arenaImpactShake{0%,100%{translate:0 0}17%{translate:-5px 2px}34%{translate:5px -3px}52%{translate:-3px 2px}73%{translate:2px -1px}}
 @media(prefers-reduced-motion:reduce){.arena.arena-shake{animation:none!important}}
+
+/* v3.0 — remove artificial floating CSS weapons; one clean impact per hit */
+.duel-summon .combat-rig,.rig-arm,.rig-blade,.rig-staff,.rig-rune{display:none!important}
+.duel-summon{border:2px solid #f2d09a!important;box-shadow:0 0 22px #f8c97d66!important;overflow:hidden!important}
+.duel-summon:after{inset:-4px!important;border-width:1px!important;box-shadow:0 0 12px #f3d29455!important}
+.arena.arena-shake{animation-duration:.21s!important}
+.cinematic-impact{width:clamp(90px,22vw,125px)!important;height:clamp(90px,22vw,125px)!important}
+.cinematic-impact .impact-core{box-shadow:0 0 14px 7px #ffbe66,0 0 32px 12px #fa6a4255!important}
+.cinematic-magic .impact-core{box-shadow:0 0 14px 7px #54e8ff,0 0 32px 12px #387bff55!important}
