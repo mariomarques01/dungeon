@@ -306,3 +306,39 @@ main:before{background:linear-gradient(180deg,#06091a55,transparent 20%,#07102c2
 .detail-flavor{font:13px/1.45 system-ui,sans-serif;color:#e4d7e4}
 .detail-close{font:bold 15px Georgia,serif;background:linear-gradient(#ffe5a4,#d99c3b);border:2px ridge #ffe0a0;color:#422414;border-radius:8px;padding:10px}
 @media(max-height:700px){.card .art img{transform:scale(1.04)}}
+
+/* 1.3 — living hero cards */
+.character-card{isolation:isolate;cursor:pointer;transform-style:preserve-3d;transition:filter .2s ease,transform .2s ease;overflow:visible!important}
+.character-card:focus-visible{outline:3px solid #f5e1a3;outline-offset:4px}
+.character-card:active{transform:scale(.96)}
+.character-card .character-frame{overflow:hidden!important;border:2px solid #f9cb7a!important;border-radius:3px;background:#140d22}
+.character-card .character-frame:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(130deg,#fff6c633,transparent 35%,transparent 67%,#e9ad5133);box-shadow:inset 0 0 18px #000b}
+.character-card .character-frame img{width:100%;height:100%;object-fit:cover;object-position:center 23%;animation:portraitBreath 5s ease-in-out infinite alternate;filter:contrast(1.1) saturate(1.25)}
+.enemyart .character-frame img{animation-duration:4.4s;filter:contrast(1.15) saturate(1.35) drop-shadow(0 0 5px #f94134)}
+.heroart .character-frame img{animation-duration:5.3s;filter:contrast(1.08) saturate(1.18) drop-shadow(0 0 5px #4bc9ff)}
+.character-aura{position:absolute;inset:-7px;z-index:-1;pointer-events:none;border:2px solid #ff8b42;border-radius:12px;box-shadow:0 0 18px #ff672a88,0 0 28px #a5213c55;animation:characterAura 2.8s ease-in-out infinite alternate}
+.heroart .character-aura{border-color:#54d6ff;box-shadow:0 0 18px #38b8ff88,0 0 28px #336aff66;animation-duration:3.2s}
+.character-card:before{content:"✦";position:absolute;top:-10px;left:45%;z-index:6;color:#fff4ba;text-shadow:0 0 9px #ffbf55;font-size:14px;animation:gemShimmer 2.5s infinite}
+.character-card .portrait-level{background:linear-gradient(#58332b,#160f24)!important;border:2px solid #f3ca75!important;color:#ffe7b1;box-shadow:0 0 7px #e7a64a77}
+.character-card .portrait-title{font-family:Georgia,serif!important;font-weight:900;letter-spacing:1px;text-shadow:0 2px 4px #000,0 0 8px #000}
+.character-card .character-power{font-family:Georgia,serif;color:#ffdca5!important;text-shadow:0 0 5px #ffaf46}
+.heroart .character-power{color:#9deaff!important;text-shadow:0 0 7px #39b8ff}
+.enemyart.hit .character-frame img{animation:portraitDamage .35s ease-out!important}
+.heroart.hit .character-frame img{animation:portraitDamage .35s ease-out!important}
+.heroart.healed .character-frame img{animation:portraitHeal .7s ease-out!important}
+@keyframes portraitBreath{0%{transform:scale(1.045) translateY(1px)}100%{transform:scale(1.11) translateY(-4px)}}
+@keyframes characterAura{0%{opacity:.45;filter:brightness(.8)}100%{opacity:1;filter:brightness(1.4)}}
+@keyframes gemShimmer{0%,100%{opacity:.35;transform:scale(.7)}50%{opacity:1;transform:scale(1.2)}}
+@keyframes portraitDamage{0%,100%{transform:translateX(0) scale(1.08);filter:brightness(1)}25%{transform:translateX(-7px) scale(1.13);filter:brightness(3) sepia(1) saturate(5)}60%{transform:translateX(6px) scale(1.08);filter:brightness(.8)}}
+@keyframes portraitHeal{0%,100%{filter:brightness(1.1);transform:scale(1.07)}45%{filter:brightness(2) drop-shadow(0 0 20px #52ffc7);transform:scale(1.13)}}
+.hero-details{position:fixed;inset:0;z-index:125;display:none;place-items:center;padding:18px;background:#050817d9;backdrop-filter:blur(8px)}
+.hero-details.open{display:grid}
+.hero-detail-panel{position:relative;width:min(88vw,360px);max-height:90dvh;overflow:auto;padding:12px 14px 18px;text-align:center;display:flex;flex-direction:column;gap:9px;border:4px ridge #f4cb76;border-radius:14px;background:radial-gradient(circle at 50% 20%,#5d3c66,#10172d 60%,#110e1f);box-shadow:0 0 32px #e8ac5477,inset 0 0 18px #000b}
+.hero-detail-close{position:absolute;top:8px;right:8px;z-index:2;background:#101326dd;border:1px solid #e8c17b;border-radius:50%;color:#fff0cb;font-size:18px;width:34px;height:34px}
+.hero-detail-art{height:min(48dvh,350px);overflow:hidden;border:3px ridge #f2c675;border-radius:9px;background:#101529}
+.hero-detail-art img{width:100%;height:100%;object-fit:cover;object-position:center 25%}
+.hero-detail-name{font:bold 27px Georgia,serif;color:#ffdfa0;text-shadow:0 2px 3px #000}
+.hero-detail-class{font:900 11px system-ui,sans-serif;letter-spacing:2px;color:#a9dfff}
+.hero-detail-desc{font:13px/1.45 system-ui,sans-serif;color:#f3e7dd}
+.hero-detail-ability{font:700 12px/1.4 system-ui,sans-serif;color:#e4c4fa;background:#090d20a9;border:1px solid #ae87b7;padding:9px;border-radius:6px}
+@media(prefers-reduced-motion:reduce){.character-card .character-frame img,.character-aura,.character-card:before{animation:none!important}}
