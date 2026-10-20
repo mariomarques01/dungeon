@@ -468,3 +468,33 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 @media(min-width:700px){.battle-sprite{height:min(56vh,480px);bottom:8%}.battle-elyra{left:15%}.battle-malgruk{right:14%}.arena .fighter-row .stats{max-width:35%!important}}
 @media(max-height:720px){.battle-sprite{height:clamp(100px,28dvh,200px);bottom:14%}}
 @media(prefers-reduced-motion:reduce){.battle-sprite,.battle-sprite img{animation:none!important}}
+
+/* 1.9 — visual composition based on cinematic illustrated battle reference */
+.arena{background:radial-gradient(ellipse at 50% 80%,#fb632522,transparent 60%),linear-gradient(180deg,#10082066,#260d2255 45%,#05132a77),url("assets/citadel.svg") center center/cover no-repeat!important}
+.arena:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,#030713c9 0%,transparent 28%),radial-gradient(ellipse at 40% 65%,#2382ff22,transparent 35%),radial-gradient(ellipse at 77% 48%,#ff2e3826,transparent 34%);z-index:0}
+.battle-stage{z-index:2!important}
+.arena-ground{left:-10%!important;right:-10%!important;bottom:9%!important;height:22%!important;border-bottom:3px solid #db9b6744!important;background:radial-gradient(ellipse at center,#e35b3655,#16214866 55%,transparent 75%)!important;box-shadow:0 14px 30px #02050a88}
+.battle-sprite{height:clamp(135px,36dvh,340px)!important;bottom:11%!important}
+.battle-elyra{left:2%!important;filter:drop-shadow(0 12px 9px #000d) drop-shadow(0 0 12px #009eff)!important}
+.battle-malgruk{right:1%!important;filter:drop-shadow(0 12px 9px #000d) drop-shadow(0 0 14px #f32948)!important}
+.arena .fighter{width:49%!important;top:5px!important;bottom:auto!important;padding:3px!important}
+.arena .enemy{left:auto!important;right:0!important}
+.arena .hero{left:0!important;right:auto!important}
+.arena .fighter-row,.arena .hero .fighter-row,.arena .enemy .fighter-row{flex-direction:row!important;align-items:flex-start!important;gap:3px!important}
+.arena .enemy .fighter-row{flex-direction:row-reverse!important}
+.arena .portrait{width:clamp(40px,10vw,70px)!important;height:clamp(54px,14vw,95px)!important;flex-shrink:0!important}
+.arena .fighter-row .stats{flex:1 1 auto!important;min-width:0!important;max-width:none!important;margin-top:2px!important}
+.arena .hp{height:10px!important;border:1px solid #ffd083!important}
+.arena .hpinfo{font-size:clamp(8px,2.2vw,12px)!important;white-space:nowrap!important}
+.arena .middle{top:14%!important;left:50%!important;z-index:12!important;padding:3px 9px!important;border:1px solid #f3b66c!important;background:#0a0a1ed9!important}
+.arena .middle b{font-size:9px!important}
+.arena .fighter .portrait-title{font-size:8px!important}
+.arena .portrait-level{font-size:8px!important}
+.arena .enemy .portrait{box-shadow:0 0 12px #ff4c31!important}
+.arena .hero .portrait{box-shadow:0 0 12px #2ab7ff!important}
+.arena .fighter .hpinfo{color:#fff0d8!important}
+.arena .fighter .status{display:none!important}
+.arena .fighter .ability-panel{display:none!important}
+.arena .fighter .intent{display:none!important}
+@media(max-width:430px){.battle-sprite{height:clamp(120px,34dvh,275px)!important;bottom:11%!important}.battle-elyra{left:-4%!important}.battle-malgruk{right:-5%!important}.arena .middle{top:22%!important}}
+@media(max-height:700px){.battle-sprite{height:clamp(110px,28dvh,210px)!important}.arena .middle{top:19%!important}}
