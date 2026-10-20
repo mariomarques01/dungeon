@@ -22,7 +22,7 @@ function currentStage(){return STAGES[Math.min(s?.stageIndex??profile.stage??0,S
 function updateStageUI(){const e=currentStage();$("enemyName").textContent=e.name;$("enemyTitle").textContent=e.title;$("enemyLabel").textContent=e.name;$("enemyPortrait").src=e.portrait;$("enemyPortrait").alt=e.name;$("enemyLevel").textContent="LV "+(12+(s?.stageIndex??profile.stage??0)*3);$("enemyAbility").textContent=e.ability;$("missionTitle").textContent="DERROTE "+e.name;$("missionText").textContent=e.description+" Vença antes da 10ª rodada!";$("missionZone").textContent=e.zone;$("stageProgress").textContent="FASE "+((profile.stage||0)+1)+" / "+STAGES.length;$("enemyArt").dataset.boss=e.element;HERO_LORE.enemy={name:e.name,role:e.title+" • NÍVEL "+(12+(profile.stage||0)*3),desc:e.description,ability:e.ability+" — "+e.attack+" dano base por ataque.",image:e.portrait}}
 function bossSpecial(){return s.round%3===0&&s.stageIndex>0}
 function bossDamage(){return currentStage().attack+(s.round%3===0?4:0)+(bossSpecial()&&s.stageIndex===1?5:0)}
-function bossIntent(){if(s.freeze)return"❄️ Congelado";if(bossSpecial()){return ["","🔥 CHAMAS: "+bossDamage()+" dano","❄️ GELO: "+bossDamage()+" dano","🪨 TERRA: +"+currentStage().guard+" escudo","🌩️ TEMPESTADE: "+bossDamage()+" dano"][s.stageIndex]}if(s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0)return"🛡️ Defesa: +"+currentStage().guard+" escudo";return"⚔️ Ataque: "+bossDamage()+" dano"}
+function bossIntent(){if(s.freeze)return"❄️ Congelado • inimigo perde a ação";if(bossSpecial()){return ["","🔥 CHAMAS: "+bossDamage()+" dano","❄️ GELO: "+bossDamage()+" dano","🪨 TERRA: +"+currentStage().guard+" escudo","🌩️ TEMPESTADE: "+bossDamage()+" dano"][s.stageIndex]}if(s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0)return"🛡️ Defesa: +"+currentStage().guard+" escudo";return"⚔️ Ataque: "+bossDamage()+" dano"}
 function bossEffect(){return ["shadow","fire","ice","earth","storm"][s.stageIndex]}
 
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
@@ -155,6 +155,14 @@ async function animateSpellToTarget(from,to,card){
  await anim.finished.catch(()=>{});
  anim.cancel();orb.remove();
 }
+function comboNotice(message,elemental=false){
+ const arena=$("arena");if(!arena)return;
+ const old=arena.querySelector(".combo-announcement");if(old)old.remove();
+ const n=document.createElement("div");n.className="combo-announcement"+(elemental?" elemental":"");
+ n.textContent=message;n.setAttribute("role","status");arena.append(n);
+ const a=n.animate([{opacity:0,transform:"translate(-50%,-50%) scale(.65)"},{offset:.3,opacity:1,transform:"translate(-50%,-50%) scale(1.08)"},{offset:.65,opacity:1,transform:"translate(-50%,-50%) scale(1)"},{opacity:0,transform:"translate(-50%,-80%) scale(.96)"}],{duration:reduced?180:850,easing:"ease-out"});
+ a.finished.catch(()=>{}).then(()=>n.remove());
+}
 function impactSequence(to,card,outcome){
  if(outcome.blocked){shieldBubble(to);actor(to,"parry",600);poseFighter(fighterFor(to),"defend",750);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
  if(outcome.amount){actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
@@ -186,13 +194,16 @@ async function play(i){
  const cardElement=$("cards").children[i];
  await fuseCard(cardElement,c);
  s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);s.combo++;const element=elementFor(c);const elementalCombo=s.lastElement===element&&s.combo>1;s.lastElement=element;elementScene(element);elementalSound(element);
+ if(elementalCombo){comboNotice("✦ RESSONÂNCIA "+element.toUpperCase()+" • +4 DANO",true);sound(810)}
+ else if(s.combo>=3){comboNotice("⚔️ SEQUÊNCIA ×"+s.combo+" • BÔNUS DE ATAQUE",false)}
+ 
  render();
  let out=[];
  if(c.damage){
   const bonus=(s.combo>=3?Math.min(6,(s.combo-2)*2):0)+(elementalCombo?4:0);
   const resolveHit=()=>{const before=s.enemyShield;const amount=damage("enemy",c.damage+bonus);const blocked=before-s.enemyShield;render();return{amount,blocked}};
   const result=c.art==="sword"?await dashStrike("heroArt","enemyArt",c,resolveHit):await magicStrike("heroArt","enemyArt",c,resolveHit);
-  out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));
+  out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));if(bonus&&result.amount>0)comboNotice("+"+bonus+" BÔNUS DE COMBO",elementalCombo);
  }
  if(c.block){
   stage("ESCUDO INCORPORADO","defense");poseFighter("heroArt","defend",900);actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
