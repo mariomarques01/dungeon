@@ -541,3 +541,9 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .arena .portrait.duel-recoil{animation:duelRecoil .42s ease-out!important}
 @keyframes duelRecoil{0%{filter:brightness(2.8);scale:1.07}40%{filter:brightness(1.7);translate:7px 0}100%{filter:brightness(1);translate:0 0;scale:1}}
 @media(prefers-reduced-motion:reduce){.duel-trail{display:none!important}}
+
+/* v2.4 — eliminate hidden sprite dependency and improve responsiveness */
+.arena .portrait.pose-cast{filter:drop-shadow(0 0 12px #60e8ff)!important}
+.arena .portrait.pose-defend{filter:drop-shadow(0 0 13px #9aeaff)!important}
+.flying-card,.duel-summon,.spell-orb{backface-visibility:hidden;transform:translateZ(0);contain:paint;will-change:transform,opacity}
+.duel-trail{filter:blur(5px)!important;opacity:.75}
