@@ -56,35 +56,63 @@ function aura(id,color,symbol){
  const host=$(id),e=document.createElement("span");e.className="absorb-aura";e.textContent=symbol;e.style.setProperty("--aura",color);host.append(e);
  setTimeout(()=>e.remove(),1150);
 }
-async function dashStrike(from,to,card,resolveHit){
- const actorEl=$(from),targetEl=$(to),start=centerOf(actorEl),end=centerOf(targetEl);
- const dx=(end.x-start.x)*.72,dy=(end.y-start.y)*.72;
- stage(card.name.toUpperCase(),"attack");actorEl.classList.add("active-fighter");
- const forward=actorEl.animate([{transform:"translate3d(0,0,0) scale(1)"},{offset:.32,transform:"translate3d(0,12px,0) scale(.93)"},{transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`}],{duration:reduced?60:480,easing:"cubic-bezier(.25,.7,.15,1)",fill:"forwards"});
- await forward.finished.catch(()=>{});
- const outcome=resolveHit();burst(to,"gold",28);screenPulse("strike");
- if(outcome.blocked){shieldBubble(to);hitFlash(to,"block");float(to,"🛡 −"+outcome.blocked,true)}
- if(outcome.amount){actor(to,"recoil",600);hitFlash(to);float(to,"−"+outcome.amount)}
- sound(240);if(navigator.vibrate&&!reduced)navigator.vibrate([25,30,50]);
- await wait(180);
- const back=actorEl.animate([{transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`},{transform:"translate3d(0,0,0) scale(1)"}],{duration:reduced?50:400,easing:"ease-out",fill:"forwards"});
+
+async function moveActorToTarget(from,to,kind="melee"){
+ const source=$(from),target=$(to),sr=source.getBoundingClientRect(),tr=target.getBoundingClientRect();
+ const ghost=source.cloneNode(true);ghost.removeAttribute("id");ghost.classList.remove("shield-active","active-fighter");ghost.classList.add("actor-ghost");
+ ghost.querySelectorAll("[id]").forEach(e=>e.removeAttribute("id"));
+ ghost.style.left=sr.left+"px";ghost.style.top=sr.top+"px";ghost.style.width=sr.width+"px";ghost.style.height=sr.height+"px";
+ document.body.append(ghost);source.classList.add("actor-away");
+ const dx=tr.left+tr.width/2-(sr.left+sr.width/2),dy=tr.top+tr.height/2-(sr.top+sr.height/2);
+ const approach=ghost.animate([
+ {transform:"translate3d(0,0,0) scale(1) rotate(0deg)",filter:"brightness(1)"},
+ {offset:.22,transform:"translate3d("+dx*.1+"px,"+(dy*.1+12)+"px,0) scale(.92) rotate(-8deg)"},
+ {offset:.75,transform:"translate3d("+dx*.78+"px,"+dy*.78+"px,0) scale(1.24) rotate(8deg)",filter:"brightness(1.4)"},
+ {transform:"translate3d("+dx*.88+"px,"+dy*.88+"px,0) scale(1.18) rotate(-6deg)",filter:"brightness(2)"}],
+ {duration:reduced?100:720,easing:"cubic-bezier(.2,.65,.2,1)",fill:"forwards"});
+ await approach.finished.catch(()=>{});
+ return async()=>{
+ const back=ghost.animate([
+ {transform:"translate3d("+dx*.88+"px,"+dy*.88+"px,0) scale(1.18) rotate(-6deg)"},
+ {transform:"translate3d(0,0,0) scale(1) rotate(0deg)"}],
+ {duration:reduced?70:450,easing:"cubic-bezier(.25,.65,.2,1)",fill:"forwards"});
  await back.finished.catch(()=>{});
- forward.cancel();back.cancel();actorEl.classList.remove("active-fighter");
- return outcome;
+ approach.cancel();back.cancel();ghost.remove();source.classList.remove("actor-away");
+ };
+}
+async function animateSpellToTarget(from,to,card){
+ const a=centerOf($(from)),b=centerOf($(to)),orb=document.createElement("div");
+ orb.className="spell-orb "+card.art;orb.style.left=(a.x-30)+"px";orb.style.top=(a.y-30)+"px";orb.style.setProperty("--spell",card.glow);
+ orb.innerHTML='<span>'+card.icon+'</span>';document.body.append(orb);
+ const dx=b.x-a.x,dy=b.y-a.y;
+ const anim=orb.animate([
+ {transform:"translate3d(0,0,0) scale(.35)",opacity:0},
+ {offset:.18,transform:"translate3d("+dx*.13+"px,"+(dy*.13-35)+"px,0) scale(1.1)",opacity:1},
+ {offset:.68,transform:"translate3d("+dx*.7+"px,"+(dy*.7-25)+"px,0) scale(1.5)",opacity:1},
+ {transform:"translate3d("+dx+"px,"+dy+"px,0) scale(1.9)",opacity:1}],
+ {duration:reduced?90:760,easing:"ease-in",fill:"forwards"});
+ await anim.finished.catch(()=>{});
+ anim.cancel();orb.remove();
+}
+function impactSequence(to,card,outcome){
+ if(outcome.blocked){shieldBubble(to);actor(to,"parry",600);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
+ if(outcome.amount){actor(to,"recoil",650);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
+ if(navigator.vibrate&&!reduced)navigator.vibrate([40,30,65]);
+}
+async function dashStrike(from,to,card,resolveHit){
+ stage("INVESTIDA • "+card.name.toUpperCase(),"attack");aura(from,card.glow,card.icon);sound(330);
+ await wait(180);
+ const returnHome=await moveActorToTarget(from,to);
+ const outcome=resolveHit();impactSequence(to,card,outcome);sound(180);
+ await wait(400);await returnHome();return outcome;
 }
 async function magicStrike(from,to,card,resolveHit){
- stage(card.name.toUpperCase(),"attack");
- actor(from,card.art==="fire"?"cast-fire":"cast-bolt",850);
- aura(from,card.glow,card.icon);
- await wait(420);
- projectile(from,to,card.icon,card.glow);
- await wait(480);
- const outcome=resolveHit();
- if(outcome.blocked){shieldBubble(to);hitFlash(to,"block");float(to,"🛡 −"+outcome.blocked,true);burst(to,"ice",15)}
- if(outcome.amount){actor(to,"recoil",650);hitFlash(to);burst(to,card.art==="fire"?"fire":"electric",32);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
- sound(card.art==="fire"?150:570);
- await wait(320);
- return outcome;
+ stage("CONJURANDO • "+card.name.toUpperCase(),"attack");
+ actor(from,card.art==="fire"?"cast-fire":"cast-bolt",850);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",16);
+ await wait(400);
+ stage("MAGIA LANÇADA","attack");await animateSpellToTarget(from,to,card);
+ const outcome=resolveHit();impactSequence(to,card,outcome);sound(card.art==="fire"?145:580);
+ await wait(420);return outcome;
 }
 function updateShieldAuras(){
  $("heroArt").classList.toggle("shield-active",s.heroShield>0);
