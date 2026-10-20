@@ -97,7 +97,16 @@ function aura(id,color,symbol){
 
 function fighterFor(id){return id==="heroArt"?"heroArt":"enemyArt"}
 function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
-function resetBattleSprites(){document.querySelectorAll(".duel-summon,.duel-trail,.spell-orb,.flying-card,.combat-impact-ring").forEach(el=>el.remove());document.querySelectorAll(".duel-source-hidden").forEach(el=>el.classList.remove("duel-source-hidden"));for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
+function resetBattleSprites(){document.querySelectorAll(".duel-summon,.duel-trail,.spell-orb,.flying-card,.combat-impact-ring,.weapon-arc").forEach(el=>el.remove());document.querySelectorAll(".duel-source-hidden").forEach(el=>el.classList.remove("duel-source-hidden"));for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
+function weaponArc(to,kind="melee",owner="heroArt"){
+ const target=$(to);if(!target)return;
+ const r=target.getBoundingClientRect(),arc=document.createElement("div");
+ arc.className="weapon-arc "+(kind==="magic"?"arc-magic":"arc-steel")+(owner==="enemyArt"?" arc-enemy":"");
+ arc.style.left=(r.left+r.width/2)+"px";arc.style.top=(r.top+r.height/2)+"px";
+ document.body.append(arc);
+ const a=arc.animate([{opacity:0,transform:"translate(-50%,-50%) rotate(-85deg) scale(.5)"},{offset:.35,opacity:1,transform:"translate(-50%,-50%) rotate(-25deg) scale(1)"},{opacity:0,transform:"translate(-50%,-50%) rotate(42deg) scale(1.35)"}],{duration:reduced?100:340,easing:"ease-out"});
+ a.finished.catch(()=>{}).then(()=>arc.remove());
+}
 function combatRig(card,owner,kind="melee"){
  const rig=document.createElement("div");rig.className="combat-rig "+(owner==="heroArt"?"rig-arcane":"rig-shadow");
  rig.setAttribute("aria-hidden","true");
@@ -148,7 +157,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  ],{duration:travel,easing:"cubic-bezier(.2,.6,.15,1)",fill:"forwards"});
  duelTrail(from,to,kind);
  await approach.finished.catch(()=>{});
- impactRing(to,kind);
+ impactRing(to,kind);weaponArc(to,kind,from);
  opponent.classList.add("duel-recoil");setTimeout(()=>opponent.classList.remove("duel-recoil"),reduced?100:460);
  return async()=>{
  const back=clone.animate([
@@ -190,7 +199,7 @@ function impactSequence(to,card,outcome){
 async function dashStrike(from,to,card,resolveHit){
  stage("INVESTIDA • "+card.name.toUpperCase(),"attack");aura(from,card.glow,card.icon);sound(330);
  await wait(65);
- const returnHome=await moveActorToTarget(from,to);
+ const returnHome=await moveActorToTarget(from,to,"melee");
  const outcome=resolveHit();impactSequence(to,card,outcome);sound(180);
  await wait(160);await returnHome();return outcome;
 }
@@ -199,7 +208,7 @@ async function magicStrike(from,to,card,resolveHit){
  poseFighter(from,"cast",650);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",12);
  await wait(100);
  await animateSpellToTarget(from,to,card);
- impactRing(to,"magic");
+ impactRing(to,"magic");weaponArc(to,"magic",from);
  const outcome=resolveHit();impactSequence(to,card,outcome);sound(card.art==="fire"?145:580);
  await wait(170);return outcome;
 }
