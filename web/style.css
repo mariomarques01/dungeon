@@ -610,3 +610,7 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .cinematic-impact{width:clamp(90px,22vw,125px)!important;height:clamp(90px,22vw,125px)!important}
 .cinematic-impact .impact-core{box-shadow:0 0 14px 7px #ffbe66,0 0 32px 12px #fa6a4255!important}
 .cinematic-magic .impact-core{box-shadow:0 0 14px 7px #54e8ff,0 0 32px 12px #387bff55!important}
+
+/* v3.1 — portraits move independently of the card frame */
+.character-frame img{transform-origin:50% 72%;backface-visibility:hidden;will-change:transform,filter}
+@media(prefers-reduced-motion:reduce){.character-frame img{will-change:auto}}
