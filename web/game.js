@@ -18,12 +18,48 @@ function unlockAudio(){
   if(audio.state==="suspended")audio.resume().catch(()=>{});
  }catch(e){}
 }
-function musicNote(frequency,duration=.28,volume=.014){
- if(!audio||audio.state!=="running"||!gameSound)return;
- const t=audio.currentTime,o=audio.createOscillator(),g=audio.createGain();
- o.type="sine";o.frequency.setValueAtTime(frequency,t);
- g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(volume,t+.045);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
- o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+duration+.02);
+let audioBus=null,noiseBuffer=null;
+function audioEngine(){
+ if(!gameSound)return null;
+ unlockAudio();if(!audio||audio.state!=="running")return null;
+ if(!audioBus||audioBus.context!==audio){
+  const master=audio.createGain();master.gain.value=.72;
+  const compressor=audio.createDynamicsCompressor();compressor.threshold.value=-18;compressor.knee.value=15;compressor.ratio.value=4;compressor.attack.value=.004;compressor.release.value=.22;
+  master.connect(compressor);compressor.connect(audio.destination);
+  audioBus={context:audio,master};
+ }
+ if(!noiseBuffer){noiseBuffer=audio.createBuffer(1,Math.floor(audio.sampleRate*.8),audio.sampleRate);const data=noiseBuffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1}
+ return audioBus.master;
+}
+function tone(frequency,duration=.25,volume=.08,shape="triangle",offset=0,fall=.5){
+ const bus=audioEngine();if(!bus)return;
+ const t=audio.currentTime+offset,o=audio.createOscillator(),g=audio.createGain();
+ o.type=shape;o.frequency.setValueAtTime(Math.max(30,frequency),t);o.frequency.exponentialRampToValueAtTime(Math.max(30,frequency*fall),t+duration);
+ g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,volume),t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
+ o.connect(g);g.connect(bus);o.start(t);o.stop(t+duration+.02);
+}
+function noiseHit(duration=.2,volume=.15,cutoff=1100,offset=0){
+ const bus=audioEngine();if(!bus)return;
+ const t=audio.currentTime+offset,source=audio.createBufferSource(),filter=audio.createBiquadFilter(),g=audio.createGain();
+ source.buffer=noiseBuffer;filter.type="lowpass";filter.frequency.setValueAtTime(cutoff,t);filter.frequency.exponentialRampToValueAtTime(Math.max(90,cutoff*.25),t+duration);
+ g.gain.setValueAtTime(Math.max(.001,volume),t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
+ source.connect(filter);filter.connect(g);g.connect(bus);source.start(t);source.stop(t+duration+.01);
+}
+function battleSfx(type){
+ if(!gameSound)return;
+ switch(type){
+ case "steel":tone(980,.19,.15,"sawtooth",0,.27);tone(1780,.24,.065,"sine",.025,.68);noiseHit(.14,.22,3700);break;
+ case "fire":noiseHit(.48,.28,950);tone(160,.46,.22,"sawtooth",0,.3);noiseHit(.25,.11,4200,.07);break;
+ case "ice":noiseHit(.17,.15,6000);tone(1350,.43,.10,"sine",0,.58);tone(2180,.35,.07,"triangle",.04,.65);break;
+ case "lightning":case "storm":noiseHit(.34,.27,7500);tone(112,.4,.24,"sawtooth",0,.28);tone(1700,.13,.1,"square",.06,.5);break;
+ case "earth":noiseHit(.44,.27,460);tone(85,.48,.25,"triangle",0,.55);break;
+ case "water":noiseHit(.35,.12,1700);tone(520,.4,.09,"sine",0,1.5);tone(780,.5,.065,"sine",.07,1.3);break;
+ default:tone(480,.24,.10,"triangle");noiseHit(.14,.08,2200);
+ }
+}
+function musicNote(frequency,duration=.36,volume=.018){
+ tone(frequency,duration,volume,"sine",0,.99);
+ tone(frequency/2,duration*.9,volume*.55,"triangle",0,1);
 }
 function stopBattleMusic(){if(musicTimer!==null){clearInterval(musicTimer);musicTimer=null}}
 function startBattleMusic(){
@@ -32,17 +68,18 @@ function startBattleMusic(){
  musicStep=0;
  musicTimer=setInterval(()=>{
   if(!battleActive||!gameSound||document.hidden)return;
-  musicNote(melody[musicStep%melody.length],.32,.012);
-  if(musicStep%4===0)musicNote(110,.65,.008);
+  musicNote(melody[musicStep%melody.length],.4,.017);
+  if(musicStep%4===0){tone(110,.9,.055,"triangle",0,.96);noiseHit(.08,.065,350)}
+  if(musicStep%4===2)noiseHit(.07,.045,1900);
   musicStep++;
- },440);
+ },490);
 }
 function updateSoundButtons(){
  const label=gameSound?"🔊 SOM":"🔇 MUDO";
  if($("battleSound")){$("battleSound").textContent=label;$("battleSound").setAttribute("aria-pressed",String(gameSound))}
  if($("homeSound"))$("homeSound").textContent=gameSound?"LIGADO":"DESLIGADO";
 }
-function sound(freq=320){if(!gameSound)return;try{unlockAudio();if(!audio||audio.state!=="running")return;const o=audio.createOscillator(),g=audio.createGain();o.type="triangle";o.frequency.setValueAtTime(freq,audio.currentTime);o.frequency.exponentialRampToValueAtTime(freq*.65,audio.currentTime+.16);g.gain.setValueAtTime(.045,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.16);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+.16)}catch{}}
+function sound(freq=320){tone(freq,.16,.075,"triangle",0,.65)}
 const STAGES=[
 {name:"MALGRUK",title:"O CORROMPIDO",zone:"SANTUÁRIO DAS SOMBRAS",hp:100,attack:12,guard:10,portrait:"assets/malgruk-elite.svg",element:"shadow",ability:"GOLPE SOMBRIO",description:"O guardião corrompido protege o primeiro portal."},
 {name:"VORAK",title:"O INCENDIÁRIO",zone:"FORNALHA INFERNAL",hp:115,attack:14,guard:12,portrait:"assets/malgruk-elite.svg",element:"fire",ability:"FÚRIA DE BRASAS",description:"Vorak domina a lava e ataca com força crescente."},
@@ -107,7 +144,7 @@ function showCardDetails(id){const c=C[id],panel=$("cardDetails");if(!panel||!c)
 function showCollection(){if(battleActive)return;const p=$("collectionPanel"),grid=$("collectionGrid");grid.replaceChildren();Object.entries(C).forEach(([id,c])=>{const b=document.createElement("button");b.type="button";b.className="collection-item"+(profile.deck.includes(id)?" selected":"");const img=document.createElement("img");img.src="assets/card-"+c.art+".svg";img.alt="";const title=document.createElement("b");title.textContent=c.name;const desc=document.createElement("small");desc.textContent="💎 "+c.cost+" · "+cardInfo(c);const chosen=document.createElement("span");chosen.className="deck-tag";chosen.textContent=profile.deck.includes(id)?"✓ NO DECK":"＋ TROCAR";b.append(img,title,desc,chosen);b.addEventListener("click",()=>toggleDeckCard(id));b.addEventListener("contextmenu",e=>{e.preventDefault();showCardDetails(id)});grid.append(b)});refreshProfile();p.classList.remove("hidden")}
 function hideCollection(){$("collectionPanel").classList.add("hidden")}
 function hideCardDetails(){const p=$("cardDetails");if(p){p.classList.remove("open");p.setAttribute("aria-hidden","true")}}
-function elementalSound(type){if(!gameSound||!audio)return;try{let now=audio.currentTime;const types={fire:[140,220,90],ice:[920,650,1100],water:[370,480,620],earth:[90,125,80],lightning:[880,220,760],storm:[110,760,170],steel:[320,210,390]};const notes=types[type]||[350,470,600];notes.forEach((f,i)=>{let o=audio.createOscillator(),g=audio.createGain();o.type=type==="lightning"||type==="storm"?"sawtooth":"sine";o.frequency.setValueAtTime(f,now+i*.095);g.gain.setValueAtTime(.0001,now+i*.095);g.gain.exponentialRampToValueAtTime(.035,now+i*.095+.02);g.gain.exponentialRampToValueAtTime(.001,now+i*.095+.19);o.connect(g);g.connect(audio.destination);o.start(now+i*.095);o.stop(now+i*.095+.2)})}catch{}}
+function elementalSound(type){battleSfx(type)}
 function log(t){$("log").textContent=t}
 function damage(who,n){let k=who==="enemy"?"enemyShield":"heroShield",absorbed=Math.min(s[k],n);s[k]-=absorbed;let actual=n-absorbed;s[who]=Math.max(0,s[who]-actual);return actual}
 function float(id,t,healing=false){let e=$(id).getBoundingClientRect(),r=$("arena").getBoundingClientRect(),f=document.createElement("span");f.className="float"+(healing?" heal":"");f.textContent=t;f.style.left=e.left-r.left+e.width*.2+"px";f.style.top=e.top-r.top+"px";$("fx").append(f);setTimeout(()=>f.remove(),1100)}
@@ -307,7 +344,7 @@ function comboNotice(message,elemental=false){
 }
 function impactSequence(to,card,outcome){
  if(outcome.blocked){actorMotion(to,"defend");shieldBubble(to);actor(to,"parry",600);poseFighter(fighterFor(to),"defend",750);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
- if(outcome.amount){actorMotion(to,"hit");actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
+ if(outcome.amount){battleSfx(card.art==="sword"?"steel":card.art);actorMotion(to,"hit");actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
  if(navigator.vibrate&&!reduced)navigator.vibrate([40,30,65]);
 }
 async function dashStrike(from,to,card,resolveHit){
