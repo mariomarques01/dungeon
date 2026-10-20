@@ -1,0 +1,17 @@
+"use strict";
+const C={slash:{name:"Espada",emoji:"⚔️",cost:1,damage:10},fire:{name:"Bola de Fogo",emoji:"🔥",cost:2,damage:14,burn:2},shield:{name:"Escudo",emoji:"🛡️",cost:1,block:12},lightning:{name:"Raio",emoji:"⚡",cost:2,damage:16},heal:{name:"Cura",emoji:"💚",cost:2,heal:12},spark:{name:"Faísca",emoji:"✨",cost:0,damage:4}};
+const deckBase=["slash","slash","fire","fire","shield","shield","lightning","heal","spark","spark","slash","shield"];
+let s;
+const $=id=>document.getElementById(id);
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+function draw(){while(s.hand.length<5){if(!s.deck.length){if(!s.discard.length)break;s.deck=shuffle(s.discard);s.discard=[]}s.hand.push(s.deck.pop())}}
+function start(){s={hero:100,enemy:100,shield:0,enemyShield:0,energy:3,burn:0,turn:1,deck:shuffle(deckBase),discard:[],hand:[],done:false};draw();log("Escolha uma carta. Você começa!");render()}
+function log(t){$("log").textContent=t}
+function hitEnemy(n){let actual=Math.max(0,n-s.enemyShield);s.enemyShield=Math.max(0,s.enemyShield-n);s.enemy=Math.max(0,s.enemy-actual);return actual}
+function play(i){if(s.done)return;let id=s.hand[i],c=C[id];if(!c||c.cost>s.energy)return;s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);let out=[];if(c.damage)out.push(hitEnemy(c.damage)+" dano");if(c.block){s.shield+=c.block;out.push("+"+c.block+" escudo")}if(c.heal){s.hero=Math.min(100,s.hero+c.heal);out.push("+"+c.heal+" vida")}if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("queimadura")}if(s.enemy<=0){s.done=true;log("🏆 Vitória! Guardião derrotado.");}else log(c.name+": "+out.join(", "));render()}
+function endTurn(){if(s.done)return;let out=[];if(s.burn){s.enemy=Math.max(0,s.enemy-3);s.burn--;out.push("Queimadura: 3 dano")}if(s.enemy<=0){s.done=true;log("🏆 Vitória por queimadura!");render();return}
+const danger=s.enemy<30;const defend=danger&&s.turn%2===0;
+if(defend){s.enemyShield+=10;out.push("Goblin ganhou 10 escudo")}else{let attack=12+(s.turn%3===0?4:0);let dealt=Math.max(0,attack-s.shield);s.shield=Math.max(0,s.shield-attack);s.hero=Math.max(0,s.hero-dealt);out.push("Goblin atacou: "+dealt+" dano")}
+s.shield=0;s.discard.push(...s.hand);s.hand=[];s.turn++;s.energy=3;draw();if(s.hero<=0){s.done=true;out.push("💀 Derrota!") }else if(s.turn>10){s.done=true;out.push(s.hero>s.enemy?"🏆 Vitória por HP!":s.hero<s.enemy?"💀 Derrota por HP!":"Empate!")}log(out.join(" • "));render()}
+function render(){$("enemyHP").textContent=s.enemy+" / 100 HP";$("heroHP").textContent=s.hero+" / 100 HP";$("enemyBar").style.width=s.enemy+"%";$("heroBar").style.width=s.hero+"%";$("shield").textContent="🛡 Escudo: "+s.shield;$("energy").textContent="⚡ Energia: "+s.energy+" / 3 | Rodada "+s.turn;$("intent").textContent="IA: "+(s.enemy<30&&s.turn%2===0?"Defender (10 escudo)":"Atacar (12–16 dano)");$("cards").replaceChildren();s.hand.forEach((id,i)=>{const c=C[id],b=document.createElement("button");b.className="card";b.disabled=s.done||c.cost>s.energy;b.innerHTML='<span class="cost">⚡ '+c.cost+'</span><span class="art">'+c.emoji+'</span><strong>'+c.name+'</strong><small>'+(c.damage?c.damage+" dano":c.block?c.block+" escudo":c.heal+" cura")+'</small>';b.addEventListener("click",()=>play(i));$("cards").appendChild(b)});$("end").disabled=s.done}
+$("end").addEventListener("click",endTurn);$("restart").addEventListener("click",start);start();
