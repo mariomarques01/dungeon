@@ -128,9 +128,9 @@ function cinematicImpact(to,kind="melee",owner="heroArt"){
  animation.finished.catch(()=>{}).then(()=>layer.remove());
  if(!reduced){
   arena.classList.remove("arena-shake");void arena.offsetWidth;arena.classList.add("arena-shake");
-  setTimeout(()=>arena.classList.remove("arena-shake"),300);
+  setTimeout(()=>arena.classList.remove("arena-shake"),210);
  }
- if(navigator.vibrate&&document.visibilityState==="visible")navigator.vibrate(kind==="magic"?[12,18,18]:15);
+ if(navigator.vibrate&&document.visibilityState==="visible")navigator.vibrate(kind==="magic"?12:9);
 }
 function impactRing(to,kind="melee"){
  const target=$(to);if(!target)return;
@@ -157,7 +157,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  const sr=source.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
  const clone=source.cloneNode(true);clone.removeAttribute("id");
  clone.querySelectorAll("[id]").forEach(n=>n.removeAttribute("id"));
- clone.classList.add("duel-summon");combatRig(clone,from,kind);clone.classList.remove("shield-active","moving","duel-card");
+ clone.classList.add("duel-summon");clone.classList.remove("shield-active","moving","duel-card");
  Object.assign(clone.style,{position:"fixed",left:sr.left+"px",top:sr.top+"px",width:sr.width+"px",height:sr.height+"px",margin:"0",pointerEvents:"none",zIndex:"100",transformOrigin:"50% 70%"});
  document.body.append(clone);source.classList.add("duel-source-hidden");
  const direction=from==="heroArt"?1:-1;
@@ -173,8 +173,8 @@ async function moveActorToTarget(from,to,kind="melee"){
  ],{duration:travel,easing:"cubic-bezier(.2,.6,.15,1)",fill:"forwards"});
  duelTrail(from,to,kind);
  await approach.finished.catch(()=>{});
- impactRing(to,kind);weaponArc(to,kind,from);cinematicImpact(to,kind,from);
- opponent.classList.add("duel-recoil");setTimeout(()=>opponent.classList.remove("duel-recoil"),reduced?100:460);
+ cinematicImpact(to,kind,from);
+ opponent.classList.add("duel-recoil");setTimeout(()=>opponent.classList.remove("duel-recoil"),reduced?100:320);
  return async()=>{
  const back=clone.animate([
  {transform:`translate3d(${dx}px,${dy}px,0) scale(1.16)`,opacity:1},
@@ -224,7 +224,7 @@ async function magicStrike(from,to,card,resolveHit){
  poseFighter(from,"cast",650);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",12);
  await wait(100);
  await animateSpellToTarget(from,to,card);
- impactRing(to,"magic");weaponArc(to,"magic",from);cinematicImpact(to,"magic",from);
+ cinematicImpact(to,"magic",from);
  const outcome=resolveHit();impactSequence(to,card,outcome);sound(card.art==="fire"?145:580);
  await wait(170);return outcome;
 }
