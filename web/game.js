@@ -45,22 +45,23 @@ function noiseHit(duration=.2,volume=.15,cutoff=1100,offset=0){
  g.gain.setValueAtTime(Math.max(.001,volume),t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
  source.connect(filter);filter.connect(g);g.connect(bus);source.start(t);source.stop(t+duration+.01);
 }
-const recordedSfx={};
-const sfxKinds=["steel","fire","ice","lightning","earth","water","heal","ui"];
+const recordedSfx={},sfxKinds=["steel","fire","ice","lightning","earth","water","heal","ui"];
+const sfxExtensions=["ogg","wav","mp3"];
 function preloadRecordedSfx(){
  for(const kind of sfxKinds){
-  for(const ext of ["ogg","wav","mp3"]){
+  for(const ext of sfxExtensions){
    const clip=new Audio("assets/sfx/"+kind+"."+ext);
-   clip.preload="auto";clip.volume=kind==="ui"?.45:.82;
-   clip.addEventListener("canplaythrough",()=>{if(!recordedSfx[kind])recordedSfx[kind]=clip},{once:true});
+   clip.preload="auto";clip.volume=kind==="ui"?.35:.88;
+   clip.addEventListener("canplay",()=>{if(!recordedSfx[kind])recordedSfx[kind]=clip},{once:true});
+   clip.addEventListener("error",()=>{},{once:true});
    clip.load();
   }
  }
 }
 function playRecordedSfx(kind){
- const clip=recordedSfx[kind]||recordedSfx[kind==="storm"?"lightning":kind==="steel"?"steel":"fire"];
+ const clip=recordedSfx[kind==="storm"?"lightning":kind];
  if(!gameSound||!clip)return false;
- try{const voice=clip.cloneNode();voice.volume=clip.volume;const p=voice.play();if(p&&p.catch)p.catch(()=>{});return true}catch(e){return false}
+ try{const voice=clip.cloneNode();voice.volume=clip.volume;const promise=voice.play();if(promise&&promise.catch)promise.catch(()=>{});return true}catch(e){return false}
 }
 preloadRecordedSfx();
 function battleSfx(type){
