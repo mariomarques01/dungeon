@@ -26,6 +26,7 @@ try:
         "heal": ("spell", "magic"),
         "ui": ("item", "coin", "book"),
     }
+    selected = []
     for category, keys in categories.items():
         ranked = sorted(candidates, key=lambda item: (
             next((i for i, key in enumerate(keys) if key in item[0].lower()), 99),
@@ -37,6 +38,11 @@ try:
         suffix = Path(filename).suffix.lower()
         target = DEST / (category + suffix)
         target.write_bytes(data)
+        selected.append(category)
         print(category, "<-", filename, len(data), "bytes")
+    required = {"steel", "fire", "lightning"}
+    missing = required - set(selected)
+    if missing:
+        raise RuntimeError("Missing essential recorded sounds: " + ", ".join(sorted(missing)))
 except Exception as exc:
-    print("Audio download unavailable; continuing without recorded assets:", exc)
+    raise RuntimeError("Cannot prepare verified recorded audio assets") from exc
