@@ -97,7 +97,25 @@ function aura(id,color,symbol){
 
 function fighterFor(id){return id==="heroArt"?"heroArt":"enemyArt"}
 function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
-function resetBattleSprites(){document.querySelectorAll(".duel-summon,.duel-trail,.spell-orb,.flying-card").forEach(el=>el.remove());document.querySelectorAll(".duel-source-hidden").forEach(el=>el.classList.remove("duel-source-hidden"));for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
+function resetBattleSprites(){document.querySelectorAll(".duel-summon,.duel-trail,.spell-orb,.flying-card,.combat-impact-ring").forEach(el=>el.remove());document.querySelectorAll(".duel-source-hidden").forEach(el=>el.classList.remove("duel-source-hidden"));for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
+function combatRig(card,owner,kind="melee"){
+ const rig=document.createElement("div");rig.className="combat-rig "+(owner==="heroArt"?"rig-arcane":"rig-shadow");
+ rig.setAttribute("aria-hidden","true");
+ const hand=document.createElement("div");hand.className="rig-arm";
+ const weapon=document.createElement("div");weapon.className=kind==="magic"?"rig-staff":"rig-blade";
+ hand.append(weapon);rig.append(hand);
+ const rune=document.createElement("div");rune.className="rig-rune";rune.textContent=kind==="magic"?"✧":"✦";rig.append(rune);
+ card.append(rig);return rig;
+}
+function impactRing(to,kind="melee"){
+ const target=$(to);if(!target)return;
+ const r=target.getBoundingClientRect(),e=document.createElement("div");
+ e.className="combat-impact-ring "+(kind==="magic"?"impact-arcane":"impact-steel");
+ e.style.left=(r.left+r.width/2)+"px";e.style.top=(r.top+r.height/2)+"px";
+ document.body.append(e);
+ const a=e.animate([{transform:"translate(-50%,-50%) scale(.18)",opacity:1},{offset:.55,transform:"translate(-50%,-50%) scale(1.2)",opacity:.95},{transform:"translate(-50%,-50%) scale(1.75)",opacity:0}],{duration:reduced?120:420,easing:"ease-out"});
+ a.finished.catch(()=>{}).then(()=>e.remove());
+}
 function duelTrail(from,to,kind){
  const start=centerOf($(from)),end=centerOf($(to)),trail=document.createElement("div");
  trail.className="duel-trail "+(kind==="magic"?"trail-magic":"trail-slash");
@@ -114,13 +132,13 @@ async function moveActorToTarget(from,to,kind="melee"){
  const sr=source.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
  const clone=source.cloneNode(true);clone.removeAttribute("id");
  clone.querySelectorAll("[id]").forEach(n=>n.removeAttribute("id"));
- clone.classList.add("duel-summon");clone.classList.remove("shield-active","moving","duel-card");
+ clone.classList.add("duel-summon");combatRig(clone,from,kind);clone.classList.remove("shield-active","moving","duel-card");
  Object.assign(clone.style,{position:"fixed",left:sr.left+"px",top:sr.top+"px",width:sr.width+"px",height:sr.height+"px",margin:"0",pointerEvents:"none",zIndex:"100",transformOrigin:"50% 70%"});
  document.body.append(clone);source.classList.add("duel-source-hidden");
  const direction=from==="heroArt"?1:-1;
  const dx=(tr.left+tr.width/2)-(sr.left+sr.width/2)-direction*(sr.width*.42+tr.width*.42);
  const dy=(tr.top+tr.height/2)-(sr.top+sr.height/2);
- const travel=reduced?110:820;
+ const travel=reduced?110:550;
  const approach=clone.animate([
  {offset:0,transform:"translate3d(0,0,0) scale(.72)",opacity:.2,filter:"brightness(2)"},
  {offset:.2,transform:`translate3d(${dx*.12}px,${dy*.15-22}px,0) scale(1.08)`,opacity:1,filter:"brightness(1.5)"},
@@ -130,6 +148,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  ],{duration:travel,easing:"cubic-bezier(.2,.6,.15,1)",fill:"forwards"});
  duelTrail(from,to,kind);
  await approach.finished.catch(()=>{});
+ impactRing(to,kind);
  opponent.classList.add("duel-recoil");setTimeout(()=>opponent.classList.remove("duel-recoil"),reduced?100:460);
  return async()=>{
  const back=clone.animate([
@@ -180,6 +199,7 @@ async function magicStrike(from,to,card,resolveHit){
  poseFighter(from,"cast",650);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",12);
  await wait(100);
  await animateSpellToTarget(from,to,card);
+ impactRing(to,"magic");
  const outcome=resolveHit();impactSequence(to,card,outcome);sound(card.art==="fire"?145:580);
  await wait(170);return outcome;
 }
