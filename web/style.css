@@ -369,3 +369,19 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 #log,footer{display:none!important}
 @media(max-height:750px){.handpanel{min-height:132px!important;max-height:150px!important}.card{height:112px!important}.portrait{width:70px!important;height:86px!important}.ability-panel{margin-top:2px!important;padding:2px!important}.fighter>small{display:none!important}.mission{min-height:34px!important}.resources{min-height:42px!important}}
 @media(max-height:600px){.handpanel{min-height:115px!important;max-height:125px!important}.card{height:95px!important}.card .art{min-height:25px!important}.ability-panel{display:none!important}.portrait{width:60px!important;height:72px!important}.mission-copy span{display:none!important}}
+
+/* 1.4 — collection screen and accessible ability catalog */
+.handtitle{align-items:center;gap:4px}
+.collection-btn{background:linear-gradient(#3b2847,#18172d);border:1px solid #d4a15c;border-radius:6px;color:#ffe0a4;font:bold 9px system-ui,sans-serif;padding:5px 6px;white-space:nowrap}
+.collection-overlay{position:fixed;z-index:105;inset:0;background:#060815dd;backdrop-filter:blur(6px);display:grid;place-items:center;padding:14px}
+.collection-overlay.hidden{display:none!important}
+.collection-sheet{width:min(100%,480px);max-height:88dvh;display:flex;flex-direction:column;border:3px ridge #efc77d;border-radius:14px;background:linear-gradient(160deg,#352642,#0b1027 55%,#16182c);padding:12px;box-shadow:0 0 35px #000}
+.collection-head{display:flex;justify-content:space-between;align-items:center;color:#ffe0a0;font:900 17px Georgia,serif}
+.collection-head button{color:#ffe4b7;background:#2b203b;border:1px solid #ba965b;border-radius:7px;padding:6px 11px}
+.collection-sheet p{color:#c9c4d7;font:11px/1.4 system-ui,sans-serif}
+.collection-grid{overflow:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:5px 1px}
+.collection-item{min-width:0;display:flex;flex-direction:column;gap:3px;align-items:center;background:#16172b;border:2px ridge #bb8d4f;border-radius:8px;color:#fbe4c6;padding:4px}
+.collection-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px}
+.collection-item b{font:900 10px/1.1 system-ui,sans-serif;text-align:center}
+.collection-item small{font:9px/1.2 system-ui,sans-serif;text-align:center;color:#b9dcf4}
+@media(max-width:360px){.handtitle span#hint{display:none}}
