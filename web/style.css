@@ -45,3 +45,25 @@
 .shield-active:after{content:"";position:absolute;inset:-9px;border:3px solid #85dfff;border-radius:23px;box-shadow:0 0 18px #60d4ff,inset 0 0 15px #72d4ff;background:linear-gradient(135deg,#84dfff22,transparent,#84dfff22);pointer-events:none;z-index:3;animation:shieldhum 2s ease-in-out infinite}
 @keyframes absorb{0%{opacity:0;transform:scale(.2) rotate(-35deg)}25%{opacity:1;transform:scale(1.35) rotate(15deg)}60%{opacity:1;transform:scale(.95)}100%{opacity:0;transform:scale(1.7) rotate(45deg)}}
 @keyframes shieldhum{0%,100%{opacity:.6;filter:brightness(.8)}50%{opacity:1;filter:brightness(1.7)}}
+
+/* v0.6: character card identity and real arena traversal */
+.portrait{width:118px;height:142px;border-radius:15px!important;overflow:visible!important;background:linear-gradient(145deg,#6c4b4c,#1d172e)!important;border:3px solid #e6ba70!important;box-shadow:0 0 0 3px #171126,0 8px 0 #171126,0 10px 26px #e08a4566!important;isolation:isolate}
+.heroart{background:linear-gradient(145deg,#4f8fb3,#1b2445)!important;border-color:#a1e6fa!important;box-shadow:0 0 0 3px #171126,0 8px 0 #171126,0 10px 26px #5dbefb66!important}
+.character-frame{position:absolute;inset:5px 5px 25px;overflow:hidden;border-radius:9px;border:1px solid #f2d9a766;box-shadow:inset 0 0 20px #0008}
+.character-frame img{width:100%;height:100%;object-fit:cover;transform:scale(1.08);animation:character-idle 3s ease-in-out infinite alternate}
+.portrait:before{content:"";position:absolute;inset:-6px;border:1px solid #f7d28e88;border-radius:17px;pointer-events:none}
+.hero-medal{position:absolute;top:-12px;left:-12px;z-index:4;width:34px;height:34px;display:grid;place-items:center;background:radial-gradient(circle,#e9c989,#75502f);border:2px solid #ffe5a8;border-radius:50%;font-size:22px;color:#29213a;box-shadow:0 2px 9px #000a}
+.heroart .hero-medal{background:radial-gradient(circle,#d1f7ff,#3a89c5);border-color:#d6faff}
+.portrait-level{position:absolute;right:-9px;top:-9px;z-index:4;background:#211a2c;border:1px solid #e6bc75;border-radius:7px;padding:4px 5px;font-size:9px;font-weight:1000;color:#ffe2a5}
+.portrait-title{position:absolute;bottom:16px;left:0;right:0;text-align:center;z-index:3;font-size:10px;font-weight:1000;letter-spacing:1.5px;color:#ffe6b0;text-shadow:0 2px 4px black;background:linear-gradient(90deg,transparent,#211628e8,transparent)}
+.character-power{position:absolute;bottom:3px;left:0;right:0;text-align:center;z-index:3;font-size:7px;letter-spacing:1.4px;color:#ffca9c}
+.heroart .character-power{color:#9eeeff}
+.actor-ghost{position:fixed!important;z-index:9999!important;pointer-events:none!important;transform-origin:center center;will-change:transform,filter}
+.actor-away{opacity:.08!important}
+.spell-orb{position:fixed;z-index:9998;pointer-events:none;width:60px;height:60px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,#fffbd8,var(--spell),transparent 72%);box-shadow:0 0 22px var(--spell),0 0 55px var(--spell),inset 0 0 18px white;filter:drop-shadow(0 0 20px var(--spell))}
+.spell-orb span{font-size:35px;filter:drop-shadow(0 0 10px white)}
+.spell-orb:before,.spell-orb:after{content:"";position:absolute;inset:-13px;border:3px dotted var(--spell);border-radius:50%;animation:rotate 1s linear infinite}
+.spell-orb:after{inset:-25px;animation-direction:reverse;opacity:.6}
+@keyframes character-idle{0%{transform:scale(1.06) translateY(2px)}100%{transform:scale(1.13) translateY(-3px)}}
+@media(max-width:390px){.portrait{width:102px;height:128px}.character-frame{inset:5px 5px 23px}.hero-medal{width:28px;height:28px;font-size:17px}.fighter-row{gap:12px}.arena{min-height:425px}}
+@media(prefers-reduced-motion:reduce){.character-frame img{animation:none}}
