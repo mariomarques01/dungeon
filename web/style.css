@@ -619,3 +619,24 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .resources{position:relative}
 .battle-speed{position:absolute;right:6px;top:-30px;z-index:8;min-height:26px;padding:3px 11px;border:1px solid #eac687;border-radius:20px;background:#101a32ee;color:#ffe6a6;font:800 12px system-ui,sans-serif;box-shadow:0 2px 8px #0008;touch-action:manipulation}
 .battle-speed:active{transform:scale(.96)}
+
+/* v3.3 — true pre-battle lobby, deck edits locked during matches */
+.home-screen{position:fixed;inset:0;z-index:300;background:radial-gradient(ellipse at 50% 25%,#3e2455 0%,#121026 52%,#070916 100%);display:flex;align-items:center;justify-content:center;overflow:auto;padding:max(20px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));color:#f8e9c6}
+.home-screen.hidden{display:none!important}
+.home-panel{width:min(100%,430px);padding:23px 20px 26px;text-align:center;border:2px solid #b18a54;border-radius:19px;background:linear-gradient(165deg,#221630ef,#0d1327fa);box-shadow:0 0 45px #c2883e33,inset 0 0 30px #6d41651c}
+.home-eyebrow{font:700 11px system-ui,sans-serif;letter-spacing:4px;color:#e6bb75}
+.home-panel h2{margin:12px 0;font:900 clamp(25px,7vw,37px) Georgia,serif;color:#ffdf96;text-shadow:0 2px 7px #000,0 0 18px #9c562e}
+.home-panel h2 em{font-style:normal;color:#fff2c4}
+.home-art{height:clamp(130px,26vh,225px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;margin:14px 0;border:1px solid #9e7749;border-radius:12px;background:radial-gradient(circle at center,#6d4670 0%,#312449 42%,#101329 85%);box-shadow:inset 0 0 40px #080716}
+.home-sigil{font-size:clamp(68px,15vw,104px);filter:drop-shadow(0 0 20px #e7a655)}
+.home-subtitle{font:700 11px system-ui,sans-serif;letter-spacing:2px;color:#e8cb9c}
+.home-stage{font:800 12px system-ui,sans-serif;color:#f9cb78;letter-spacing:2px}
+.home-panel h3{margin:9px 0 3px;font:800 21px Georgia,serif;color:#fff1d0}
+.home-panel p{margin:4px 0 17px;color:#c7c7df;font:600 12px system-ui,sans-serif;letter-spacing:1px}
+.home-deck-summary{display:flex;justify-content:space-between;gap:8px;border:1px solid #796446;border-radius:9px;padding:11px;color:#e8d5b7;font:700 12px system-ui,sans-serif}
+.home-panel button{display:block;width:100%;border-radius:10px;min-height:49px;margin-top:12px;font:900 16px Georgia,serif;letter-spacing:1px;cursor:pointer}
+.home-secondary{color:#ffdc9b;background:#1b203b;border:1px solid #bc945c}
+.home-primary{color:#241324;background:linear-gradient(#fff9bd,#ffbd50);border:2px solid #fff0ae;box-shadow:0 4px 16px #d9903c66}
+.home-tip{display:block;margin-top:13px;font:12px/1.45 system-ui,sans-serif;color:#bdb5c9}
+body.battle-active #collectionBtn{display:none!important}
+#collectionPanel{z-index:400!important}
