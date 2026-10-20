@@ -26,6 +26,8 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Preparar efeitos sonoros CC0
+        run: python3 scripts/prepare_sfx.py
       - name: Preparar arquivos do jogo
         run: |
           test -f web/index.html
