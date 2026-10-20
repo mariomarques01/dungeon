@@ -143,3 +143,27 @@ footer{flex:0 0 auto;margin-top:3px;font-size:7px}
  .art{min-height:20px}
  .handtitle{padding-bottom:2px}
 }
+
+/* v0.8 clear objective, elemental spectacle and critical health feedback */
+.objective{flex:0 0 auto;font-size:9px;color:#e9d4ae;text-align:center;padding:2px 5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dangerNotice{position:absolute;top:calc(env(safe-area-inset-top) + 63px);left:8%;right:8%;text-align:center;z-index:18;pointer-events:none;font-size:12px;font-weight:1000;color:#ffe9ad;text-shadow:0 0 9px red;animation:dangerText .75s ease-in-out infinite alternate}
+#dangerNotice:empty{display:none}
+.buttons #end{width:100%}
+.card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.arena.element-fire{animation:fireScene 1.25s ease-out}
+.arena.element-ice{animation:iceScene 1.25s ease-out}
+.arena.element-earth{animation:earthScene 1.1s ease-out}
+.arena.element-water{animation:waterScene 1.25s ease-out}
+.arena.element-lightning,.arena.element-storm{animation:stormScene 1.2s ease-out}
+.lightning-flash{position:absolute;inset:0;z-index:8;background:repeating-linear-gradient(125deg,transparent 0 38%,#fff 39%,#9ed8ff 40%,transparent 42% 65%);mix-blend-mode:screen;pointer-events:none;animation:flashScene .6s steps(3,end) forwards}
+.danger-health:before{content:"";position:fixed;inset:0;z-index:20;pointer-events:none;box-shadow:inset 0 0 65px 18px #f00028aa;animation:dangerBorder 1.1s ease-in-out infinite alternate}
+.danger-health .hero .hp{box-shadow:0 0 14px #ff395a}
+@keyframes dangerBorder{from{box-shadow:inset 0 0 30px 9px #fa123666}to{box-shadow:inset 0 0 95px 30px #ff1239bb}}
+@keyframes dangerText{from{opacity:.65}to{opacity:1}}
+@keyframes fireScene{0%,100%{filter:none}25%{filter:sepia(.8) saturate(2.5) hue-rotate(-25deg) brightness(1.45)}55%{filter:sepia(.5) saturate(2) brightness(1.1)}}
+@keyframes iceScene{0%,100%{filter:none}25%{filter:hue-rotate(35deg) saturate(1.8) brightness(1.6)}60%{filter:hue-rotate(35deg) brightness(1.1)}}
+@keyframes earthScene{0%,100%{transform:translateX(0);filter:none}20%,40%{transform:translateX(-5px);filter:sepia(.6)}30%,50%{transform:translateX(5px)}}
+@keyframes waterScene{0%,100%{filter:none}30%{filter:hue-rotate(45deg) brightness(1.5)}60%{filter:hue-rotate(15deg) brightness(1.2)}}
+@keyframes stormScene{0%,100%{filter:none}15%,40%{filter:brightness(2.2) contrast(1.5)}20%,45%{filter:brightness(.55)}}
+@keyframes flashScene{0%,100%{opacity:0}20%,45%{opacity:.95}35%,70%{opacity:.05}}
+@media(max-height:740px){.objective{font-size:8px;padding:1px 3px 2px}}
