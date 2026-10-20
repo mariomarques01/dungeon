@@ -49,7 +49,14 @@ function float(id,t,healing=false){let e=$(id).getBoundingClientRect(),r=$("aren
 function impact(id,t,healing=false){let e=$(id);e.classList.remove("hit","healed");void e.offsetWidth;e.classList.add(healing?"healed":"hit");float(id,t,healing);setTimeout(()=>e.classList.remove("hit","healed"),480);if(navigator.vibrate&&!reduced)navigator.vibrate(35)}
 function projectile(from,to,emoji,color){if(reduced)return;let b=$("arena").getBoundingClientRect(),a=$(from).getBoundingClientRect(),z=$(to).getBoundingClientRect(),sx=a.left+a.width/2-b.left,sy=a.top+a.height/2-b.top,tx=z.left+z.width/2-b.left,ty=z.top+z.height/2-b.top,p=document.createElement("span");p.className="projectile";p.textContent=emoji;p.style.left=sx+"px";p.style.top=sy+"px";p.style.setProperty("--dx",tx-sx+"px");p.style.setProperty("--dy",ty-sy+"px");p.style.setProperty("--glow",color);$("fx").append(p);setTimeout(()=>p.remove(),520)}
 
-const wait=ms=>new Promise(resolve=>setTimeout(resolve,reduced?20:ms));
+let battleSpeed=1;
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,reduced?20:Math.round(ms/battleSpeed)));
+function toggleBattleSpeed(){
+ battleSpeed=battleSpeed===1?1.5:battleSpeed===1.5?2:1;
+ const button=$("battleSpeed");if(button){button.textContent="▶ ×"+battleSpeed;button.setAttribute("aria-label","Velocidade do combate "+battleSpeed+" vezes. Toque para alterar")}
+ try{localStorage.setItem("dungeon_battle_speed",String(battleSpeed))}catch(e){}
+}
+try{const saved=Number(localStorage.getItem("dungeon_battle_speed"));if([1,1.5,2].includes(saved))battleSpeed=saved}catch(e){}
 let animationToken=0;
 function stage(text,kind="attack"){const el=$("phase");el.textContent=text;el.className="stage "+kind}
 function actor(id,action,duration=650){const el=$(id);el.classList.remove("cast-fire","cast-bolt","cast-guard","cast-heal","lunge","recoil","parry","channel");void el.offsetWidth;el.classList.add(action);setTimeout(()=>el.classList.remove(action),duration)}
@@ -103,7 +110,7 @@ function poseFighter(id,pose,duration=800){
  el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");
  el.dataset.combatPose=pose;
  el.classList.add("pose-"+pose);
- const timer=setTimeout(()=>{if(el.dataset.combatPose===pose){el.classList.remove("pose-"+pose);delete el.dataset.combatPose}poseTimers.delete(el)},reduced?80:duration);
+ const timer=setTimeout(()=>{if(el.dataset.combatPose===pose){el.classList.remove("pose-"+pose);delete el.dataset.combatPose}poseTimers.delete(el)},reduced?80:Math.round(duration/battleSpeed));
  poseTimers.set(el,timer);
 }
 function actorMotion(id,kind="attack"){
@@ -119,7 +126,7 @@ function actorMotion(id,kind="attack"){
  [{transform:"scale(1)",filter:"brightness(1)"},{offset:.45,transform:"scale(.94) translateY(4px)",filter:"brightness(1.25)"},{transform:"scale(1)",filter:"brightness(1)"}]:
  [{transform:"translateX(0)",filter:"brightness(1)"},{offset:.3,transform:`translateX(${dir*7}px)`,filter:"brightness(1.6)"},{offset:.55,transform:`translateX(${-dir*4}px)`,filter:"brightness(1.1)"},{transform:"translateX(0)",filter:"brightness(1)"}];
  portrait.getAnimations().filter(a=>a.id==="combat-pose-motion").forEach(a=>a.cancel());
- const animation=portrait.animate(frames,{duration:kind==="attack"?460:kind==="cast"?620:340,easing:"ease-in-out"});
+ const animation=portrait.animate(frames,{duration:Math.round((kind==="attack"?460:kind==="cast"?620:340)/battleSpeed),easing:"ease-in-out"});
  animation.id="combat-pose-motion";
 }
 
@@ -189,7 +196,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  const direction=from==="heroArt"?1:-1;
  const dx=(tr.left+tr.width/2)-(sr.left+sr.width/2)-direction*(sr.width*.42+tr.width*.42);
  const dy=(tr.top+tr.height/2)-(sr.top+sr.height/2);
- const travel=reduced?110:490;
+ const travel=reduced?110:Math.round(490/battleSpeed);
  const approach=clone.animate([
  {offset:0,transform:"translate3d(0,0,0) scale(.72)",opacity:.2,filter:"brightness(2)"},
  {offset:.2,transform:`translate3d(${dx*.12}px,${dy*.15-22}px,0) scale(1.08)`,opacity:1,filter:"brightness(1.5)"},
@@ -206,7 +213,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  {transform:`translate3d(${dx}px,${dy}px,0) scale(1.16)`,opacity:1},
  {offset:.55,transform:`translate3d(${dx*.38}px,${dy*.36-16}px,0) scale(.95)`,opacity:.9},
  {transform:"translate3d(0,0,0) scale(.72)",opacity:0}
- ],{duration:reduced?90:260,easing:"ease-in-out",fill:"forwards"});
+ ],{duration:reduced?90:Math.round(260/battleSpeed),easing:"ease-in-out",fill:"forwards"});
  await back.finished.catch(()=>{});
  approach.cancel();back.cancel();clone.remove();source.classList.remove("duel-source-hidden");
  };
@@ -221,7 +228,7 @@ async function animateSpellToTarget(from,to,card){
  {offset:.18,transform:"translate3d("+dx*.13+"px,"+(dy*.13-35)+"px,0) scale(1.1)",opacity:1},
  {offset:.68,transform:"translate3d("+dx*.7+"px,"+(dy*.7-25)+"px,0) scale(1.5)",opacity:1},
  {transform:"translate3d("+dx+"px,"+dy+"px,0) scale(1.9)",opacity:1}],
- {duration:reduced?90:390,easing:"ease-in",fill:"forwards"});
+ {duration:reduced?90:Math.round(390/battleSpeed),easing:"ease-in",fill:"forwards"});
  await anim.finished.catch(()=>{});
  anim.cancel();orb.remove();
 }
@@ -315,4 +322,4 @@ function render(){alertCheck();$("enemyHP").textContent=s.enemy+" / "+currentSta
  $("hint").textContent=s.busy?"⚔️ Executando ação...":!playable.length?"Sem cartas jogáveis • encerre o turno":vulnerable&&playable.some(id=>C[id].block)?"⚠️ Defenda! Próximo golpe: "+threat:playable.some(id=>C[id].damage)?"⚔️ Ataque disponível":"✦ Prepare sua defesa ou cura";
  $("end").classList.toggle("turn-ready",!s.busy&&!s.done&&!playable.length);
  $("cards").classList.toggle("no-playable",!s.busy&&!playable.length);$("gems").replaceChildren();for(let i=0;i<3;i++){let g=document.createElement("span");g.className="gem"+(i>=s.energy?" off":"");g.textContent="💎";$("gems").append(g)}$("cards").replaceChildren();s.hand.forEach((id,i)=>{let c=C[id],b=document.createElement("button");b.className="card card-"+c.art+(c.cost<=s.energy&&!s.busy&&!s.done?" card-playable":" card-unavailable");b.dataset.element=c.art;b.disabled=s.done||s.busy||c.cost>s.energy;b.style.setProperty("--glow",c.glow+"66");b.style.setProperty("--delay",i*45+"ms");b.setAttribute("aria-label",c.name+", "+c.cost+" mana, "+cardInfo(c));let cost=document.createElement("span");cost.className="cost";cost.textContent=c.cost;let art=document.createElement("div");art.className="art";let img=document.createElement("img");img.src="assets/card-"+c.art+".svg";img.alt="";art.append(img);let name=document.createElement("strong");name.textContent=c.name;let desc=document.createElement("small");desc.textContent=cardInfo(c);let rarity=document.createElement("span");rarity.className="rarity";let type=document.createElement("span");type.className="card-type";type.textContent=c.block?"DEFESA":c.heal?"CURA":c.art==="sword"?"ATAQUE":"MAGIA";b.append(cost,art,name,desc,type,rarity);b.addEventListener("click",()=>play(i));let pressTimer;b.addEventListener("pointerdown",()=>{pressTimer=setTimeout(()=>showCardDetails(id),550)});["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,()=>clearTimeout(pressTimer)));$("cards").append(b)});$("end").disabled=s.done||s.busy;updateShieldAuras()}
-["hero","enemy"].forEach(which=>{const e=$(which==="hero"?"heroArt":"enemyArt");e.addEventListener("click",()=>{if(!s.busy)showHeroDetails(which)});e.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();if(!s.busy)showHeroDetails(which)}})});$("closeHeroDetails").addEventListener("click",hideHeroDetails);$("heroDetailBack").addEventListener("click",hideHeroDetails);$("heroDetails").addEventListener("click",ev=>{if(ev.target.id==="heroDetails")hideHeroDetails()});$("end").addEventListener("click",endTurn);$("cardDetails")?.addEventListener("click",hideCardDetails);$("collectionBtn").addEventListener("click",showCollection);$("closeCollection").addEventListener("click",hideCollection);$("collectionPanel").addEventListener("click",e=>{if(e.target.id==="collectionPanel")hideCollection()});$("again").addEventListener("click",start);start();refreshProfile();
+["hero","enemy"].forEach(which=>{const e=$(which==="hero"?"heroArt":"enemyArt");e.addEventListener("click",()=>{if(!s.busy)showHeroDetails(which)});e.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();if(!s.busy)showHeroDetails(which)}})});$("closeHeroDetails").addEventListener("click",hideHeroDetails);$("heroDetailBack").addEventListener("click",hideHeroDetails);$("heroDetails").addEventListener("click",ev=>{if(ev.target.id==="heroDetails")hideHeroDetails()});$("end").addEventListener("click",endTurn);$("cardDetails")?.addEventListener("click",hideCardDetails);$("collectionBtn").addEventListener("click",showCollection);$("closeCollection").addEventListener("click",hideCollection);$("collectionPanel").addEventListener("click",e=>{if(e.target.id==="collectionPanel")hideCollection()});$("again").addEventListener("click",start);$("battleSpeed")?.addEventListener("click",toggleBattleSpeed);if($("battleSpeed"))$("battleSpeed").textContent="▶ ×"+battleSpeed;start();refreshProfile();
