@@ -98,31 +98,47 @@ function aura(id,color,symbol){
 function fighterFor(id){return id==="heroArt"?"heroArt":"enemyArt"}
 function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
 function resetBattleSprites(){for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
+function duelTrail(from,to,kind){
+ const start=centerOf($(from)),end=centerOf($(to)),trail=document.createElement("div");
+ trail.className="duel-trail "+(kind==="magic"?"trail-magic":"trail-slash");
+ trail.style.left=start.x+"px";trail.style.top=start.y+"px";
+ trail.style.setProperty("--trail-color",from==="heroArt"?"#58dfff":"#ff7657");
+ document.body.append(trail);
+ const dx=end.x-start.x,dy=end.y-start.y;
+ const anim=trail.animate([{transform:"translate3d(0,0,0) rotate(-25deg) scale(.3)",opacity:0},{offset:.35,transform:`translate3d(${dx*.5}px,${dy*.5}px,0) rotate(12deg) scale(1)`,opacity:.9},{transform:`translate3d(${dx*.86}px,${dy*.86}px,0) rotate(70deg) scale(1.4)`,opacity:0}],{duration:reduced?80:620,easing:"ease-out",fill:"forwards"});
+ anim.finished.catch(()=>{}).then(()=>trail.remove());
+}
 async function moveActorToTarget(from,to,kind="melee"){
- const fighter=$(fighterFor(from)),opponent=$(fighterFor(to)),arena=$("arena");
- if(!fighter||!opponent)return async()=>{};
- const fr=fighter.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
+ const source=$(from),opponent=$(to);
+ if(!source||!opponent)return async()=>{};
+ const sr=source.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
+ const clone=source.cloneNode(true);clone.removeAttribute("id");
+ clone.querySelectorAll("[id]").forEach(n=>n.removeAttribute("id"));
+ clone.classList.add("duel-summon");clone.classList.remove("shield-active","moving","duel-card");
+ Object.assign(clone.style,{position:"fixed",left:sr.left+"px",top:sr.top+"px",width:sr.width+"px",height:sr.height+"px",margin:"0",pointerEvents:"none",zIndex:"100",transformOrigin:"50% 70%"});
+ document.body.append(clone);source.classList.add("duel-source-hidden");
  const direction=from==="heroArt"?1:-1;
- const dx=(tr.left+tr.width*.5)-(fr.left+fr.width*.5)-direction*(fr.width*.38+tr.width*.38);
- const dy=(tr.top+tr.height*.5)-(fr.top+fr.height*.5);
- poseFighter(fighter.id,kind==="magic"?"cast":"attack",1550);
- fighter.classList.add("moving","duel-card");
- const approach=fighter.animate([
- {transform:"translate3d(0,0,0) scale(1)",offset:0},
- {transform:`translate3d(${dx*.35}px,${dy*.15-18}px,0) scale(1.08)`,offset:.4},
- {transform:`translate3d(${dx*.82}px,${dy*.8}px,0) scale(1.18)`,offset:.82},
- {transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`,offset:1}
- ],{duration:reduced?100:730,easing:"cubic-bezier(.16,.7,.18,1)",fill:"forwards"});
+ const dx=(tr.left+tr.width/2)-(sr.left+sr.width/2)-direction*(sr.width*.42+tr.width*.42);
+ const dy=(tr.top+tr.height/2)-(sr.top+sr.height/2);
+ const travel=reduced?110:820;
+ const approach=clone.animate([
+ {offset:0,transform:"translate3d(0,0,0) scale(.72)",opacity:.2,filter:"brightness(2)"},
+ {offset:.2,transform:`translate3d(${dx*.12}px,${dy*.15-22}px,0) scale(1.08)`,opacity:1,filter:"brightness(1.5)"},
+ {offset:.54,transform:`translate3d(${dx*.45}px,${dy*.45-18}px,0) scale(1.23) rotate(${-direction*8}deg)`,opacity:1},
+ {offset:.77,transform:`translate3d(${dx*.78}px,${dy*.8}px,0) scale(1.25) rotate(${direction*8}deg)`,opacity:1},
+ {offset:1,transform:`translate3d(${dx}px,${dy}px,0) scale(1.16) rotate(${-direction*5}deg)`,opacity:1,filter:"brightness(1.8)"}
+ ],{duration:travel,easing:"cubic-bezier(.2,.6,.15,1)",fill:"forwards"});
+ duelTrail(from,to,kind);
  await approach.finished.catch(()=>{});
- poseFighter(opponent.id,"hit",650);
+ opponent.classList.add("duel-recoil");setTimeout(()=>opponent.classList.remove("duel-recoil"),reduced?100:460);
  return async()=>{
- const back=fighter.animate([
- {transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`,offset:0},
- {transform:`translate3d(${dx*.42}px,${dy*.15-8}px,0) scale(1.07)`,offset:.5},
- {transform:"translate3d(0,0,0) scale(1)",offset:1}
- ],{duration:reduced?80:530,easing:"ease-in-out",fill:"forwards"});
+ const back=clone.animate([
+ {transform:`translate3d(${dx}px,${dy}px,0) scale(1.16)`,opacity:1},
+ {offset:.55,transform:`translate3d(${dx*.38}px,${dy*.36-16}px,0) scale(.95)`,opacity:.9},
+ {transform:"translate3d(0,0,0) scale(.72)",opacity:0}
+ ],{duration:reduced?90:470,easing:"ease-in-out",fill:"forwards"});
  await back.finished.catch(()=>{});
- approach.cancel();back.cancel();fighter.classList.remove("moving","duel-card");
+ approach.cancel();back.cancel();clone.remove();source.classList.remove("duel-source-hidden");
  };
 }
 async function animateSpellToTarget(from,to,card){
@@ -182,11 +198,11 @@ async function play(i){
   out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));
  }
  if(c.block){
-  stage("ESCUDO INCORPORADO","defense");poseFighter("elyraFighter","defend",900);actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
+  stage("ESCUDO INCORPORADO","defense");poseFighter("heroArt","defend",900);actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
   await wait(450);s.heroShield+=c.block;updateShieldAuras();float("heroArt","+"+c.block+" 🛡",true);sound(540);out.push("+"+c.block+" escudo");await wait(330);
  }
  if(c.heal){
-  stage("ENERGIA VITAL","heal");poseFighter("elyraFighter","heal",950);actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
+  stage("ENERGIA VITAL","heal");poseFighter("heroArt","heal",950);actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
   const n=Math.min(c.heal,100-s.hero);await wait(420);s.hero+=n;float("heroArt","+"+n+" ♥",true);sound(720);out.push("+"+n+" HP");await wait(260);
  }
  if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("🔥 Queimadura");burst("enemyArt","fire",10)}if(c.freeze){s.freeze=Math.max(s.freeze,c.freeze);out.push("❄️ Malgruk congelado");burst("enemyArt","ice",18)}
@@ -197,11 +213,11 @@ async function endTurn(){
  if(s.done||s.busy)return;s.busy=true;stage("TURNO DE "+currentStage().name,"danger");log("👹 "+currentStage().name+" está preparando a reação...");render();
  await wait(500);
  let out=[];
- if(s.burn){const n=damage("enemy",3);s.burn--;poseFighter("malgrukFighter","hit",600);actor("enemyArt","recoil",550);burst("enemyArt","fire",12);float("enemyArt","🔥 −"+n);out.push("Queimadura: "+n);await wait(520)}
+ if(s.burn){const n=damage("enemy",3);s.burn--;poseFighter("enemyArt","hit",600);actor("enemyArt","recoil",550);burst("enemyArt","fire",12);float("enemyArt","🔥 −"+n);out.push("Queimadura: "+n);await wait(520)}
  if(s.enemy<=0){finish("win");return}
- const frozen=s.freeze>0;if(frozen){s.freeze--;stage(currentStage().name+" CONGELADO","defense");elementScene("ice");poseFighter("malgrukFighter","defend",850);actor("enemyArt","parry",700);burst("enemyArt","ice",26);out.push("❄️ "+currentStage().name+" perdeu a ação");await wait(600)}const special=!frozen&&bossSpecial();const defend=!frozen&&((special&&s.stageIndex===3)||(!special&&s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0));
+ const frozen=s.freeze>0;if(frozen){s.freeze--;stage(currentStage().name+" CONGELADO","defense");elementScene("ice");poseFighter("enemyArt","defend",850);actor("enemyArt","parry",700);burst("enemyArt","ice",26);out.push("❄️ "+currentStage().name+" perdeu a ação");await wait(600)}const special=!frozen&&bossSpecial();const defend=!frozen&&((special&&s.stageIndex===3)||(!special&&s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0));
  if(defend){
-  stage(special?"🪨 MURALHA DO COLOSSO":"DEFESA DO GUARDIÃO","defense");if(special)elementScene("earth");poseFighter("malgrukFighter","defend",900);actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
+  stage(special?"🪨 MURALHA DO COLOSSO":"DEFESA DO GUARDIÃO","defense");if(special)elementScene("earth");poseFighter("enemyArt","defend",900);actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
   await wait(520);s.enemyShield+=currentStage().guard;updateShieldAuras();float("enemyArt","+"+currentStage().guard+" 🛡",true);out.push(currentStage().name+" ergueu escudo");await wait(280);
  }else if(!frozen){
   const attack=bossDamage();
