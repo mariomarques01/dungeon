@@ -96,7 +96,33 @@ function aura(id,color,symbol){
 }
 
 function fighterFor(id){return id==="heroArt"?"heroArt":"enemyArt"}
-function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
+const poseTimers=new WeakMap();
+function poseFighter(id,pose,duration=800){
+ const el=$(id);if(!el)return;
+ const previous=poseTimers.get(el);if(previous)clearTimeout(previous);
+ el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");
+ el.dataset.combatPose=pose;
+ el.classList.add("pose-"+pose);
+ const timer=setTimeout(()=>{if(el.dataset.combatPose===pose){el.classList.remove("pose-"+pose);delete el.dataset.combatPose}poseTimers.delete(el)},reduced?80:duration);
+ poseTimers.set(el,timer);
+}
+function actorMotion(id,kind="attack"){
+ const el=$(id);if(!el||reduced)return;
+ const portrait=el.querySelector(".character-frame img")||el.querySelector("img");
+ if(!portrait)return;
+ const enemy=id==="enemyArt",dir=enemy?-1:1;
+ const frames=kind==="attack"?
+ [{transform:"translate3d(0,0,0) rotate(0deg) scale(1)"},{offset:.32,transform:`translate3d(${-dir*5}px,5px,0) rotate(${-dir*5}deg) scale(.96)`},{offset:.7,transform:`translate3d(${dir*9}px,-5px,0) rotate(${dir*7}deg) scale(1.07)`},{transform:"translate3d(0,0,0) rotate(0deg) scale(1)"}]:
+ kind==="cast"?
+ [{filter:"brightness(1)",transform:"translateY(0) scale(1)"},{offset:.55,filter:"brightness(1.45) saturate(1.25)",transform:"translateY(-6px) scale(1.055)"},{filter:"brightness(1)",transform:"translateY(0) scale(1)"}]:
+ kind==="defend"?
+ [{transform:"scale(1)",filter:"brightness(1)"},{offset:.45,transform:"scale(.94) translateY(4px)",filter:"brightness(1.25)"},{transform:"scale(1)",filter:"brightness(1)"}]:
+ [{transform:"translateX(0)",filter:"brightness(1)"},{offset:.3,transform:`translateX(${dir*7}px)`,filter:"brightness(1.6)"},{offset:.55,transform:`translateX(${-dir*4}px)`,filter:"brightness(1.1)"},{transform:"translateX(0)",filter:"brightness(1)"}];
+ portrait.getAnimations().filter(a=>a.id==="combat-pose-motion").forEach(a=>a.cancel());
+ const animation=portrait.animate(frames,{duration:kind==="attack"?460:kind==="cast"?620:340,easing:"ease-in-out"});
+ animation.id="combat-pose-motion";
+}
+
 function resetBattleSprites(){document.querySelectorAll(".duel-summon,.duel-trail,.spell-orb,.flying-card,.combat-impact-ring,.weapon-arc,.cinematic-impact").forEach(el=>el.remove());document.querySelectorAll(".duel-source-hidden").forEach(el=>el.classList.remove("duel-source-hidden"));for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
 function weaponArc(to,kind="melee",owner="heroArt"){
  const target=$(to);if(!target)return;
@@ -208,12 +234,12 @@ function comboNotice(message,elemental=false){
  a.finished.catch(()=>{}).then(()=>n.remove());
 }
 function impactSequence(to,card,outcome){
- if(outcome.blocked){shieldBubble(to);actor(to,"parry",600);poseFighter(fighterFor(to),"defend",750);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
- if(outcome.amount){actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
+ if(outcome.blocked){actorMotion(to,"defend");shieldBubble(to);actor(to,"parry",600);poseFighter(fighterFor(to),"defend",750);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
+ if(outcome.amount){actorMotion(to,"hit");actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
  if(navigator.vibrate&&!reduced)navigator.vibrate([40,30,65]);
 }
 async function dashStrike(from,to,card,resolveHit){
- stage("INVESTIDA • "+card.name.toUpperCase(),"attack");aura(from,card.glow,card.icon);sound(330);
+ stage("INVESTIDA • "+card.name.toUpperCase(),"attack");poseFighter(from,"attack",520);actorMotion(from,"attack");aura(from,card.glow,card.icon);sound(330);
  await wait(65);
  const returnHome=await moveActorToTarget(from,to,"melee");
  const outcome=resolveHit();impactSequence(to,card,outcome);sound(180);
@@ -221,7 +247,7 @@ async function dashStrike(from,to,card,resolveHit){
 }
 async function magicStrike(from,to,card,resolveHit){
  stage("CONJURAÇÃO • "+card.name.toUpperCase(),"attack");
- poseFighter(from,"cast",650);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",12);
+ poseFighter(from,"cast",650);actorMotion(from,"cast");aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",12);
  await wait(100);
  await animateSpellToTarget(from,to,card);
  cinematicImpact(to,"magic",from);
@@ -251,11 +277,11 @@ async function play(i){
   out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));if(bonus&&result.amount>0)comboNotice("+"+bonus+" BÔNUS DE COMBO",elementalCombo);
  }
  if(c.block){
-  stage("ESCUDO INCORPORADO","defense");poseFighter("heroArt","defend",900);actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
+  stage("ESCUDO INCORPORADO","defense");poseFighter("heroArt","defend",900);actorMotion("heroArt","defend");actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
   await wait(220);s.heroShield+=c.block;updateShieldAuras();float("heroArt","+"+c.block+" 🛡",true);sound(540);out.push("+"+c.block+" escudo");await wait(120);
  }
  if(c.heal){
-  stage("ENERGIA VITAL","heal");poseFighter("heroArt","heal",950);actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
+  stage("ENERGIA VITAL","heal");poseFighter("heroArt","heal",950);actorMotion("heroArt","cast");actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
   const n=Math.min(c.heal,100-s.hero);await wait(220);s.hero+=n;float("heroArt","+"+n+" ♥",true);sound(720);out.push("+"+n+" HP");await wait(110);
  }
  if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("🔥 Queimadura");burst("enemyArt","fire",10)}if(c.freeze){s.freeze=Math.max(s.freeze,c.freeze);out.push("❄️ "+currentStage().name+" congelado");burst("enemyArt","ice",18)}
@@ -270,7 +296,7 @@ async function endTurn(){
  if(s.enemy<=0){finish("win");return}
  const frozen=s.freeze>0;if(frozen){s.freeze--;stage(currentStage().name+" CONGELADO","defense");elementScene("ice");poseFighter("enemyArt","defend",850);actor("enemyArt","parry",700);burst("enemyArt","ice",26);out.push("❄️ "+currentStage().name+" perdeu a ação");await wait(600)}const special=!frozen&&bossSpecial();const defend=!frozen&&((special&&s.stageIndex===3)||(!special&&s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0));
  if(defend){
-  stage(special?"🪨 MURALHA DO COLOSSO":"DEFESA DO GUARDIÃO","defense");if(special)elementScene("earth");poseFighter("enemyArt","defend",900);actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
+  stage(special?"🪨 MURALHA DO COLOSSO":"DEFESA DO GUARDIÃO","defense");if(special)elementScene("earth");poseFighter("enemyArt","defend",900);actorMotion("enemyArt","defend");actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
   await wait(270);s.enemyShield+=currentStage().guard;updateShieldAuras();float("enemyArt","+"+currentStage().guard+" 🛡",true);out.push(currentStage().name+" ergueu escudo");await wait(280);
  }else if(!frozen){
   const attack=bossDamage();
