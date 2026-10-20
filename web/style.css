@@ -498,3 +498,6 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .arena .fighter .intent{display:none!important}
 @media(max-width:430px){.battle-sprite{height:clamp(120px,34dvh,275px)!important;bottom:11%!important}.battle-elyra{left:-4%!important}.battle-malgruk{right:-5%!important}.arena .middle{top:22%!important}}
 @media(max-height:700px){.battle-sprite{height:clamp(110px,28dvh,210px)!important}.arena .middle{top:19%!important}}
+
+/* Prepared to load transparent painted character assets once uploaded to web/assets. */
+.battle-sprite img{object-fit:contain;filter:drop-shadow(0 2px 4px #0008)}
