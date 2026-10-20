@@ -585,3 +585,19 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .weapon-arc.arc-magic{border-top-color:#8df3ff;border-right-color:#537fff;box-shadow:9px -8px 18px -12px #7fffff,12px -10px 30px -10px #467dff;filter:drop-shadow(0 0 10px #6bcaff)}
 .weapon-arc.arc-enemy{border-top-color:#ff9a91;border-right-color:#a33157;filter:drop-shadow(0 0 9px #ff5477)}
 @media(prefers-reduced-motion:reduce){.weapon-arc{display:none!important}}
+
+/* v2.9 - full-impact combat FX tuned for modern mobile GPUs */
+.cinematic-impact{position:absolute;z-index:75;width:130px;height:130px;pointer-events:none;transform:translate(-50%,-50%);will-change:transform,opacity;isolation:isolate}
+.cinematic-impact i{position:absolute;inset:0;display:block}
+.cinematic-impact .impact-core{inset:30%;border-radius:50%;background:#fff9d8;box-shadow:0 0 22px 12px #ffbe66,0 0 55px 20px #fa6a4277}
+.cinematic-impact .impact-rays{background:repeating-conic-gradient(from 12deg,#ffe8b0 0 7deg,transparent 7deg 28deg);mask-image:radial-gradient(circle,transparent 0 16%,#000 24% 70%,transparent 76%);filter:drop-shadow(0 0 6px #ffc46e)}
+.cinematic-impact .impact-wave{inset:9%;border:5px solid #ffe8aa;border-radius:50%;box-shadow:0 0 18px #ffb35b,inset 0 0 14px #ffb35b}
+.cinematic-magic .impact-core{background:#e2ffff;box-shadow:0 0 20px 12px #54e8ff,0 0 50px 22px #387bff77}
+.cinematic-magic .impact-rays{background:repeating-conic-gradient(from 12deg,#b4ffff 0 7deg,transparent 7deg 28deg);filter:drop-shadow(0 0 7px #37b9ff)}
+.cinematic-magic .impact-wave{border-color:#9ff8ff;box-shadow:0 0 18px #3cbcff,inset 0 0 14px #3cbcff}
+.cinematic-enemy .impact-core{background:#ffe6d2;box-shadow:0 0 22px 12px #ff5266,0 0 55px 20px #a51b3977}
+.cinematic-enemy .impact-rays{background:repeating-conic-gradient(from 12deg,#ffb5a2 0 7deg,transparent 7deg 28deg);filter:drop-shadow(0 0 7px #ff4d61)}
+.cinematic-enemy .impact-wave{border-color:#ff9f9f;box-shadow:0 0 18px #f43b56,inset 0 0 14px #f43b56}
+.arena.arena-shake{animation:arenaImpactShake .28s ease-out}
+@keyframes arenaImpactShake{0%,100%{translate:0 0}17%{translate:-5px 2px}34%{translate:5px -3px}52%{translate:-3px 2px}73%{translate:2px -1px}}
+@media(prefers-reduced-motion:reduce){.arena.arena-shake{animation:none!important}}
