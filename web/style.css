@@ -395,3 +395,12 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .deck-notice{min-height:15px;font:10px/1.25 system-ui,sans-serif;color:#9ce8f7;text-align:center}
 .collection-sheet p{margin:5px 0}
 @media(max-height:750px){.profile-stats{min-height:15px;font-size:9px;padding:1px}.mission{min-height:31px!important}}
+
+/* 1.6 — five stage boss campaign */
+.stage-progress{position:absolute;top:5px;right:6px;z-index:3;color:#ffe1a2;background:#171128d9;border:1px solid #bf8e4c;border-radius:5px;font:900 9px system-ui,sans-serif;padding:2px 5px}
+.mission{position:relative}
+.mission-zone{display:none}
+.enemyart[data-boss="fire"]{box-shadow:0 0 19px #ff532c,0 0 0 2px #ff6a36!important}
+.enemyart[data-boss="ice"]{box-shadow:0 0 19px #54ddff,0 0 0 2px #67eaff!important}
+.enemyart[data-boss="earth"]{box-shadow:0 0 19px #d1aa57,0 0 0 2px #d1aa57!important}
+.enemyart[data-boss="storm"]{box-shadow:0 0 19px #b46aff,0 0 0 2px #b46aff!important}
