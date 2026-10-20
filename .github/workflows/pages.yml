@@ -28,6 +28,14 @@ jobs:
           enablement: true
       - name: Preparar efeitos sonoros CC0
         run: python3 scripts/prepare_sfx.py
+      - name: Validar jogo e arquivos sonoros
+        run: |
+          node --check web/game.js
+          test -s web/index.html
+          test -s web/style.css
+          for sound in steel fire lightning; do
+            find web/assets/sfx -maxdepth 1 -type f -name "$sound.*" -size +100c | grep -q . || exit 1
+          done
       - name: Preparar arquivos do jogo
         run: |
           test -f web/index.html
