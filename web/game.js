@@ -32,27 +32,88 @@ async function animateAttack(from,to,card,amount,blocked=0){
  source.classList.remove("active-fighter");
  await wait(250);
 }
+
+function centerOf(el){const r=el.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2}}
+async function fuseCard(cardElement,card,heroId="heroArt"){
+ if(!cardElement)return;
+ const from=cardElement.getBoundingClientRect(),target=centerOf($(heroId));
+ const clone=cardElement.cloneNode(true);
+ clone.disabled=true;clone.classList.add("flying-card");clone.style.left=from.left+"px";clone.style.top=from.top+"px";clone.style.width=from.width+"px";clone.style.height=from.height+"px";clone.style.margin="0";clone.style.animation="none";clone.style.setProperty("--glow",card.glow+"bb");
+ document.body.append(clone);cardElement.style.visibility="hidden";
+ stage("CARTA INVOCADA","attack");sound(510);
+ await wait(90);
+ const dx=target.x-(from.left+from.width/2),dy=target.y-(from.top+from.height/2);
+ const anim=clone.animate([{transform:"translate3d(0,0,0) scale(1) rotate(0deg)",opacity:1,filter:"brightness(1)"},{offset:.65,transform:`translate3d(${dx*.7}px,${dy*.7-30}px,0) scale(.8) rotate(-12deg)`,opacity:1,filter:"brightness(1.6)"},{transform:`translate3d(${dx}px,${dy}px,0) scale(.06) rotate(360deg)`,opacity:0,filter:"brightness(4)"}],{duration:reduced?60:650,easing:"cubic-bezier(.25,.1,.3,1)",fill:"forwards"});
+ await anim.finished.catch(()=>{});
+ clone.remove();
+ actor(heroId,card.block?"cast-guard":card.heal?"cast-heal":"channel",650);
+ burst(heroId,card.block?"ice":card.heal?"heal":card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",26);
+ aura(heroId,card.glow,card.icon);
+ screenPulse(card.block?"shield":card.heal?"heal":"strike");
+ await wait(220);
+}
+function aura(id,color,symbol){
+ const host=$(id),e=document.createElement("span");e.className="absorb-aura";e.textContent=symbol;e.style.setProperty("--aura",color);host.append(e);
+ setTimeout(()=>e.remove(),1150);
+}
+async function dashStrike(from,to,card,resolveHit){
+ const actorEl=$(from),targetEl=$(to),start=centerOf(actorEl),end=centerOf(targetEl);
+ const dx=(end.x-start.x)*.72,dy=(end.y-start.y)*.72;
+ stage(card.name.toUpperCase(),"attack");actorEl.classList.add("active-fighter");
+ const forward=actorEl.animate([{transform:"translate3d(0,0,0) scale(1)"},{offset:.32,transform:"translate3d(0,12px,0) scale(.93)"},{transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`}],{duration:reduced?60:480,easing:"cubic-bezier(.25,.7,.15,1)",fill:"forwards"});
+ await forward.finished.catch(()=>{});
+ const outcome=resolveHit();burst(to,"gold",28);screenPulse("strike");
+ if(outcome.blocked){shieldBubble(to);hitFlash(to,"block");float(to,"🛡 −"+outcome.blocked,true)}
+ if(outcome.amount){actor(to,"recoil",600);hitFlash(to);float(to,"−"+outcome.amount)}
+ sound(240);if(navigator.vibrate&&!reduced)navigator.vibrate([25,30,50]);
+ await wait(180);
+ const back=actorEl.animate([{transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`},{transform:"translate3d(0,0,0) scale(1)"}],{duration:reduced?50:400,easing:"ease-out",fill:"forwards"});
+ await back.finished.catch(()=>{});
+ forward.cancel();back.cancel();actorEl.classList.remove("active-fighter");
+ return outcome;
+}
+async function magicStrike(from,to,card,resolveHit){
+ stage(card.name.toUpperCase(),"attack");
+ actor(from,card.art==="fire"?"cast-fire":"cast-bolt",850);
+ aura(from,card.glow,card.icon);
+ await wait(420);
+ projectile(from,to,card.icon,card.glow);
+ await wait(480);
+ const outcome=resolveHit();
+ if(outcome.blocked){shieldBubble(to);hitFlash(to,"block");float(to,"🛡 −"+outcome.blocked,true);burst(to,"ice",15)}
+ if(outcome.amount){actor(to,"recoil",650);hitFlash(to);burst(to,card.art==="fire"?"fire":"electric",32);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
+ sound(card.art==="fire"?150:570);
+ await wait(320);
+ return outcome;
+}
+function updateShieldAuras(){
+ $("heroArt").classList.toggle("shield-active",s.heroShield>0);
+ $("enemyArt").classList.toggle("shield-active",s.enemyShield>0);
+}
 async function play(i){
  if(s.done||s.busy)return;
  const id=s.hand[i],c=C[id];if(!c||c.cost>s.energy)return;
- s.busy=true;s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);s.combo++;
- render();let out=[];
+ s.busy=true;
+ const cardElement=$("cards").children[i];
+ await fuseCard(cardElement,c);
+ s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);s.combo++;
+ render();
+ let out=[];
  if(c.damage){
   const bonus=s.combo>=3?Math.min(6,(s.combo-2)*2):0;
-  const before=s.enemyShield,n=damage("enemy",c.damage+bonus),blocked=before-s.enemyShield;
-  await animateAttack("heroArt","enemyArt",c,n,blocked);
-  out.push(n+" de dano"+(bonus?" • COMBO +"+bonus:""));
+  const resolveHit=()=>{const before=s.enemyShield;const amount=damage("enemy",c.damage+bonus);const blocked=before-s.enemyShield;render();return{amount,blocked}};
+  const result=c.art==="sword"?await dashStrike("heroArt","enemyArt",c,resolveHit):await magicStrike("heroArt","enemyArt",c,resolveHit);
+  out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));
  }
  if(c.block){
-  stage("BARREIRA ARCANA","defense");actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",20);screenPulse("shield");
-  await wait(430);s.heroShield+=c.block;float("heroArt","+12 🛡",true);sound(540);out.push("+"+c.block+" escudo");
-  await wait(260);
+  stage("ESCUDO INCORPORADO","defense");actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
+  await wait(450);s.heroShield+=c.block;updateShieldAuras();float("heroArt","+"+c.block+" 🛡",true);sound(540);out.push("+"+c.block+" escudo");await wait(330);
  }
  if(c.heal){
-  stage("LUZ RESTAURADORA","heal");actor("heroArt","cast-heal",850);burst("heroArt","heal",24);screenPulse("heal");
+  stage("ENERGIA VITAL","heal");actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
   const n=Math.min(c.heal,100-s.hero);await wait(420);s.hero+=n;float("heroArt","+"+n+" ♥",true);sound(720);out.push("+"+n+" HP");await wait(260);
  }
- if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("🔥 Queimadura");burst("enemyArt","fire",8)}
+ if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("🔥 Queimadura");burst("enemyArt","fire",10)}
  if(s.enemy<=0){render();finish("win");return}
  s.busy=false;stage("SUA VEZ","ready");log(c.icon+" "+c.name+": "+out.join(" • "));render();
 }
@@ -65,17 +126,17 @@ async function endTurn(){
  const defend=s.enemy<30&&s.round%2===0;
  if(defend){
   stage("DEFESA DO GUARDIÃO","defense");actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
-  await wait(520);s.enemyShield+=10;float("enemyArt","+10 🛡",true);out.push("Malgruk ergueu escudo");await wait(280);
+  await wait(520);s.enemyShield+=10;updateShieldAuras();float("enemyArt","+10 🛡",true);out.push("Malgruk ergueu escudo");await wait(280);
  }else{
-  const attack=12+(s.round%3===0?4:0),blocked=Math.min(s.heroShield,attack),n=damage("hero",attack);
-  await animateAttack("enemyArt","heroArt",{name:"GOLPE DE MALGRUK",art:"sword",icon:"🪓",glow:"#f6a55d"},n,blocked);
-  out.push("Malgruk atacou: "+n+" dano"+(blocked?" ("+blocked+" bloqueado)":""));
+  const attack=12+(s.round%3===0?4:0);
+  const result=await dashStrike("enemyArt","heroArt",{name:"GOLPE DE MALGRUK",art:"sword",icon:"🪓",glow:"#f6a55d"},()=>{const before=s.heroShield;const amount=damage("hero",attack);const blocked=before-s.heroShield;render();return{amount,blocked}});
+  out.push("Malgruk atacou: "+result.amount+" dano"+(result.blocked?" ("+result.blocked+" bloqueado)":""));
  }
- s.heroShield=0;s.discard.push(...s.hand);s.hand=[];s.round++;s.energy=3;s.combo=0;draw();
+ s.heroShield=0;updateShieldAuras();s.discard.push(...s.hand);s.hand=[];s.round++;s.energy=3;s.combo=0;draw();
  if(s.hero<=0){finish("lose");return}
  if(s.round>10){finish(s.hero>s.enemy?"win":s.hero<s.enemy?"lose":"draw");return}
  s.busy=false;stage("SUA VEZ","ready");log(out.join(" • ")+" • Sua vez!");render();
 }
 function finish(k){s.done=true;s.busy=false;render();$("resultIcon").textContent=k==="win"?"🏆":k==="draw"?"⚖️":"💀";$("resultTitle").textContent=k==="win"?"VITÓRIA!":k==="draw"?"EMPATE":"DERROTA";$("resultText").textContent=k==="win"?"Malgruk foi derrotado. A Torre espera por você!":k==="draw"?"Os heróis terminaram empatados.":"Ajuste seu deck e tente novamente.";$("reward").textContent=k==="win"?"+50 MOEDAS (SIMULAÇÃO)":k==="draw"?"+10 MOEDAS (SIMULAÇÃO)":"+5 MOEDAS (SIMULAÇÃO)";$("result").classList.remove("hidden");sound(k==="win"?740:190)}
-function render(){$("enemyHP").textContent=s.enemy+" / 100";$("heroHP").textContent=s.hero+" / 100";$("enemyBar").style.width=s.enemy+"%";$("heroBar").style.width=s.hero+"%";$("round").textContent=Math.min(10,s.round)+" / 10";$("enemyStatus").textContent=[s.enemyShield?"🛡 Escudo "+s.enemyShield:"",s.burn?"🔥 Queimadura "+s.burn:""].filter(Boolean).join(" • ")||"✦ Sem efeitos";$("heroStatus").textContent=s.heroShield?"🛡 Escudo "+s.heroShield:"✦ Sem efeitos";$("intent").textContent=s.enemy<30&&s.round%2===0?"🛡 Próximo: defender":"⚔ Próximo: "+(12+(s.round%3===0?4:0))+" dano";$("energyText").textContent=s.energy+" / 3";$("combo").textContent="×"+Math.max(1,s.combo);$("deckCount").textContent=s.deck.length;$("hint").textContent=s.busy?"Aguarde...":s.energy?"Toque para jogar":"Sem mana • encerre o turno";$("gems").replaceChildren();for(let i=0;i<3;i++){let g=document.createElement("span");g.className="gem"+(i>=s.energy?" off":"");g.textContent="💎";$("gems").append(g)}$("cards").replaceChildren();s.hand.forEach((id,i)=>{let c=C[id],b=document.createElement("button");b.className="card";b.disabled=s.done||s.busy||c.cost>s.energy;b.style.setProperty("--glow",c.glow+"66");b.style.setProperty("--delay",i*45+"ms");b.setAttribute("aria-label",c.name+", "+c.cost+" mana");let cost=document.createElement("span");cost.className="cost";cost.textContent=c.cost;let art=document.createElement("div");art.className="art";let img=document.createElement("img");img.src="assets/"+c.art+".svg";img.alt="";art.append(img);let name=document.createElement("strong");name.textContent=c.name;let desc=document.createElement("small");desc.textContent=c.damage?c.damage+" dano":c.block?c.block+" escudo":c.heal+" cura";let rarity=document.createElement("span");rarity.className="rarity";b.append(cost,art,name,desc,rarity);b.addEventListener("click",()=>play(i));$("cards").append(b)});$("end").disabled=s.done||s.busy}
+function render(){$("enemyHP").textContent=s.enemy+" / 100";$("heroHP").textContent=s.hero+" / 100";$("enemyBar").style.width=s.enemy+"%";$("heroBar").style.width=s.hero+"%";$("round").textContent=Math.min(10,s.round)+" / 10";$("enemyStatus").textContent=[s.enemyShield?"🛡 Escudo "+s.enemyShield:"",s.burn?"🔥 Queimadura "+s.burn:""].filter(Boolean).join(" • ")||"✦ Sem efeitos";$("heroStatus").textContent=s.heroShield?"🛡 Escudo "+s.heroShield:"✦ Sem efeitos";$("intent").textContent=s.enemy<30&&s.round%2===0?"🛡 Próximo: defender":"⚔ Próximo: "+(12+(s.round%3===0?4:0))+" dano";$("energyText").textContent=s.energy+" / 3";$("combo").textContent="×"+Math.max(1,s.combo);$("deckCount").textContent=s.deck.length;$("hint").textContent=s.busy?"Aguarde...":s.energy?"Toque para jogar":"Sem mana • encerre o turno";$("gems").replaceChildren();for(let i=0;i<3;i++){let g=document.createElement("span");g.className="gem"+(i>=s.energy?" off":"");g.textContent="💎";$("gems").append(g)}$("cards").replaceChildren();s.hand.forEach((id,i)=>{let c=C[id],b=document.createElement("button");b.className="card";b.disabled=s.done||s.busy||c.cost>s.energy;b.style.setProperty("--glow",c.glow+"66");b.style.setProperty("--delay",i*45+"ms");b.setAttribute("aria-label",c.name+", "+c.cost+" mana");let cost=document.createElement("span");cost.className="cost";cost.textContent=c.cost;let art=document.createElement("div");art.className="art";let img=document.createElement("img");img.src="assets/"+c.art+".svg";img.alt="";art.append(img);let name=document.createElement("strong");name.textContent=c.name;let desc=document.createElement("small");desc.textContent=c.damage?c.damage+" dano":c.block?c.block+" escudo":c.heal+" cura";let rarity=document.createElement("span");rarity.className="rarity";b.append(cost,art,name,desc,rarity);b.addEventListener("click",()=>play(i));$("cards").append(b)});$("end").disabled=s.done||s.busy;updateShieldAuras()}
 $("end").addEventListener("click",endTurn);$("restart").addEventListener("click",start);$("again").addEventListener("click",start);start();
