@@ -1,0 +1,38 @@
+name: Publicar Dungeon Cards no GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+      - name: Preparar arquivos do jogo
+        run: |
+          test -f web/index.html
+          cp web/index.html web/404.html
+          touch web/.nojekyll
+      - name: Enviar arquivos
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4
