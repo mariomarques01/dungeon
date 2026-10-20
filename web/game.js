@@ -92,7 +92,7 @@ function aura(id,color,symbol){
  setTimeout(()=>e.remove(),1150);
 }
 
-function fighterFor(id){return id==="heroArt"?"elyraFighter":"malgrukFighter"}
+function fighterFor(id){return id==="heroArt"?"heroArt":"enemyArt"}
 function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
 function resetBattleSprites(){for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
 async function moveActorToTarget(from,to,kind="melee"){
@@ -100,10 +100,10 @@ async function moveActorToTarget(from,to,kind="melee"){
  if(!fighter||!opponent)return async()=>{};
  const fr=fighter.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
  const direction=from==="heroArt"?1:-1;
- const dx=(tr.left+tr.width*.5)-(fr.left+fr.width*.5)-direction*(fr.width*.45+tr.width*.45);
+ const dx=(tr.left+tr.width*.5)-(fr.left+fr.width*.5)-direction*(fr.width*.38+tr.width*.38);
  const dy=(tr.top+tr.height*.5)-(fr.top+fr.height*.5);
  poseFighter(fighter.id,kind==="magic"?"cast":"attack",1550);
- fighter.classList.add("moving");
+ fighter.classList.add("moving","duel-card");
  const approach=fighter.animate([
  {transform:"translate3d(0,0,0) scale(1)",offset:0},
  {transform:`translate3d(${dx*.35}px,${dy*.15-18}px,0) scale(1.08)`,offset:.4},
@@ -119,7 +119,7 @@ async function moveActorToTarget(from,to,kind="melee"){
  {transform:"translate3d(0,0,0) scale(1)",offset:1}
  ],{duration:reduced?80:530,easing:"ease-in-out",fill:"forwards"});
  await back.finished.catch(()=>{});
- approach.cancel();back.cancel();fighter.classList.remove("moving");
+ approach.cancel();back.cancel();fighter.classList.remove("moving","duel-card");
  };
 }
 async function animateSpellToTarget(from,to,card){
