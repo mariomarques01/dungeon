@@ -404,3 +404,33 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .enemyart[data-boss="ice"]{box-shadow:0 0 19px #54ddff,0 0 0 2px #67eaff!important}
 .enemyart[data-boss="earth"]{box-shadow:0 0 19px #d1aa57,0 0 0 2px #d1aa57!important}
 .enemyart[data-boss="storm"]{box-shadow:0 0 19px #b46aff,0 0 0 2px #b46aff!important}
+
+/* v1.7 cinematic combat — arena is a stage, not a dashboard */
+.arena{position:relative!important;isolation:isolate;overflow:hidden!important;background:linear-gradient(180deg,#08082033,#090c2422),url("assets/citadel.svg") center center/cover no-repeat!important}
+.arena:before{opacity:.28!important}
+.arena:after{opacity:.55!important}
+.arena .fighter{position:absolute!important;z-index:3;width:100%!important;left:0!important;padding:4px 10px!important;min-height:0!important;pointer-events:none}
+.arena .fighter .portrait{pointer-events:auto}
+.arena .enemy{top:1%!important;bottom:auto!important}
+.arena .hero{bottom:1%!important;top:auto!important}
+.arena .fighter>.name,.arena .fighter>small,.arena .ability-panel,.arena .intent,.arena .status{display:none!important}
+.arena .fighter-row{display:flex!important;gap:8px!important;align-items:center!important;justify-content:space-between!important}
+.arena .enemy .fighter-row{flex-direction:row!important}
+.arena .hero .fighter-row{flex-direction:row-reverse!important}
+.arena .stats{flex:1 1 auto!important;min-width:0!important;max-width:65%!important}
+.arena .hpinfo{font-size:11px!important;letter-spacing:.3px!important;text-shadow:0 1px 5px #000}
+.arena .hp{height:14px!important;box-shadow:0 0 9px #000!important}
+.arena .portrait{width:clamp(78px,22vw,112px)!important;height:clamp(105px,27vw,145px)!important}
+.arena .middle{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;z-index:2!important;width:auto!important;height:auto!important;background:#090e24a8!important;border:1px solid #d7aa63!important;border-radius:20px!important;padding:5px 13px!important;pointer-events:none}
+.arena .middle .sigil{display:none!important}
+.arena .middle b{font-size:10px!important;letter-spacing:1px!important;white-space:nowrap!important}
+.arena:has(.arena-summon) .middle{opacity:.35}
+.arena:after{pointer-events:none!important}
+.actor-ghost.arena-summon{z-index:95!important;filter:drop-shadow(0 0 15px #fff2ae)!important}
+.arena .fighter .portrait.actor-away{opacity:.12!important}
+.arena .fighter .portrait{box-shadow:0 0 10px #050512!important}
+.arena .fighter .portrait-title{font-size:11px!important}
+.arena .enemy .hpinfo{color:#ffb4aa!important}
+.arena .hero .hpinfo{color:#8df2ff!important}
+.arena .fighter-row .stats{align-self:center!important}
+@media(max-height:740px){.arena .portrait{width:75px!important;height:96px!important}.arena .middle{padding:3px 9px!important}}
