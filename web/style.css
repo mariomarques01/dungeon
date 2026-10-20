@@ -264,3 +264,23 @@ main:before{background:linear-gradient(180deg,#06091a55,transparent 20%,#07102c2
 .card .art img{filter:saturate(1.55) contrast(1.1) drop-shadow(0 0 6px #ffa84c88)}
 #end{background:linear-gradient(180deg,#fff0ad,#ffbd3e 54%,#bd6917)!important;box-shadow:inset 0 2px 8px #fff9d5,0 0 18px #ffab3b99,0 4px 0 #663411!important}
 @media(max-height:740px){.character-frame{inset:3px 3px 18px!important}}
+
+/* v1.1 — richly illustrated cards, premium framed UI, still fits phone */
+.card{position:relative;overflow:visible;background:linear-gradient(170deg,#a06a2f,#211326 12%,#0a0d1c 85%,#8b5728)!important;border:2px solid #e7b563!important;box-shadow:0 0 0 1px #3d1a1b,inset 0 0 0 2px #ffca7044,0 3px 12px #000e!important}
+.card:before{content:"";position:absolute;inset:2px;pointer-events:none;border:1px solid #b77b3d88;border-radius:6px}
+.card .art{position:relative;overflow:hidden;background:#111022!important;border:1px solid #ffce80!important;box-shadow:inset 0 0 12px #000b,0 0 8px var(--glow);border-radius:5px}
+.card .art img{width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(1.3) contrast(1.06)!important}
+.card strong{font-weight:900;letter-spacing:-.15px;text-shadow:0 2px 3px #000,0 0 8px #000}
+.card small{color:#f9e9d7!important}
+.card .cost{z-index:4;box-shadow:0 0 0 2px #06214c,0 0 10px #0ca9ff}
+.card-type{background:linear-gradient(#4d2645,#1d142a);border-color:#d9a364;box-shadow:inset 0 1px #f9d5aa44}
+.card:disabled{filter:saturate(.45) brightness(.65)}
+.card:active:not(:disabled){transform:translateY(-7px) scale(1.04);filter:brightness(1.18)}
+.portrait:after{content:"";position:absolute;inset:1px;border:1px solid #ffeab088;pointer-events:none;border-radius:5px}
+.heroart:after{border-color:#8bdeff99}
+.mission-copy strong{font-family:Georgia,serif;text-shadow:0 2px 3px #000}
+.ability-icon{font-size:20px}
+#end{position:relative;overflow:hidden;text-shadow:0 1px #fff6d6}
+#end:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,#ffffff55 49%,transparent 60%);transform:translateX(-140%);animation:goldSweep 4s ease-in-out infinite;pointer-events:none}
+@keyframes goldSweep{0%,65%{transform:translateX(-140%)}95%,100%{transform:translateX(140%)}}
+@media(max-height:740px){.card .art{min-height:26px}.card strong{font-size:clamp(7px,1.85vw,10px)}}
