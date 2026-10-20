@@ -342,3 +342,30 @@ main:before{background:linear-gradient(180deg,#06091a55,transparent 20%,#07102c2
 .hero-detail-desc{font:13px/1.45 system-ui,sans-serif;color:#f3e7dd}
 .hero-detail-ability{font:700 12px/1.4 system-ui,sans-serif;color:#e4c4fa;background:#090d20a9;border:1px solid #ae87b7;padding:9px;border-radius:6px}
 @media(prefers-reduced-motion:reduce){.character-card .character-frame img,.character-aura,.character-card:before{animation:none!important}}
+
+/* v1.3.1 urgent iPhone regression fix: hand + mana always visible */
+html,body{height:100%;overflow:hidden!important}
+main{height:100dvh!important;max-height:100dvh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;min-height:0!important}
+header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
+.arena{flex:1 1 0!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:hidden!important}
+.enemy,.hero{padding-top:4px!important;padding-bottom:2px!important}
+.middle{height:clamp(10px,2.2dvh,22px)!important;min-height:10px!important}
+.fighter .name{font-size:clamp(10px,2.5vw,14px)!important}
+.fighter>small{margin:0 0 3px!important}
+.portrait{width:clamp(73px,20vw,105px)!important;height:clamp(92px,25vw,132px)!important}
+.resources{display:flex!important;min-height:51px!important;padding:4px 5px!important}
+#gems{display:flex!important;min-height:18px!important}
+.handpanel{display:block!important;min-height:155px!important;max-height:185px!important;padding:4px 3px!important}
+.handtitle{padding:2px 6px 5px!important}
+.scroll{display:block!important;overflow:visible!important;padding:4px 2px 6px!important}
+#cards{display:flex!important;flex-wrap:nowrap!important;width:100%!important;min-width:0!important;gap:3px!important;justify-content:space-evenly!important}
+.card{display:flex!important;flex:1 1 0!important;width:0!important;min-width:0!important;max-width:105px!important;height:clamp(113px,15dvh,150px)!important;min-height:0!important;padding:3px 2px!important}
+.card .art{flex:1 1 auto!important;height:auto!important;min-height:35px!important}
+.card strong{min-height:15px!important;font-size:clamp(7px,1.9vw,10px)!important}
+.card small{font-size:clamp(7px,1.7vw,9px)!important}
+.card-type{font-size:clamp(6px,1.7vw,9px)!important}
+.buttons{display:flex!important;margin:4px 0 0!important}
+.buttons #end{min-height:43px!important}
+#log,footer{display:none!important}
+@media(max-height:750px){.handpanel{min-height:132px!important;max-height:150px!important}.card{height:112px!important}.portrait{width:70px!important;height:86px!important}.ability-panel{margin-top:2px!important;padding:2px!important}.fighter>small{display:none!important}.mission{min-height:34px!important}.resources{min-height:42px!important}}
+@media(max-height:600px){.handpanel{min-height:115px!important;max-height:125px!important}.card{height:95px!important}.card .art{min-height:25px!important}.ability-panel{display:none!important}.portrait{width:60px!important;height:72px!important}.mission-copy span{display:none!important}}
