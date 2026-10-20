@@ -528,3 +528,6 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .arena .portrait-level{font-size:9px!important}
 @media(max-height:750px){.arena .portrait{width:clamp(70px,20vw,100px)!important;height:clamp(90px,25vw,128px)!important}.arena .hp{height:13px!important}.arena .fighter{padding:3px 7px!important}}
 @media(max-height:610px){.arena .portrait{width:65px!important;height:83px!important}.arena .middle{font-size:9px!important}}
+
+/* v2.2: compact tactical enemy intention below health */
+.arena .enemy .intent{display:block!important;font:700 clamp(9px,2.3vw,12px) system-ui,sans-serif!important;letter-spacing:.2px!important;color:#ffe3a6!important;text-shadow:0 2px 5px #000!important;white-space:normal!important;line-height:1.25!important;margin-top:2px!important}
