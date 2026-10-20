@@ -45,8 +45,27 @@ function noiseHit(duration=.2,volume=.15,cutoff=1100,offset=0){
  g.gain.setValueAtTime(Math.max(.001,volume),t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
  source.connect(filter);filter.connect(g);g.connect(bus);source.start(t);source.stop(t+duration+.01);
 }
+const recordedSfx={};
+const sfxKinds=["steel","fire","ice","lightning","earth","water","heal","ui"];
+function preloadRecordedSfx(){
+ for(const kind of sfxKinds){
+  for(const ext of ["ogg","wav","mp3"]){
+   const clip=new Audio("assets/sfx/"+kind+"."+ext);
+   clip.preload="auto";clip.volume=kind==="ui"?.45:.82;
+   clip.addEventListener("canplaythrough",()=>{if(!recordedSfx[kind])recordedSfx[kind]=clip},{once:true});
+   clip.load();
+  }
+ }
+}
+function playRecordedSfx(kind){
+ const clip=recordedSfx[kind]||recordedSfx[kind==="storm"?"lightning":kind==="steel"?"steel":"fire"];
+ if(!gameSound||!clip)return false;
+ try{const voice=clip.cloneNode();voice.volume=clip.volume;const p=voice.play();if(p&&p.catch)p.catch(()=>{});return true}catch(e){return false}
+}
+preloadRecordedSfx();
 function battleSfx(type){
  if(!gameSound)return;
+ if(playRecordedSfx(type))return;
  switch(type){
  case "steel":tone(980,.19,.15,"sawtooth",0,.27);tone(1780,.24,.065,"sine",.025,.68);noiseHit(.14,.22,3700);break;
  case "fire":noiseHit(.48,.28,950);tone(160,.46,.22,"sawtooth",0,.3);noiseHit(.25,.11,4200,.07);break;
