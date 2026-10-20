@@ -149,7 +149,7 @@ function showHome(){
  $("homeDeckCount").textContent=profile.deck.length+" / 12 cartas";["homeTowerPanel","homeSettingsPanel"].forEach(id=>$(id).classList.add("hidden"));renderHomeMenu();
  refreshProfile();
 }
-function start(){unlockAudio();battleActive=true;startBattleMusic();updateSoundButtons();document.body.classList.add("battle-active");$("homeScreen")?.classList.add("hidden");$("collectionBtn").disabled=true;$("collectionBtn").setAttribute("aria-disabled","true");hideCollection();resetBattleSprites();s={stageIndex:profile.stage||0,hero:100,enemy:STAGES[profile.stage||0].hp,heroShield:0,enemyShield:0,energy:3,burn:0,freeze:0,round:1,combo:0,lastElement:"",deck:shuffle(profile.deck),discard:[],hand:[],done:false,busy:false};updateStageUI();draw();$("result").classList.add("hidden");stage("SUA VEZ","ready");log("⚔ Prepare seu primeiro ataque!");render()}
+function start(){unlockAudio();battleActive=true;startBattleMusic();updateSoundButtons();document.body.classList.add("battle-active");$("homeScreen")?.classList.add("hidden");$("collectionBtn").disabled=true;$("collectionBtn").setAttribute("aria-disabled","true");hideCollection();resetBattleSprites();s={stageIndex:profile.stage||0,hero:100,enemy:STAGES[profile.stage||0].hp,heroShield:0,enemyShield:0,energy:3,burn:0,freeze:0,round:1,combo:0,lastElement:"",elementChain:[],triadUsed:false,triadCharge:false,deck:shuffle(profile.deck),discard:[],hand:[],done:false,busy:false};updateStageUI();draw();$("result").classList.add("hidden");stage("SUA VEZ","ready");log("⚔ Prepare seu primeiro ataque!");render()}
 
 const elementFor=c=>c.art==="sword"?"steel":c.art==="shield"?"ice":c.art==="heal"?"water":c.art==="spark"?"lightning":c.art;
 function elementScene(element){const arena=$("arena");arena.classList.remove("element-fire","element-ice","element-earth","element-water","element-lightning","element-storm");void arena.offsetWidth;arena.classList.add("element-"+element);setTimeout(()=>arena.classList.remove("element-"+element),reduced?150:1300);if(element==="storm"||element==="lightning")lightningFlash();if(element==="fire")burst("enemyArt","fire",28);if(element==="ice")burst("enemyArt","ice",25);if(element==="water")burst("heroArt","heal",24);if(element==="earth")burst("heroArt","gold",26)}
@@ -393,14 +393,14 @@ async function play(i){
  s.busy=true;
  const cardElement=$("cards").children[i];
  await fuseCard(cardElement,c);
- s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);s.combo++;const element=elementFor(c);const elementalCombo=s.lastElement===element&&s.combo>1;s.lastElement=element;elementScene(element);elementalSound(element);
+ s.energy-=c.cost;s.hand.splice(i,1);s.discard.push(id);s.combo++;const element=elementFor(c);s.elementChain??=[];s.elementChain.push(element);if(s.elementChain.length>3)s.elementChain.shift();const triad=s.elementChain.length===3&&new Set(s.elementChain).size===3&&!s.triadUsed;if(triad){s.triadUsed=true;s.triadCharge=true;s.energy=Math.min(3,s.energy+1);comboNotice("✦ TRÍADE ARCANA • +1 ENERGIA E +6 DANO",true);log("🔮 Tríade Arcana! Três elementos diferentes: +1 energia e +6 no próximo ataque.");}const elementalCombo=s.lastElement===element&&s.combo>1;s.lastElement=element;elementScene(element);elementalSound(element);
  if(elementalCombo){comboNotice("✦ RESSONÂNCIA "+element.toUpperCase()+" • +4 DANO",true);sound(810)}
  else if(s.combo>=3){comboNotice("⚔️ SEQUÊNCIA ×"+s.combo+" • BÔNUS DE ATAQUE",false)}
  
  render();
  let out=[];
  if(c.damage){
-  const bonus=(s.combo>=3?Math.min(6,(s.combo-2)*2):0)+(elementalCombo?4:0);
+  const bonus=(s.combo>=3?Math.min(6,(s.combo-2)*2):0)+(elementalCombo?4:0)+(s.triadCharge?6:0);s.triadCharge=false;
   const resolveHit=()=>{const before=s.enemyShield;const amount=damage("enemy",c.damage+bonus);const blocked=before-s.enemyShield;render();return{amount,blocked}};
   const result=c.art==="sword"?await dashStrike("heroArt","enemyArt",c,resolveHit):await magicStrike("heroArt","enemyArt",c,resolveHit);
   out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));if(bonus&&result.amount>0)comboNotice("+"+bonus+" BÔNUS DE COMBO",elementalCombo);
@@ -434,7 +434,7 @@ async function endTurn(){
   const result=await dashStrike("enemyArt","heroArt",{name:special?currentStage().ability:"GOLPE DE "+currentStage().name,art:effect,icon:special?["","🔥","❄️","🪨","🌩️"][s.stageIndex]:"🪓",glow:special?"#bca2ff":"#f6a55d"},()=>{const before=s.heroShield;const amount=damage("hero",attack);const blocked=before-s.heroShield;render();return{amount,blocked}});
   out.push(currentStage().name+" atacou: "+result.amount+" dano"+(result.blocked?" ("+result.blocked+" bloqueado)":""));
  }
- s.heroShield=0;updateShieldAuras();s.discard.push(...s.hand);s.hand=[];s.round++;s.energy=3;s.combo=0;s.lastElement="";draw();
+ s.heroShield=0;updateShieldAuras();s.discard.push(...s.hand);s.hand=[];s.round++;s.energy=3;s.combo=0;s.lastElement="";s.elementChain=[];s.triadUsed=false;s.triadCharge=false;draw();
  if(s.hero<=0){finish("lose");return}
  if(s.round>10){finish(s.hero>s.enemy?"win":s.hero<s.enemy?"lose":"draw");return}
  s.busy=false;stage("SUA VEZ","ready");log(out.join(" • ")+" • Sua vez!");render();
