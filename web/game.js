@@ -24,7 +24,7 @@ function bossDamage(){return currentStage().attack+(s.round%3===0?4:0)}
 
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function draw(){while(s.hand.length<5){if(!s.deck.length){if(!s.discard.length)break;s.deck=shuffle(s.discard);s.discard=[]}s.hand.push(s.deck.pop())}}
-function start(){s={stageIndex:profile.stage||0,hero:100,enemy:STAGES[profile.stage||0].hp,heroShield:0,enemyShield:0,energy:3,burn:0,freeze:0,round:1,combo:0,lastElement:"",deck:shuffle(profile.deck),discard:[],hand:[],done:false,busy:false};updateStageUI();draw();$("result").classList.add("hidden");stage("SUA VEZ","ready");log("⚔ Prepare seu primeiro ataque!");render()}
+function start(){resetBattleSprites();s={stageIndex:profile.stage||0,hero:100,enemy:STAGES[profile.stage||0].hp,heroShield:0,enemyShield:0,energy:3,burn:0,freeze:0,round:1,combo:0,lastElement:"",deck:shuffle(profile.deck),discard:[],hand:[],done:false,busy:false};updateStageUI();draw();$("result").classList.add("hidden");stage("SUA VEZ","ready");log("⚔ Prepare seu primeiro ataque!");render()}
 
 const elementFor=c=>c.art==="sword"?"steel":c.art==="shield"?"ice":c.art==="heal"?"water":c.art==="spark"?"lightning":c.art;
 function elementScene(element){const arena=$("arena");arena.classList.remove("element-fire","element-ice","element-earth","element-water","element-lightning","element-storm");void arena.offsetWidth;arena.classList.add("element-"+element);setTimeout(()=>arena.classList.remove("element-"+element),reduced?150:1300);if(element==="storm"||element==="lightning")lightningFlash();if(element==="fire")burst("enemyArt","fire",28);if(element==="ice")burst("enemyArt","ice",25);if(element==="water")burst("heroArt","heal",24);if(element==="earth")burst("heroArt","gold",26)}
@@ -81,9 +81,9 @@ async function fuseCard(cardElement,card,heroId="heroArt"){
  const anim=clone.animate([{transform:"translate3d(0,0,0) scale(1) rotate(0deg)",opacity:1,filter:"brightness(1)"},{offset:.65,transform:`translate3d(${dx*.7}px,${dy*.7-30}px,0) scale(.8) rotate(-12deg)`,opacity:1,filter:"brightness(1.6)"},{transform:`translate3d(${dx}px,${dy}px,0) scale(.06) rotate(360deg)`,opacity:0,filter:"brightness(4)"}],{duration:reduced?60:650,easing:"cubic-bezier(.25,.1,.3,1)",fill:"forwards"});
  await anim.finished.catch(()=>{});
  clone.remove();
- actor(heroId,card.block?"cast-guard":card.heal?"cast-heal":"channel",650);
- burst(heroId,card.block?"ice":card.heal?"heal":card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",26);
- aura(heroId,card.glow,card.icon);
+ poseFighter("elyraFighter",card.block?"defend":card.heal?"heal":"cast",850);
+ burst("elyraFighter",card.block?"ice":card.heal?"heal":card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",26);
+ aura("elyraFighter",card.glow,card.icon);
  screenPulse(card.block?"shield":card.heal?"heal":"strike");
  await wait(220);
 }
@@ -92,38 +92,38 @@ function aura(id,color,symbol){
  setTimeout(()=>e.remove(),1150);
 }
 
+function fighterFor(id){return id==="heroArt"?"elyraFighter":"malgrukFighter"}
+function poseFighter(id,pose,duration=800){const el=$(id);if(!el)return;el.classList.remove("pose-attack","pose-cast","pose-defend","pose-heal","pose-hit");void el.offsetWidth;el.classList.add("pose-"+pose);setTimeout(()=>el.classList.remove("pose-"+pose),duration)}
+function resetBattleSprites(){for(const id of ["elyraFighter","malgrukFighter"]){const el=$(id);if(el){el.getAnimations().forEach(a=>a.cancel());el.style.transform="";el.className="battle-sprite "+(id==="elyraFighter"?"battle-elyra":"battle-malgruk")}}}
 async function moveActorToTarget(from,to,kind="melee"){
- const source=$(from),target=$(to),sr=source.getBoundingClientRect(),tr=target.getBoundingClientRect(),ar=$("arena").getBoundingClientRect();
- const ghost=source.cloneNode(true);ghost.removeAttribute("id");ghost.classList.remove("shield-active","active-fighter");ghost.classList.add("actor-ghost","arena-summon");
- ghost.querySelectorAll("[id]").forEach(e=>e.removeAttribute("id"));
- ghost.style.left=sr.left+"px";ghost.style.top=sr.top+"px";ghost.style.width=sr.width+"px";ghost.style.height=sr.height+"px";
- ghost.style.pointerEvents="none";document.body.append(ghost);source.classList.add("actor-away");
- const startX=sr.left+sr.width/2,startY=sr.top+sr.height/2;
- const arenaX=ar.left+ar.width/2,arenaY=ar.top+ar.height*.52;
- const targetX=tr.left+tr.width/2,targetY=tr.top+tr.height/2;
- const centerDX=arenaX-startX,centerDY=arenaY-startY;
- const hitDX=(arenaX+(targetX-arenaX)*.64)-startX,hitDY=(arenaY+(targetY-arenaY)*.64)-startY;
- const approach=ghost.animate([
- {transform:"translate3d(0,0,0) scale(.95)",opacity:.75,filter:"brightness(2)"},
- {offset:.26,transform:`translate3d(${centerDX*.62}px,${centerDY*.62}px,0) scale(1.22)`,opacity:1,filter:"brightness(1.65)"},
- {offset:.65,transform:`translate3d(${centerDX}px,${centerDY}px,0) scale(1.35)`,filter:"brightness(1.2)"},
- {offset:.83,transform:`translate3d(${hitDX*.86}px,${hitDY*.86}px,0) scale(1.35) rotate(-7deg)`,filter:"brightness(1.6)"},
- {transform:`translate3d(${hitDX}px,${hitDY}px,0) scale(1.4) rotate(5deg)`,filter:"brightness(2)"}],
- {duration:reduced?120:850,easing:"cubic-bezier(.2,.65,.2,1)",fill:"forwards"});
+ const fighter=$(fighterFor(from)),opponent=$(fighterFor(to)),arena=$("arena");
+ if(!fighter||!opponent)return async()=>{};
+ const fr=fighter.getBoundingClientRect(),tr=opponent.getBoundingClientRect();
+ const direction=from==="heroArt"?1:-1;
+ const dx=(tr.left+tr.width*.5)-(fr.left+fr.width*.5)-direction*(fr.width*.45+tr.width*.45);
+ const dy=(tr.top+tr.height*.5)-(fr.top+fr.height*.5);
+ poseFighter(fighter.id,kind==="magic"?"cast":"attack",1550);
+ fighter.classList.add("moving");
+ const approach=fighter.animate([
+ {transform:"translate3d(0,0,0) scale(1)",offset:0},
+ {transform:`translate3d(${dx*.35}px,${dy*.15-18}px,0) scale(1.08)`,offset:.4},
+ {transform:`translate3d(${dx*.82}px,${dy*.8}px,0) scale(1.18)`,offset:.82},
+ {transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`,offset:1}
+ ],{duration:reduced?100:730,easing:"cubic-bezier(.16,.7,.18,1)",fill:"forwards"});
  await approach.finished.catch(()=>{});
- burst(to,kind==="magic"?"electric":"gold",14);
+ poseFighter(opponent.id,"hit",650);
  return async()=>{
- const back=ghost.animate([
- {transform:`translate3d(${hitDX}px,${hitDY}px,0) scale(1.4) rotate(5deg)`,opacity:1},
- {offset:.5,transform:`translate3d(${centerDX}px,${centerDY}px,0) scale(1.1)`,opacity:1},
- {transform:"translate3d(0,0,0) scale(.8)",opacity:0}],
- {duration:reduced?80:520,easing:"ease-in-out",fill:"forwards"});
+ const back=fighter.animate([
+ {transform:`translate3d(${dx}px,${dy}px,0) scale(1.2)`,offset:0},
+ {transform:`translate3d(${dx*.42}px,${dy*.15-8}px,0) scale(1.07)`,offset:.5},
+ {transform:"translate3d(0,0,0) scale(1)",offset:1}
+ ],{duration:reduced?80:530,easing:"ease-in-out",fill:"forwards"});
  await back.finished.catch(()=>{});
- approach.cancel();back.cancel();ghost.remove();source.classList.remove("actor-away");
+ approach.cancel();back.cancel();fighter.classList.remove("moving");
  };
 }
 async function animateSpellToTarget(from,to,card){
- const a=centerOf($(from)),b=centerOf($(to)),orb=document.createElement("div");
+ const a=centerOf($(fighterFor(from))),b=centerOf($(fighterFor(to))),orb=document.createElement("div");
  orb.className="spell-orb "+card.art;orb.style.left=(a.x-30)+"px";orb.style.top=(a.y-30)+"px";orb.style.setProperty("--spell",card.glow);
  orb.innerHTML='<span>'+card.icon+'</span>';document.body.append(orb);
  const dx=b.x-a.x,dy=b.y-a.y;
@@ -137,8 +137,8 @@ async function animateSpellToTarget(from,to,card){
  anim.cancel();orb.remove();
 }
 function impactSequence(to,card,outcome){
- if(outcome.blocked){shieldBubble(to);actor(to,"parry",600);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
- if(outcome.amount){actor(to,"recoil",650);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
+ if(outcome.blocked){shieldBubble(to);actor(to,"parry",600);poseFighter(fighterFor(to),"defend",750);hitFlash(to,"block");burst(to,"ice",22);float(to,"🛡 −"+outcome.blocked,true)}
+ if(outcome.amount){actor(to,"recoil",650);poseFighter(fighterFor(to),"hit",750);hitFlash(to);burst(to,card.art==="fire"?"fire":card.art==="lightning"?"electric":"gold",36);float(to,"−"+outcome.amount);screenPulse(card.art==="fire"?"fire":"strike")}
  if(navigator.vibrate&&!reduced)navigator.vibrate([40,30,65]);
 }
 async function dashStrike(from,to,card,resolveHit){
@@ -150,9 +150,9 @@ async function dashStrike(from,to,card,resolveHit){
 }
 async function magicStrike(from,to,card,resolveHit){
  stage("INVOCANDO • "+card.name.toUpperCase(),"attack");
- actor(from,"channel",750);aura(from,card.glow,card.icon);burst(from,card.art==="fire"?"fire":"electric",18);
+ poseFighter(fighterFor(from),"cast",1000);aura(fighterFor(from),card.glow,card.icon);burst(fighterFor(from),card.art==="fire"?"fire":"electric",18);
  await wait(250);
- stage("ELYRA AVANÇA!","attack");
+ stage(from==="heroArt"?"ELYRA AVANÇA!":"O CHEFE AVANÇA!","attack");
  const returnHome=await moveActorToTarget(from,to,"magic");
  stage("MAGIA EM COMBATE","attack");
  await animateSpellToTarget(from,to,card);
@@ -179,11 +179,11 @@ async function play(i){
   out.push(result.amount+" dano"+(bonus?" • COMBO +"+bonus:""));
  }
  if(c.block){
-  stage("ESCUDO INCORPORADO","defense");actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
+  stage("ESCUDO INCORPORADO","defense");poseFighter("elyraFighter","defend",900);actor("heroArt","cast-guard",750);shieldBubble("heroArt");burst("heroArt","ice",24);screenPulse("shield");
   await wait(450);s.heroShield+=c.block;updateShieldAuras();float("heroArt","+"+c.block+" 🛡",true);sound(540);out.push("+"+c.block+" escudo");await wait(330);
  }
  if(c.heal){
-  stage("ENERGIA VITAL","heal");actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
+  stage("ENERGIA VITAL","heal");poseFighter("elyraFighter","heal",950);actor("heroArt","cast-heal",850);burst("heroArt","heal",30);screenPulse("heal");
   const n=Math.min(c.heal,100-s.hero);await wait(420);s.hero+=n;float("heroArt","+"+n+" ♥",true);sound(720);out.push("+"+n+" HP");await wait(260);
  }
  if(c.burn){s.burn=Math.max(s.burn,c.burn);out.push("🔥 Queimadura");burst("enemyArt","fire",10)}if(c.freeze){s.freeze=Math.max(s.freeze,c.freeze);out.push("❄️ Malgruk congelado");burst("enemyArt","ice",18)}
@@ -194,11 +194,11 @@ async function endTurn(){
  if(s.done||s.busy)return;s.busy=true;stage("TURNO DE "+currentStage().name,"danger");log("👹 "+currentStage().name+" está preparando a reação...");render();
  await wait(500);
  let out=[];
- if(s.burn){const n=damage("enemy",3);s.burn--;actor("enemyArt","recoil",550);burst("enemyArt","fire",12);float("enemyArt","🔥 −"+n);out.push("Queimadura: "+n);await wait(520)}
+ if(s.burn){const n=damage("enemy",3);s.burn--;poseFighter("malgrukFighter","hit",600);actor("enemyArt","recoil",550);burst("enemyArt","fire",12);float("enemyArt","🔥 −"+n);out.push("Queimadura: "+n);await wait(520)}
  if(s.enemy<=0){finish("win");return}
- const frozen=s.freeze>0;if(frozen){s.freeze--;stage("MALGRUK CONGELADO","defense");elementScene("ice");actor("enemyArt","parry",700);burst("enemyArt","ice",26);out.push("❄️ Malgruk perdeu a ação");await wait(600)}const defend=!frozen&&s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0;
+ const frozen=s.freeze>0;if(frozen){s.freeze--;stage("MALGRUK CONGELADO","defense");elementScene("ice");poseFighter("malgrukFighter","defend",850);actor("enemyArt","parry",700);burst("enemyArt","ice",26);out.push("❄️ Malgruk perdeu a ação");await wait(600)}const defend=!frozen&&s.enemy<Math.ceil(currentStage().hp*.3)&&s.round%2===0;
  if(defend){
-  stage("DEFESA DO GUARDIÃO","defense");actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
+  stage("DEFESA DO GUARDIÃO","defense");poseFighter("malgrukFighter","defend",900);actor("enemyArt","cast-guard",700);shieldBubble("enemyArt");burst("enemyArt","ice",14);
   await wait(520);s.enemyShield+=currentStage().guard;updateShieldAuras();float("enemyArt","+"+currentStage().guard+" 🛡",true);out.push("Malgruk ergueu escudo");await wait(280);
  }else if(!frozen){
   const attack=bossDamage();
