@@ -531,3 +531,13 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 
 /* v2.2: compact tactical enemy intention below health */
 .arena .enemy .intent{display:block!important;font:700 clamp(9px,2.3vw,12px) system-ui,sans-serif!important;letter-spacing:.2px!important;color:#ffe3a6!important;text-shadow:0 2px 5px #000!important;white-space:normal!important;line-height:1.25!important;margin-top:2px!important}
+
+/* v2.3 — animated summon is a separate layer, HUD remains stable */
+.duel-source-hidden{visibility:hidden!important}
+.duel-summon{box-shadow:0 0 22px #e5ba68,0 0 38px #653fbcaa!important;border-radius:11px!important;will-change:transform,opacity,filter}
+.duel-summon:after{content:"";position:absolute;inset:-12px;border:2px solid #f9d28b77;border-radius:18px;box-shadow:0 0 18px #ffce7388;pointer-events:none}
+.duel-trail{position:fixed;z-index:98;pointer-events:none;width:110px;height:90px;transform-origin:50% 50%;background:radial-gradient(ellipse at center,var(--trail-color),transparent 65%);filter:blur(11px) brightness(1.6);border-radius:50%;mix-blend-mode:screen}
+.duel-trail.trail-slash{width:130px;height:22px;filter:blur(5px) brightness(2);border-top:3px solid #fff7cf;transform:rotate(-30deg)}
+.arena .portrait.duel-recoil{animation:duelRecoil .42s ease-out!important}
+@keyframes duelRecoil{0%{filter:brightness(2.8);scale:1.07}40%{filter:brightness(1.7);translate:7px 0}100%{filter:brightness(1);translate:0 0;scale:1}}
+@media(prefers-reduced-motion:reduce){.duel-trail{display:none!important}}
