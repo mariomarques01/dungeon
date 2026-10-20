@@ -547,3 +547,12 @@ header,.mission,.resources,.handpanel,.buttons{flex-shrink:0!important}
 .arena .portrait.pose-defend{filter:drop-shadow(0 0 13px #9aeaff)!important}
 .flying-card,.duel-summon,.spell-orb{backface-visibility:hidden;transform:translateZ(0);contain:paint;will-change:transform,opacity}
 .duel-trail{filter:blur(5px)!important;opacity:.75}
+
+/* v2.5: instant readable feedback and playable cards */
+#hint{font-size:clamp(9px,2.2vw,12px)!important;line-height:1.2!important;color:#d7e5ff!important}
+.card-playable{box-shadow:0 0 0 1px #f8cb7699,0 0 12px #e7b65e44!important;filter:brightness(1.09)!important}
+.card-playable:active{transform:translateY(-9px) scale(1.045)!important;filter:brightness(1.3)!important}
+.card-unavailable{filter:grayscale(.4) brightness(.65)!important;opacity:.72!important}
+#end.turn-ready{animation:readyPulse 1.65s ease-in-out infinite!important}
+@keyframes readyPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.19) drop-shadow(0 0 8px #ffcf68)}}
+@media(prefers-reduced-motion:reduce){#end.turn-ready{animation:none!important}}
