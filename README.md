@@ -3,7 +3,7 @@ Jogo de cartas com interface e combate nativos em Godot 4.4.1, exportado para We
 
 ## Jogar
 - Godot (endereço principal): https://mariomarques01.github.io/dungeon/
-- Godot (link compatível): https://mariomarques01.github.io/dungeon/godot/
+- Godot (link compatível, redireciona ao endereço principal): https://mariomarques01.github.io/dungeon/godot/
 - Versão web original: https://mariomarques01.github.io/dungeon/classic/
 
 ## Layout e combate da versão 2
@@ -38,3 +38,5 @@ NODE_PATH=/tmp/dungeon-browser/node_modules node tests/godot_browser.cjs
 ```
 
 O teste cobre edição do deck, configurações, animação de atribuição, momento de impacto, bloqueio de cliques repetidos, defesa, reprodução e mute da música, uma batalha completa e persistência após recarga. Usa uma consulta `?qa=1` somente de leitura para inspecionar o estado real do motor; essa consulta não altera as regras. `DUNGEON_URL` permite testar outro endereço; `CHROMIUM_PATH` permite selecionar o navegador. As capturas são salvas em `artifacts/browser`.
+
+A publicação usa um nome de pacote exclusivo por tentativa e compartilha os arquivos do motor pelo endereço principal, evitando duplicações ao reexecutar o deploy.

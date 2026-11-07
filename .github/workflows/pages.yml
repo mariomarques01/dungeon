@@ -70,7 +70,7 @@ jobs:
           touch web/.nojekyll
           mkdir -p site/classic site/godot
           cp -R web/godot/. site/
-          cp -R web/godot/. site/godot/
+          printf '%s\n' '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Dungeon Cards</title><script>location.replace(new URL("../"+location.search+location.hash,location.href));</script><a href="../">Abrir Dungeon Cards</a></html>' > site/godot/index.html
           cp -R web/. site/classic/
           rm -rf site/classic/godot
           cp site/index.html site/404.html
@@ -78,7 +78,10 @@ jobs:
       - name: Enviar arquivos
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: site
       - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
