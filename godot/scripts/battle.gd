@@ -52,6 +52,11 @@ var controls: Control
 var voices: Array = []
 var sfx: Dictionary = {}
 var save_error = false
+var presentation
+var audio_engine
+var qa_enabled = false
+var last_hit: Dictionary = {}
+var turn_serial = 0
 
 func _ready() -> void:
  title_font.fallbacks = [preload("res://assets/symbols.ttf")]
@@ -60,10 +65,12 @@ func _ready() -> void:
  stages = JSON.parse_string(FileAccess.get_file_as_string("res://assets/stages.json"))
  for art in ["gem","lobby","lobby-panel","lobby-background","swords","sword","citadel","elyra-elite","malgruk-elite","elyra-battle","malgruk-battle","card-sword","card-fire","card-shield","card-lightning","card-heal","card-spark","card-ice","card-water","card-earth","card-storm"]:
   textures[art] = load("res://assets/" + art + ".png")
- for kind in ["steel","fire","ice","lightning","earth","water","heal","ui"]:
-  var path = "res://assets/sfx/"+kind+".ogg"
-  if ResourceLoader.exists(path): sfx[kind]=load(path)
  load_profile()
+ presentation=preload("res://scripts/arena_visuals.gd").new(self)
+ audio_engine=preload("res://scripts/combat_audio.gd").new(self)
+ audio_engine.set_enabled(sound_on)
+ if OS.has_feature("web"):
+  qa_enabled=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))=="1"
  controls = Control.new()
  add_child(controls)
  resized.connect(rebuild)
@@ -101,23 +108,18 @@ func save_profile() -> void:
   else: save_error = true
 
 func _process(delta: float) -> void:
- clock += delta
- fx_time = maxf(0,fx_time-delta*speed)
- motion = maxf(0,motion-delta*speed)
- pulse = maxf(0,pulse-delta*speed)
- if screen == "battle" and sound_on and not done:
-  music_clock += delta
-  if music_clock > 0.49:
-   music_clock = 0
-   var notes = [220.0,261.63,293.66,329.63,293.66,261.63,196.0,246.94,220.0,261.63,329.63,392.0,329.63,293.66,261.63,196.0]
-   tone(notes[music_step%notes.size()],0.32,0.025)
-   if music_step%4==0: tone(110.0,0.9,0.035)
-   music_step += 1
+ clock+=delta
+ if presentation: presentation.update(delta)
+ if audio_engine: audio_engine.update(delta)
+ if qa_enabled:
+  var snapshot={"screen":screen,"panel":panel,"hero":hero,"enemy":enemy,"heroShield":hero_shield,"enemyShield":enemy_shield,"energy":energy,"round":round_number,"hand":hand,"deck":deck.size(),"busy":busy,"done":done,"burn":burn,"freeze":freeze,"stage":stage_index,"phase":phase,"sound":sound_on,"speed":speed,"profile":profile,"animation":presentation.action,"animationTime":presentation.action_time,"visualEvents":presentation.events,"audio":audio_engine.history,"musicPlaying":audio_engine.music.playing and not audio_engine.music.stream_paused}
+  JavaScriptBridge.eval("window.__dungeonState="+JSON.stringify(snapshot))
  queue_redraw()
 
 func layout_transform() -> Transform2D:
- var factor = minf(size.x/390.0,size.y/740.0)
- return Transform2D(0,Vector2(factor,factor),0,(size-Vector2(390,740)*factor)/2)
+ var height=700.0 if screen=="battle" else 740.0
+ var factor=minf(size.x/390.0,size.y/height)
+ return Transform2D(0,Vector2(factor,factor),0,(size-Vector2(390,height)*factor)/2)
 
 func rebuild() -> void:
  if not is_instance_valid(controls): return
@@ -135,13 +137,13 @@ func rebuild() -> void:
   button(Rect2(200,477,157,45),"CONFIGURAÇÕES",func(): panel = "settings"; rebuild())
   button(Rect2(33,534,324,49),"INICIAR BATALHA",start_battle,true)
  elif screen == "battle":
-  button(Rect2(14,465,83,26),"SOM" if sound_on else "MUDO",toggle_sound)
-  button(Rect2(319,465,57,26),"× " + str(speed),toggle_speed)
-  button(Rect2(12,125,58,75),"",func(): panel = "enemy"; rebuild(),false,busy,true)
-  button(Rect2(320,410,58,80),"",func(): panel = "hero"; rebuild(),false,busy,true)
+  button(Rect2(17,480,90,21),"SOM" if sound_on else "MUDO",toggle_sound)
+  button(Rect2(320,479,55,21),"× " + str(speed),toggle_speed)
+  button(Rect2(9,7,55,55),"",func(): panel = "enemy"; rebuild(),false,busy,true)
+  button(Rect2(313,422,62,56),"",func(): panel = "hero"; rebuild(),false,busy,true)
   for i in range(hand.size()):
    var id = hand[i]
-   var card_button = button(Rect2(7+i*76,569,72,113),"",play.bind(i),false,busy or done or cards[id].cost>energy,true)
+   var card_button = button(Rect2(8+i*76,532,70,110),"",play.bind(i),false,busy or done or cards[id].cost>energy,true)
    var hold = Timer.new()
    hold.one_shot = true
    hold.wait_time = 0.55
@@ -149,7 +151,10 @@ func rebuild() -> void:
    card_button.button_down.connect(hold.start)
    card_button.button_up.connect(hold.stop)
    hold.timeout.connect(func(): panel="card:"+id; rebuild())
-  button(Rect2(9,696,372,38),"ENCERRAR TURNO  →",end_turn,true,busy or done)
+  var end_button=button(Rect2(9,656,372,39),"",end_turn,false,busy or done,true)
+  end_button.tooltip_text="Encerrar turno"
+  var gear=button(Rect2(326,15,48,34),"⚙",func(): panel="settings"; rebuild())
+  gear.add_theme_font_size_override("font_size",25)
  if panel != "":
   for node in controls.get_children(): node.hide()
   build_panel()
@@ -245,12 +250,14 @@ func _draw() -> void:
  draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func draw_home() -> void:
- image_at("lobby-background",Rect2(0,0,390,740))
+ draw_texture_rect(presentation.backdrop,Rect2(0,0,390,740),false,Color(0.35,0.28,0.38))
  image_at("lobby-panel",Rect2(16,89,358,558))
  text_at("✦  T O R R E   I N F I N I T A  ✦",Rect2(33,105,324,20),10,GOLD,true)
  image_at("swords",Rect2(33,127,26,30))
  text_at("DUNGEON CARDS",Rect2(59,126,298,40),25,GOLD,true,true)
- image_at("lobby",Rect2(33,166,324,100))
+ draw_texture_rect_region(presentation.backdrop,Rect2(33,166,324,100),Rect2(0,200,presentation.backdrop.get_width(),650))
+ presentation.actor(false,0,Vector2(101,263),94)
+ presentation.actor(true,0,Vector2(298,263),91)
  text_at("A JORNADA COMEÇA AQUI",Rect2(33,244,324,20),10,GOLD,true)
  text_at("FASE %d / 5" % (int(profile.stage)+1),Rect2(33,274,324,20),12,GOLD,true)
  var boss = stages[int(profile.stage)]
@@ -263,80 +270,7 @@ func draw_home() -> void:
 ele fica bloqueado.",Rect2(33,596,324,35),10,Color("bdb5c9"),true)
 
 func draw_battle() -> void:
- image_at("citadel",Rect2(0,0,390,740),Color(0.7,0.65,0.85))
- image_at("swords",Rect2(7,20,23,28))
- draw_rect(Rect2(0,0,390,740),Color(0.02,0.02,0.09,0.5))
- text_at("✦  T O R R E   I N F I N I T A",Rect2(12,5,250,15),10,GOLD)
- text_at("DUNGEON CARDS",Rect2(30,20,265,30),20,GOLD,false,true)
- frame(Rect2(292,4,86,45),INK,GOLD,12)
- text_at("500",Rect2(297,14,76,22),21,GOLD,true,true)
- text_at("BRONZE III",Rect2(297,37,76,15),8,WHITE,true)
- frame(Rect2(329,2,53,14),Color("16152b"),GOLD,2)
- text_at("FASE %d/5" % (stage_index+1),Rect2(331,4,49,11),7,GOLD,true)
- draw_line(Vector2(9,56),Vector2(381,56),GOLD,1)
- text_at("NV %d  ·  %d MOEDAS  ·  %d VITÓRIAS  ·  FASE %d/5" % [1+int(profile.xp)/100,profile.coins,profile.wins,stage_index+1],Rect2(7,60,376,15),10,GOLD,true)
- frame(Rect2(4,76,382,44),Color(0.03,0.03,0.1,0.94),GOLD,0)
- text_at("DERROTE " + stages[stage_index].name,Rect2(42,78,230,20),15,GOLD,false,true)
- text_wrapped(stages[stage_index].description+" Vença antes da 10ª rodada!",Rect2(42,98,260,20),8,WHITE)
- image_at("malgruk-elite",Rect2(9,82,27,32))
- frame(Rect2(310,85,69,26),Color("342235"),GOLD,0)
- text_at("RODADA %d/10" % mini(10,round_number),Rect2(312,92,65,15),9,GOLD,true,true)
- image_cover("citadel",Rect2(8,123,374,370))
- draw_rect(Rect2(8,123,374,370),Color(0.04,0.02,0.1,0.18))
- portrait(false,Rect2(12,125,58,75))
- text_at("VIDA",Rect2(82,138,150,18),12,WHITE)
- text_at("%d / %d" % [enemy,stages[stage_index].hp],Rect2(291,138,87,18),12,WHITE,true)
- health_bar(Rect2(82,161,294,12),float(enemy)/float(stages[stage_index].hp),Color("ff665e"))
- text_at(intent(),Rect2(82,181,290,18),10,GOLD)
- var enemy_status = []
- if enemy_shield>0: enemy_status.append("ESCUDO %d" % enemy_shield)
- if burn>0: enemy_status.append("QUEIMA %d" % burn)
- if freeze>0: enemy_status.append("CONGELADO")
- text_at(" · ".join(enemy_status),Rect2(82,201,290,18),9,Color("a5dcff"))
- # Native tweened combatants emerge only during attacks, as in the source.
- if motion>0:
-  var progress = sin((1.0-motion)*PI)
-  var from = Vector2(294,332) if motion_enemy else Vector2(34,322)
-  var to = Vector2(50,244) if motion_enemy else Vector2(280,205)
-  var at = from.lerp(to,progress)
-  image_at("malgruk-battle" if motion_enemy else "elyra-battle",Rect2(at,Vector2(75,105)))
- frame(Rect2(148,296,94,29),Color(0.04,0.04,0.1,0.86),GOLD,16)
- text_at(phase,Rect2(151,305,88,15),10,GOLD,true,true)
- text_at("VIDA",Rect2(15,432,120,20),12,WHITE)
- text_at("%d / 100" % hero,Rect2(234,432,73,20),12,WHITE,true)
- health_bar(Rect2(15,453,292,12),hero/100.0,Color("42dfee"))
- portrait(true,Rect2(320,410,58,80))
- if hero_shield>0: text_at("ESCUDO %d" % hero_shield,Rect2(108,474,190,18),10,Color("9ce9ff"),true)
- if hero<=30: text_at("VIDA CRÍTICA — PROTEJA ELYRA",Rect2(65,405,250,16),10,Color("ff8677"),true)
- for i in range(3): frame(Rect2(8+i*128,497,119,38),Color(0.03,0.04,0.1,0.95),Color("ad905e"),0)
- text_at("MANA %d / 3" % energy,Rect2(9,499,117,15),9,WHITE,true,true)
- text_at("SEQUÊNCIA",Rect2(137,499,117,15),9,WHITE,true,true)
- text_at("BARALHO",Rect2(265,499,117,15),9,WHITE,true,true)
- for i in range(3):
-  image_at("gem",Rect2(24+i*27,509,24,24),Color.WHITE if i<energy else Color(0.25,0.3,0.4,0.6))
- text_at("×%d" % maxi(1,combo),Rect2(137,513,117,20),19,GOLD,true,true)
- text_at(str(deck.size()),Rect2(265,513,117,20),19,GOLD,true,true)
- draw_line(Vector2(0,541),Vector2(390,541),GOLD,1)
- text_at("✦ SUA MÃO",Rect2(9,546,170,20),13,GOLD,false,true)
- var playable = false
- for id in hand:
-  if cards[id].cost<=energy: playable=true
- text_at("Executando ação..." if busy else "Toque para jogar" if playable else "Encerre o turno",Rect2(250,549,130,16),9,WHITE,true)
- if hero_shield>0: draw_arc(Vector2(348,448),39,0,TAU,48,Color(0.4,0.85,1,0.8),3)
- if enemy_shield>0: draw_arc(Vector2(41,161),39,0,TAU,48,Color(0.4,0.85,1,0.8),3)
- for i in range(hand.size()): draw_card(hand[i],Rect2(7+i*76,569,72,113),busy or cards[hand[i]].cost>energy)
- if fx_time>0:
-  var at = Vector2(190,240 if fx_enemy else 405)
-  var col = fx_color
-  col.a = minf(1,fx_time*2)
-  draw_arc(at,18+(1-fx_time)*65,0,TAU,40,col,3)
-  for i in range(12):
-   var angle = i*TAU/12+clock
-   var particle = at+Vector2(cos(angle),sin(angle))*(15+(1-fx_time)*80)
-   draw_circle(particle,2.5*fx_time,col)
-  text_at(fx_amount,Rect2(at.x-110,at.y-45-(1-fx_time)*25,220,30),26,col,true,true)
- if pulse>0: draw_rect(Rect2(8,123,374,370),Color(fx_color,0.13*pulse))
-
+ presentation.draw_scene()
 
 func portrait(is_hero: bool, rect: Rect2) -> void:
  var rim = style_box(INK,GOLD,9)
@@ -374,37 +308,20 @@ func info(id: String) -> String:
  return " · ".join(parts)
 
 func draw_card(id: String, rect: Rect2, unavailable = false) -> void:
- var c = cards[id]
- var rim = style_box(Color("0a1026"),GOLD,7)
- rim.shadow_color = Color(Color(c.glow),0.5)
- rim.shadow_size = 5
- draw_style_box(rim,rect)
- frame(rect.grow(-3),Color.TRANSPARENT,Color("a47b4c"),4)
- var texrect = Rect2(rect.position+Vector2(3,3),Vector2(rect.size.x-6,rect.size.y*0.64))
- image_at("card-"+c.art,texrect)
- draw_rect(Rect2(rect.position+Vector2(3,rect.size.y*0.64),Vector2(rect.size.x-6,rect.size.y*0.34)),Color(0.02,0.03,0.07,0.95))
- text_at(c.name,Rect2(rect.position+Vector2(2,rect.size.y*0.66),Vector2(rect.size.x-4,15)),7,WHITE,true)
- text_at(info(id),Rect2(rect.position+Vector2(2,rect.size.y*0.78),Vector2(rect.size.x-4,15)),7,GOLD,true)
- var type = "DEFESA" if c.has("block") else "CURA" if c.has("heal") else "ATAQUE" if c.art=="sword" else "MAGIA"
- frame(Rect2(rect.position+Vector2(5,rect.size.y-15),Vector2(rect.size.x-10,12)),Color("17233d"),Color(c.glow),5)
- text_at(type,Rect2(rect.position+Vector2(5,rect.size.y-14),Vector2(rect.size.x-10,12)),7,WHITE,true)
- var center = rect.position+Vector2(8,9)
- draw_circle(center,11,Color("166c9b"))
- draw_arc(center,11,0,TAU,24,Color("adf5ff"),2)
- text_at(str(int(c.cost)),Rect2(center-Vector2(10,8),Vector2(20,17)),12,Color.WHITE,true)
- if unavailable: draw_rect(rect,Color(0.02,0.02,0.08,0.53))
+ presentation.draw_card(id,rect,unavailable)
 
 func build_panel() -> void:
  # Full-screen input shield keeps touches from reaching the battle underneath.
  var shield = button(Rect2(0,0,390,740),"",func(): pass,false,false,true)
  shield.mouse_default_cursor_shape = Control.CURSOR_ARROW
  if panel == "result":
-  button(Rect2(55,478,280,48),"VOLTAR À TORRE",func(): screen="home"; panel=""; rebuild(),true)
+  button(Rect2(55,478,280,48),"VOLTAR À TORRE",func(): screen="home"; panel=""; audio_engine.stop_music(); rebuild(),true)
  else:
   button(Rect2(316,61,42,30),"FECHAR",func(): panel=""; rebuild())
  if panel == "settings":
   button(Rect2(65,258,260,44),"SOM: LIGADO" if sound_on else "SOM: DESLIGADO",toggle_sound)
   button(Rect2(65,326,260,44),"VELOCIDADE: ×"+str(speed),toggle_speed)
+  button(Rect2(65,394,260,44),"CRÉDITOS DE ÁUDIO",func(): panel="credits"; rebuild())
  elif panel == "collection":
   var ids = cards.keys()
   var start = collection_page*8
@@ -437,10 +354,10 @@ func draw_panel() -> void:
    text_at("CONCLUÍDA" if i<int(profile.stage) else "PRÓXIMA BATALHA" if i==int(profile.stage) else "BLOQUEADA",Rect2(53,232+i*82,280,16),9,WHITE)
  elif panel == "settings":
   text_at("CONFIGURAÇÕES",Rect2(30,156,330,30),22,GOLD,true,true)
-  text_at("Progresso salvo automaticamente neste navegador.",Rect2(30,423,330,35),10,WHITE,true)
+  text_at("Progresso salvo automaticamente neste navegador.",Rect2(30,464,330,35),10,WHITE,true)
  elif panel in ["hero","enemy"]:
   var is_hero = panel=="hero"
-  image_at("elyra-elite" if is_hero else "malgruk-elite",Rect2(112,150,166,230))
+  presentation.actor(not is_hero,0,Vector2(195,393),235)
   text_at("ELYRA" if is_hero else stages[stage_index].name,Rect2(30,408,330,35),25,GOLD,true,true)
   text_at("GUARDIÃ ARCANA" if is_hero else stages[stage_index].title,Rect2(30,453,330,24),12,WHITE,true)
   text_at("ESSÊNCIA ARCANA" if is_hero else stages[stage_index].ability,Rect2(30,512,330,24),15,GOLD,true,true)
@@ -451,6 +368,12 @@ func draw_panel() -> void:
   text_at(cards[id].name,Rect2(30,482,330,30),22,GOLD,true,true)
   text_at(info(id),Rect2(30,532,330,24),13,WHITE,true)
   text_wrapped(card_flavor(cards[id]),Rect2(45,581,300,62),11,GOLD)
+ elif panel=="credits":
+  text_at("MÚSICA E EFEITOS",Rect2(30,133,330,30),20,GOLD,true,true)
+  text_wrapped("Dark Descent — Matthew Pablo. www.matthewpablo.com. CC BY 3.0. Música convertida e normalizada para uso no jogo.",Rect2(45,199,300,85),11,WHITE)
+  text_wrapped("8 RPG Battle Magic SFX — leohpaz. CC BY 4.0. Gravações de fogo, gelo, trovão, água, vento, terra e carga mágica; convertidas e normalizadas.",Rect2(45,305,300,100),11,WHITE)
+  text_wrapped("80 RPG SFX — rubberduck. Freeze Spell — artisticdude. CC0. Impactos de espada e armadura, escudo, cura e reação do orc.",Rect2(45,426,300,90),11,WHITE)
+  text_wrapped("Licenças: creativecommons.org/licenses/by/3.0/ e creativecommons.org/licenses/by/4.0/. Fontes e links completos constam no projeto.",Rect2(45,551,300,90),10,GOLD)
  elif panel == "result":
   text_at("TORRE INFINITA",Rect2(30,180,330,24),12,WHITE,true)
   text_at("VITÓRIA!" if outcome=="win" else "EMPATE" if outcome=="draw" else "DERROTA",Rect2(30,244,330,55),38,GOLD,true,true)
@@ -476,12 +399,9 @@ func select_card(id: String) -> void:
  rebuild()
 
 func toggle_sound() -> void:
- sound_on = not sound_on
+ sound_on=not sound_on
  if OS.has_feature("web"): JavaScriptBridge.eval("localStorage.setItem('dungeon_sound','"+("on" if sound_on else "off")+"')")
- if not sound_on:
-  for voice in voices:
-   if is_instance_valid(voice): voice.stop(); voice.queue_free()
-  voices.clear()
+ audio_engine.set_enabled(sound_on)
  rebuild()
 
 func toggle_speed() -> void:
@@ -490,46 +410,24 @@ func toggle_speed() -> void:
  rebuild()
 
 func effect(art: String) -> void:
- if not sound_on: return
- var kind = "steel" if art=="sword" else "lightning" if art=="storm" else art
- if not sfx.has(kind): tone(160.0 if art=="fire" else 740.0,0.35); return
- var voice = AudioStreamPlayer.new()
- voice.stream = sfx[kind]
- voice.volume_db = -3
- add_child(voice)
- voices.append(voice)
- voice.finished.connect(func(): voices.erase(voice); voice.queue_free())
- voice.play()
+ audio_engine.play(audio_engine.clip_for(art))
 
-func tone(frequency: float, duration = 0.2, volume = 0.15) -> void:
- if not sound_on: return
- var wav = AudioStreamWAV.new()
- wav.format = AudioStreamWAV.FORMAT_16_BITS
- wav.mix_rate = 22050
- var count = int(duration*22050)
- var data = PackedByteArray()
- data.resize(count*2)
- for i in range(count):
-  var t = float(i)/22050.0
-  var envelope = sin(PI*float(i)/count)*exp(-t*7)
-  var wave = sin(TAU*frequency*t)+0.25*sin(TAU*frequency*2*t)
-  data.encode_s16(i*2,int(clampf(wave*envelope*volume,-1,1)*32767))
- wav.data = data
- var voice = AudioStreamPlayer.new()
- voice.stream = wav
- add_child(voice)
- voices.append(voice)
- voice.finished.connect(func(): voices.erase(voice); voice.queue_free())
- voice.play()
+func tone(_frequency: float, _duration = 0.2, _volume = 0.15) -> void:
+ if audio_engine: audio_engine.play("ui",-11.0)
 
 func start_battle() -> void:
- stage_index = int(profile.stage)
+ turn_serial+=1
+ stage_index=int(profile.stage)
  hero=100; enemy=int(stages[stage_index].hp); hero_shield=0; enemy_shield=0
  energy=3; round_number=1; combo=0; burn=0; freeze=0
  chain=[]; last_element=""; triad_used=false; triad_charge=false
  hand=[]; discard=[]; deck=profile.deck.duplicate(); deck.shuffle()
  done=false; busy=false; screen="battle"; panel=""; phase="SUA VEZ"
- message="Prepare seu primeiro ataque!"; draw_hand(); tone(440,0.3); rebuild()
+ message="Prepare seu primeiro ataque!"
+ presentation.reset()
+ audio_engine.history.clear()
+ audio_engine.start_music()
+ draw_hand(); rebuild()
 
 func draw_hand() -> void:
  while hand.size()<5:
@@ -542,51 +440,81 @@ func element(c: Dictionary) -> String:
  return "steel" if c.art=="sword" else "ice" if c.art=="shield" else "water" if c.art=="heal" else "lightning" if c.art=="spark" else c.art
 
 func hit(target_enemy: bool, amount: int) -> int:
- var absorbed = mini(enemy_shield if target_enemy else hero_shield,amount)
- amount -= absorbed
- if target_enemy: enemy_shield-=absorbed; enemy=maxi(0,enemy-amount)
- else: hero_shield-=absorbed; hero=maxi(0,hero-amount)
- return amount
+ amount=maxi(0,amount)
+ var current_shield=maxi(0,enemy_shield if target_enemy else hero_shield)
+ var absorbed=mini(current_shield,amount)
+ var hp=enemy if target_enemy else hero
+ var actual=mini(hp,amount-absorbed)
+ if target_enemy: enemy_shield=current_shield-absorbed; enemy=maxi(0,enemy-actual)
+ else: hero_shield=current_shield-absorbed; hero=maxi(0,hero-actual)
+ last_hit={"damage":actual,"blocked":absorbed,"enemy":target_enemy}
+ return actual
 
 func feedback(value: String, color: Color, target_enemy: bool) -> void:
- fx_amount=value; fx_color=color; fx_enemy=target_enemy; fx_time=1.0; pulse=1.0
+ presentation.emit_event(value,color,target_enemy)
+
+func animation_at(seconds: float) -> void:
+ while not presentation.action.is_empty() and presentation.action_time<seconds:
+  await get_tree().process_frame
 
 func play(index: int) -> void:
- if busy or done or index<0 or index>=hand.size(): return
- var id = hand[index]
- var c: Dictionary = cards[id]
- if c.cost>energy: return
- busy=true; energy-=int(c.cost); hand.remove_at(index); discard.append(id); combo+=1
- var el = element(c)
+ if busy or done or panel!="" or index<0 or index>=hand.size(): return
+ var id=hand[index]
+ var c: Dictionary=cards[id].duplicate()
+ c.id=id
+ if int(c.cost)>energy: return
+ busy=true
+ var serial=turn_serial
+ energy-=int(c.cost); hand.remove_at(index); discard.append(id); combo+=1
+ var el=element(c)
  chain.append(el)
  if chain.size()>3: chain.pop_front()
- var unique = {}
+ var unique={}
  for item in chain: unique[item]=true
  if chain.size()==3 and unique.size()==3 and not triad_used:
   triad_used=true; triad_charge=true; energy=mini(3,energy+1)
- var resonance = last_element==el and combo>1
- last_element=el; phase="CONJURAÇÃO" if c.art!="sword" else "INVESTIDA"
- motion=1.0; motion_enemy=false; effect(c.art)
+  feedback("TRÍADE · +1 MANA",Color("cdb0ff"),false)
+ var resonance=last_element==el and combo>1
+ last_element=el
+ phase="PODER INCORPORADO"
+ presentation.begin(c,false,index)
  rebuild()
- await get_tree().create_timer(0.35/speed).timeout
- var details = []
+ await animation_at(0.36)
+ if serial!=turn_serial: return
+ audio_engine.charge(c.art)
+ await animation_at(0.73)
+ if serial!=turn_serial: return
+ phase="ATAQUE" if c.has("damage") else "DEFESA" if c.has("block") else "CURA"
+ await animation_at(1.05)
+ if serial!=turn_serial: return
+ var details=[]
  if c.has("damage"):
-  var bonus = (mini(6,(combo-2)*2) if combo>=3 else 0)+(4 if resonance else 0)+(6 if triad_charge else 0)
+  var bonus=(mini(6,(combo-2)*2) if combo>=3 else 0)+(4 if resonance else 0)+(6 if triad_charge else 0)
   triad_charge=false
-  var amount = hit(true,int(c.damage)+bonus)
-  feedback("−%d%s" % [amount,"  COMBO +%d" % bonus if bonus>0 else ""],Color(c.glow),true)
+  var amount=hit(true,int(c.damage)+bonus)
+  var blocked=int(last_hit.blocked)
+  if blocked>0: presentation.emit_event("%d BLOQUEADO" % blocked,Color("8deaff"),true,"block")
+  if amount>0: presentation.emit_event("−%d%s" % [amount," COMBO" if bonus>0 else ""],Color(c.glow),true,"hurt")
+  audio_engine.impact(c.art,amount,blocked,true)
   details.append("%d dano" % amount)
  if c.has("block"):
-  hero_shield+=int(c.block); feedback("+%d ESCUDO" % int(c.block),Color("72d9ff"),false)
+  hero_shield+=int(c.block)
+  feedback("+%d ESCUDO" % int(c.block),Color("72e7ff"),false)
+  if not c.has("damage"):
+   audio_engine.play("earth" if c.art=="earth" else "ice" if c.art=="ice" else "water" if c.art=="water" else "shield",-4.0)
   details.append("+%d defesa" % int(c.block))
  if c.has("heal"):
-  var amount = mini(int(c.heal),100-hero)
-  hero+=amount; feedback("+%d VIDA" % amount,Color("88ffb4"),false)
+  var amount=mini(int(c.heal),100-hero)
+  hero+=amount
+  feedback("+%d VIDA" % amount,Color("8effb4"),false)
+  audio_engine.play("heal",-8.0 if c.has("block") else -4.0)
   details.append("+%d cura" % amount)
- if c.has("burn"): burn=maxi(burn,int(c.burn)); details.append("Queimadura")
- if c.has("freeze"): freeze=maxi(freeze,int(c.freeze)); details.append("Congelado")
+ if c.has("burn"): burn=maxi(burn,int(c.burn)); feedback("QUEIMADURA",Color("ffb364"),true)
+ if c.has("freeze"): freeze=maxi(freeze,int(c.freeze)); feedback("CONGELADO",Color("b3efff"),true); audio_engine.play("freeze",-11.0)
  message=c.name+": "+" · ".join(details)
- await get_tree().create_timer(0.35/speed).timeout
+ await animation_at(1.85)
+ if serial!=turn_serial: return
+ presentation.complete()
  if enemy<=0: finish("win"); return
  busy=false; phase="SUA VEZ"; rebuild()
 
@@ -606,28 +534,61 @@ func intent() -> String:
  return "Ataque: %d dano" % boss_damage()
 
 func end_turn() -> void:
- if busy or done: return
- busy=true; phase="TURNO INIMIGO"; rebuild()
- await get_tree().create_timer(0.35/speed).timeout
+ if busy or done or panel!="": return
+ busy=true
+ var serial=turn_serial
+ phase="TURNO INIMIGO"
+ rebuild()
+ await get_tree().create_timer(0.22/speed).timeout
+ if serial!=turn_serial: return
  if burn>0:
-  var amount=hit(true,3); burn-=1
-  feedback("QUEIMA −%d" % amount,Color("ff995c"),true)
-  await get_tree().create_timer(0.3/speed).timeout
+  var amount=hit(true,3)
+  burn-=1
+  presentation.begin({"art":"fire","glow":"#ff853f"},false,-1,"burn")
+  presentation.emit_event("QUEIMA −%d" % amount,Color("ff995c"),true,"hurt")
+  audio_engine.play("fire",-9.0)
+  await animation_at(0.7)
+  if serial!=turn_serial: return
+  presentation.complete()
  if enemy<=0: finish("win"); return
  if freeze>0:
-  freeze-=1; message=stages[stage_index].name+" perdeu a ação: congelado."
-  feedback("CONGELADO",Color("a4e9ff"),true)
+  freeze-=1
+  phase="INIMIGO CONGELADO"
+  presentation.begin({"art":"ice"},true,-1,"frozen")
+  feedback("AÇÃO IMPEDIDA",Color("b6efff"),true)
+  audio_engine.play("freeze",-8.0)
+  message=stages[stage_index].name+" perdeu a ação: congelado."
+  await animation_at(0.7)
  elif boss_defends():
+  var c={"art":"earth" if stage_index==3 else "shield","block":int(stages[stage_index].guard),"glow":"#fac58b"}
+  presentation.begin(c,true)
+  audio_engine.charge(c.art)
+  await animation_at(1.05)
+  if serial!=turn_serial: return
   enemy_shield+=int(stages[stage_index].guard)
+  feedback("+%d ESCUDO" % int(stages[stage_index].guard),Color("9de7ff"),true)
+  audio_engine.play(c.art,-4.0)
   message=stages[stage_index].name+" ergueu escudo."
-  feedback("+%d ESCUDO" % int(stages[stage_index].guard),Color("a4e9ff"),true)
+  await animation_at(1.85)
  else:
-  motion=1.0; motion_enemy=true; effect(stages[stage_index].element if boss_special() else "sword")
-  await get_tree().create_timer(0.35/speed).timeout
+  var art=stages[stage_index].element if boss_special() else "sword"
+  var c={"art":art,"damage":boss_damage(),"glow":"#ff8f4f"}
+  phase=stages[stage_index].ability if boss_special() else "ATAQUE INIMIGO"
+  presentation.begin(c,true)
+  await animation_at(0.36)
+  if serial!=turn_serial: return
+  audio_engine.charge(art)
+  await animation_at(1.05)
+  if serial!=turn_serial: return
   var amount=hit(false,boss_damage())
-  message=stages[stage_index].name+" atacou: %d dano." % amount
-  feedback("−%d" % amount,Color("ff7f66"),false)
- await get_tree().create_timer(0.45/speed).timeout
+  var blocked=int(last_hit.blocked)
+  if blocked>0: presentation.emit_event("%d BLOQUEADO" % blocked,Color("91eaff"),false,"block")
+  if amount>0: presentation.emit_event("−%d VIDA" % amount,Color("ff7f66"),false,"hurt")
+  audio_engine.impact(art,amount,blocked,false)
+  message=stages[stage_index].name+" atacou: %d dano; %d bloqueado." % [amount,blocked]
+  await animation_at(1.85)
+ if serial!=turn_serial: return
+ presentation.complete()
  hero_shield=0; discard.append_array(hand); hand.clear(); round_number+=1; energy=3
  combo=0; last_element=""; chain=[]; triad_used=false; triad_charge=false; draw_hand()
  if hero<=0: finish("lose"); return
@@ -641,4 +602,4 @@ func finish(result: String) -> void:
  profile.xp+=35 if result=="win" else 12 if result=="draw" else 8
  if result=="win": profile.wins+=1; profile.stage=mini(4,int(profile.stage)+1)
  if result=="lose": profile.losses+=1
- save_profile(); panel="result"; tone(660 if result=="win" else 160,0.5); rebuild()
+ save_profile(); panel="result"; audio_engine.finish_music(); audio_engine.play("heal" if result=="win" else "armor",-8.0); rebuild()

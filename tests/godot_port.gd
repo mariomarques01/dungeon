@@ -13,10 +13,12 @@ func fresh() -> void:
  game.start_battle()
  game.speed=20.0
  game.sound_on=false
+ game.audio_engine.set_enabled(false)
 func run() -> void:
  game=load("res://scenes/main.tscn").instantiate()
  root.add_child(game)
  game.sound_on=false
+ game.audio_engine.set_enabled(false)
  fresh()
  check(game.cards.size()==24 and game.stages.size()==5,"24 habilidades e 5 chefes")
  check(game.hand.size()==5 and game.deck.size()==7,"Baralho de 12 com compra de 5 cartas")

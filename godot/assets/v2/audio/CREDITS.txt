@@ -1,0 +1,21 @@
+Dark Descent — Matthew Pablo (2012), www.matthewpablo.com
+Source: https://opengameart.org/content/dark-descent
+License: CC BY 3.0 https://creativecommons.org/licenses/by/3.0/
+Converted to Ogg Vorbis, normalized loudness, loop enabled in engine.
+
+8 RPG Battle Magic SFX (free samples) — leohpaz (2022)
+Source: https://opengameart.org/content/8-magic-attacks
+License: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
+Fire, ice, thunder, water, wind, earth and charge recordings.
+Converted to Ogg Vorbis, normalized loudness, trimmed to short game events.
+
+80 CC0 RPG SFX — rubberduck
+Source: https://opengameart.org/sites/default/files/80-CC0-RPG-SFX_0.zip
+License: CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/
+Sword, armor, shield impact, healing chime, orc reaction and interface sounds.
+Normalized loudness and converted to Ogg Vorbis.
+
+Freeze Spell — artisticdude
+Source: https://opengameart.org/content/freeze-spell-0
+License: CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/
+Normalized loudness and converted to Ogg Vorbis.
