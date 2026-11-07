@@ -31,5 +31,24 @@ func run() -> void:
    if game.rules.can_attack(0,unit.uid,victim).ok:await game.request_attack(unit.uid,victim)
   for voice in game.audio_engine.voices:
    if is_instance_valid(voice):voice.stop()
+ # Lethal spell effects keep the element that actually killed the target.
+ for spell in ['fireball','frost','bolt','vortex']:
+  game.start_match();game.rules.players[0].mana=10;game.rules.players[0].hand=[spell]
+  var victim=game.rules.spawn(1,'stoneguard');victim.health=1
+  game.view.prepare()
+  await game.request_play(0,{'side':1,'uid':victim.uid})
+  var remains=game.view.ghosts.filter(func(g):return g.uid==victim.uid)
+  if remains.is_empty() or remains[0].element!=game.cards[spell].element:push_error('Wrong death element: '+spell);failures+=1
+ print('Fire, ice, lightning and shadow death profiles checked')
+ # A real lethal action opens the victory panel with live units still on the board.
+ game.start_match();game.rules.spawn(0,'dragon');game.rules.spawn(1,'wolf')
+ game.rules.players[0].mana=10;game.rules.players[0].hand=['fireball']
+ game.rules.players[1].health=1;game.view.prepare()
+ await game.request_play(0,{'side':1,'hero':true})
+ if game.panel!='result' or game.rules.outcome!='win':push_error('Victory panel did not open');failures+=1
+ for node in game.view.nodes.values():
+  if node.z_index>=game.overlay.z_index:push_error('Card art overlaps result');failures+=1
+ if game.audio_engine.action_clip('wolf','bite')!='bite_hit' or game.audio_engine.action_clip('golem','earth')!='stone_hit' or game.audio_engine.action_clip('orc','steel')!='steel_heavy':push_error('Wrong creature sound family');failures+=1
+ print('Victory layers and creature audio profiles checked')
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)

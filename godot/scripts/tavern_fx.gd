@@ -220,8 +220,14 @@ func projectile(origin: Vector2,dest: Vector2,t: float,element: String,color: Co
   for i in range(9):
    var p=at-direction*i*9+Vector2(0,sin(i*2+t*16)*i*1.5)
    glow(p,maxf(2,24-i*2),color,(1-i/10.0)*0.8)
-  glow(at,25,color)
+  glow(at,34,color)
 func impact(at: Vector2,element: String,t: float,alpha=1.0,id='') -> void:
+ if t>=0.999 or alpha<0.002:return
+ c.draw_set_transform(at,0,Vector2(1.4,1.4))
+ impact_shape(Vector2.ZERO,element,t,alpha,id)
+ c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+func impact_shape(at: Vector2,element: String,t: float,alpha=1.0,id='') -> void:
  if t>=0.999 or alpha<0.002:return
  var color=v.element_color(element);var fade=(1-t)*alpha
  if element in ['steel','bite']:
@@ -291,7 +297,12 @@ func event(p: Dictionary) -> void:
   'freeze':
    for i in range(7):shard(at+Vector2(-52+i*17,35),-PI/2,50+i%3*15,Color('b1edff'),fade)
   'debuff':roots(at,1-t*0.25,fade)
-  'destroy','death':impact(at,'dark',t,0.8)
+  'destroy':impact(at,'dark',t,0.9)
+  'death':
+   impact(at,element,t,1.15)
+   for i in range(10):
+    var point=at+Vector2.from_angle(i*2.4)*(20+t*90)+Vector2(0,-t*60 if element=='fire' else t*t*40)
+    shard(point,i*1.4,18*(1-t),color,fade)
   'draw','mana':
    shard(at-Vector2(0,t*65),-PI/2,24,Color('92dfff'),fade)
 func status(unit: Dictionary,rect: Rect2) -> void:
@@ -302,3 +313,41 @@ func status(unit: Dictionary,rect: Rect2) -> void:
  if 'poison' in unit.keywords:
   for i in range(3):glow(at+Vector2(sin(i*2+v.clock)*rect.size.x*0.45,30+cos(i*3+v.clock*2)*8),3,Color('9fe342'),0.5)
  if unit.shield:ring(at,rect.size.x*0.6,Color('ffe8a2'),0.3+sin(v.clock*2)*0.1,v.clock*0.3)
+
+func environment() -> void:
+ c=v.canvas
+ for effect in v.scenery:
+  var t=float(effect.age)/2.4;var fade=1-t
+  var element=str(effect.element);var color=v.element_color(element)
+  var at: Vector2=effect.position
+  c.draw_rect(Rect2(Vector2.ZERO,v.game.logical_size),Color(color,fade*0.045))
+  # Reflections and elemental remnants on the board, underneath all cards.
+  for i in range(3):
+   var floor_point=at+Vector2((i-1)*75,35+absf(i-1)*12)
+   glow(floor_point,52+sin(t*PI)*30,color,fade*0.13)
+  match element:
+   'fire':
+    for i in range(18):
+     var point=at+Vector2(sin(i*17)*130,60-fposmod(effect.age*70+i*19,210))
+     shard(point,-PI/2,9,Color('ffbd6a'),fade*0.8)
+    for side in [-1,1]:
+     glow(Vector2(v.layout.w*(0.05 if side==-1 else 0.95),v.layout.h*0.28),100,color,fade*0.4)
+    c.draw_arc(at,95,0,TAU,64,Color(0.22,0.07,0.03,fade*0.25),12,true)
+   'ice':
+    for i in range(12):
+     var point=Vector2(v.layout.w*(0.06 if i%2==0 else 0.94),v.layout.h*(0.2+i*0.04))
+     shard(point,-PI/2+(i%2-0.5),28,Color('c7f4ff'),fade*0.65)
+    for i in range(15):
+     var point=at+Vector2(sin(i*7)*130,-90+fposmod(effect.age*45+i*21,180))
+     c.draw_circle(point,2,Color('c5f2ff')*Color(1,1,1,fade))
+   'lightning','storm':
+    for i in range(4):
+     var end=at+Vector2.from_angle(i*TAU/4+0.3)*145
+     lightning(at,end,t,color,fade*0.45)
+   'earth','nature':
+    for i in range(3):roots(at+Vector2((i-1)*75,45),0.5+sin(t*PI)*0.5,fade*0.35)
+   'heal','shield':
+    ring(at,100+t*45,color,fade*0.3,t)
+   'dark','arcane':
+    for i in range(3):
+     c.draw_arc(at,70+i*30,effect.age*(i+1),effect.age*(i+1)+PI*1.5,64,Color(color,fade*0.3),3,true)

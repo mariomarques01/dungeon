@@ -25,3 +25,9 @@ shadow (creature_misc_05), arcane (spell_02), nature (spell_01),
 summon_stone (stones_02), death_soft (creature_die_01) from the same
 80 CC0 RPG SFX archive by rubberduck. Trimmed, faded, loudness normalized.
 Card handling is a short, quiet recording of paper, not the charge spell.
+
+Combat detail update: steel_light (blade_02), steel_heavy (blade_03),
+wood_hit (wood_03), stone_hit (stones_03), bite_hit (creature_hurt_02),
+ward_break (chain_03), from rubberduck's same CC0 archive.
+Shortened, faded and normalized. Distinct source/retaliation events are mixed
+once per sound family per action to avoid stacking area attacks.

@@ -35,6 +35,7 @@ var clock=0.0
 var match_serial=0
 var rewarded=false
 var qa_enabled=false
+var previous_viewport=Vector2.ZERO
 var web_touch_callback
 var done: bool:
  get: return rules!=null and rules.done
@@ -50,7 +51,7 @@ func _ready() -> void:
  rules=Rules.new(cards)
  load_profile()
  art_layer=Control.new();art_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(art_layer)
- overlay=TopLayer.new();overlay.game=self;overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(overlay)
+ overlay=TopLayer.new();overlay.z_index=100;overlay.game=self;overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(overlay)
  view=View.new(self)
  audio_engine=Audio.new(self);audio_engine.set_enabled(sound_on)
  if OS.has_feature('web'): install_web_touch()
@@ -113,9 +114,11 @@ func save_profile() -> void:
   if file:file.store_string(raw)
 
 func layout_board() -> void:
+ if previous_viewport!=size:
+  drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;previous_viewport=size
  portrait=size.y>size.x*1.05
- var width=760.0 if portrait else 1280.0
- var height=clampf(width*size.y/maxf(1,size.x),1180,1740) if portrait else clampf(width*size.y/maxf(1,size.x),700,960)
+ var height=760.0*size.y/maxf(1,size.x) if portrait else 800.0
+ var width=760.0 if portrait else height*size.x/maxf(1,size.y)
  logical_size=Vector2(width,height)
  var factor=minf(size.x/width,size.y/height)
  board_transform=Transform2D(0,Vector2(factor,factor),0,(size-logical_size*factor)/2)
@@ -137,7 +140,7 @@ func _process(delta: float) -> void:
    var item=view.unit_views[uid];units.append({'uid':uid,'side':item.side,'rect':rect_json(item.rect),'unit':item.unit})
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
-  var snap={'screen':screen,'panel':panel,'busy':busy,'drag':drag,'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':view.anim,'animationTime':view.anim_time,'effectHistory':view.effect_history,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'screen':screen,'panel':panel,'busy':busy,'drag':drag,'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':view.anim,'animationTime':view.anim_time,'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -202,6 +205,7 @@ func _input(event: InputEvent) -> void:
  elif event is InputEventMouseMotion and event.device!=-1:
   pointer=board_transform.affine_inverse()*event.position;pointer_move()
  elif event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
+  if panel=='result':activate_button('home');return
   drag={};press={};selected_card=-1;selected_attacker=-1;inspect_id='';panel=''
 
 func pointer_down() -> void:
@@ -311,7 +315,7 @@ func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';busy=false;rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
  rules.start(profile.deck)
- view.anim={};view.particles=[];view.ghosts=[];view.floats=[]
+ view.anim={};view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
  audio_engine.start_music();toast_time=0
 
 func at_time(value: float) -> void:
@@ -338,7 +342,7 @@ func request_play(index: int,target: Dictionary={},position = -1,origin=Vector2.
  for event in result.events:
   if event.kind=='damage':view.anim.impact_points.append(view.target_center(event.target))
  view.ingest(result.events,before)
- play_events(result.events,card.element)
+ play_events(result.events,card.element,before)
  await at_time(1.3 if card.kind=='spell' else 1.15)
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
@@ -357,7 +361,7 @@ func request_attack(uid: int,target: Dictionary,side=0) -> void:
  if serial!=match_serial:return
  var before=rules.players.duplicate(true)
  var result=rules.attack(side,uid,target)
- view.ingest(result.events,before);play_events(result.events,element)
+ view.ingest(result.events,before);play_events(result.events,element,before)
  await at_time(0.85)
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
@@ -369,38 +373,55 @@ func request_power(target: Dictionary,side=0) -> void:
  busy=true
  var serial=match_serial
  var destination=view.target_center(target) if side==0 else Vector2(logical_size.x/2,view.layout.enemy_row)
- view.begin({'kind':'power','id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'steel','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target})
+ view.begin({'kind':'power','side':side,'id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'steel','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target})
  audio_engine.charge('fire');await at_time(0.5)
  if serial!=match_serial:return
  var before=rules.players.duplicate(true)
  var result=rules.power(side,target)
- view.ingest(result.events,before);play_events(result.events,'fire')
+ view.ingest(result.events,before);play_events(result.events,'fire',before)
  await at_time(0.95)
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
 
-func play_events(events: Array,element: String) -> void:
- var damage=false;var heal=false;var shield=false;var summon=false;var death=false
+func play_events(events: Array,element: String,before: Array=[]) -> void:
+ var played={}
+ var causes={}
  for event in events:
-  damage=damage or event.kind=='damage';heal=heal or event.kind=='heal';shield=shield or event.kind=='shield_break';summon=summon or event.kind=='summon';death=death or event.kind=='death'
- if damage:audio_engine.play(audio_engine.clip_for(element),-9.0)
- if heal:audio_engine.play('heal',-12.0)
- if shield:audio_engine.play('shield',-6.0)
- if summon:
-  for event in events:
-   if event.kind=='summon':audio_engine.summon_card(event.id,cards[event.id].element);break
- if death:audio_engine.play('death_soft',-17.0)
- if events.any(func(e):return e.kind in ['armor','blocked','shield_break']):audio_engine.play('armor',-13.0)
- if events.any(func(e):return e.kind=='freeze'):audio_engine.play('freeze',-14.0)
- if events.any(func(e):return e.kind=='buff'):audio_engine.play('heal',-15.0)
- if not damage and not summon and not heal and events.any(func(e):return e.kind in ['mana','draw','debuff','destroy']):audio_engine.play(audio_engine.clip_for(element),-15.0)
+  var kind=str(event.kind);var sound='';var gain=-11.0
+  var source=str(view.anim.get('id',''))
+  var event_element=str(event.get('element',element))
+  if kind=='damage':
+   if event.target.has('uid'):causes[int(event.target.uid)]=event_element
+   if view.anim.get('kind','')=='attack' and event.target.side==view.anim.get('side',0) and not before.is_empty():
+    var defender=view.anim.get('target',{})
+    for unit in before[int(defender.get('side',1))].board:
+     if unit.uid==defender.get('uid',-1):source=unit.id;break
+   sound=audio_engine.action_clip(source,event_element)
+  elif kind=='shield_break':sound='ward_break';gain=-10
+  elif kind in ['armor','blocked']:sound='armor';gain=-12
+  elif kind=='heal':sound='heal';gain=-13
+  elif kind=='buff':sound='steel_light' if source=='rune_blade' else 'heal';gain=-13
+  elif kind=='freeze':sound='freeze';gain=-12
+  elif kind=='death':
+   event_element=str(causes.get(int(event.uid),element))
+   source=str(event.id)
+   if event_element=='ice':sound='ward_break'
+   elif event_element in ['fire','dark','arcane','storm','lightning']:sound=audio_engine.clip_for(event_element)
+   elif source in ['golem','stoneguard','treant','beetle']:sound=audio_engine.action_clip(source,str(cards[source].element))
+   else:sound='death_soft'
+   gain=-16
+  elif kind=='summon':
+   if not played.has('summon'):audio_engine.summon_card(event.id,cards[event.id].element);played.summon=true
+  elif kind in ['mana','draw','debuff','destroy']:sound=audio_engine.clip_for(event_element);gain=-16
+  if not sound.is_empty() and not played.has(sound):
+   audio_engine.play(sound,gain,1.0,{'card':source,'event':kind,'element':event_element});played[sound]=true
 
 func end_player_turn() -> void:
  if busy or rules.done or rules.active!=0:return
  selected_card=-1;selected_attacker=-1;drag={};inspect_id=''
  var serial=match_serial
  var before=rules.players.duplicate(true)
- var result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark');check_result()
+ var result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
  if rules.done:return
  notify('Turno do rival')
  await get_tree().create_timer(0.45/speed).timeout
@@ -419,7 +440,7 @@ func end_player_turn() -> void:
  if not rules.done and rules.can_power(1).ok:await request_power({},1)
  if serial!=match_serial or rules.done:return
  before=rules.players.duplicate(true)
- result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark');check_result()
+ result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
  if not rules.done:notify('Seu turno · +1 cristal de mana')
 
 func check_result() -> void:
@@ -431,4 +452,4 @@ func check_result() -> void:
   if rules.outcome=='win':profile.wins+=1
   if rules.outcome=='lose':profile.losses+=1
   save_profile()
- panel='result';busy=false;audio_engine.finish_music()
+ panel='result';busy=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id='';view.pointer_trail=[];view.result_time=0;audio_engine.finish_music()

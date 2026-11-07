@@ -34,3 +34,5 @@ The browser integration passed a complete match driven only through real pointer
 ## Remaining notes
 
 Small decorative differences from the inspiration are expected: this is an original game rather than a pixel-identical recreation. Mobile Safari on physical hardware was not available; native touch behavior was verified in Chromium's touch-capable mobile mode.
+
+Resultado, combate e rotação: painel numa camada acima de toda a arte; vitória por ação letal testada com criaturas sobreviventes. Resultado revisado em `docs/qa/tavern/result-fixed.png`. Morte por fogo, gelo, raio e sombra preserva o elemento causador nos fragmentos. Perfis de som por criatura/material e contra-ataque exercitados nas 44 sequências. Partida completa com oito criaturas, cinco ataques, feitiços e toque terminou sem erros no navegador. Rotação em tela móvel com densidade 3 preservou saúde/mão, preencheu o canvas, manteve as cartas visíveis e permitiu abrir/fechar configurações por toque; evidência em `docs/qa/tavern/landscape-fill.png`.

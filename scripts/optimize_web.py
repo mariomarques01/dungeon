@@ -28,6 +28,7 @@ config["fileSizes"] = {runtime + ".wasm": (root / (runtime + ".wasm")).stat().st
                        pack: (root / pack).stat().st_size}
 html = html.replace(match[0], "const GODOT_CONFIG = " + json.dumps(config) + ";")
 html = html.replace('<html lang="en">', '<html lang="pt-BR">')
+html = html.replace('initial-scale=1.0"', 'initial-scale=1.0, viewport-fit=cover"')
 # Cache only immutable, content-addressed game downloads. Storage failures must
 # never prevent play (private browsing, quota limits, unsupported Cache API).
 cache_script = """

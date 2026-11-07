@@ -8,6 +8,9 @@ var effect_history=[]
 var pointer_trail=[]
 var hand_lifts={}
 var frame_delta=0.016
+var result_time=0.0
+var scenery=[]
+var fragment_cache={}
 var board: Texture2D
 var portrait_board: Texture2D
 var creatures: Texture2D
@@ -63,6 +66,9 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
+ result_time+=delta
+ for effect in scenery:effect.age+=delta*game.speed
+ scenery=scenery.filter(func(effect):return effect.age<2.4)
  frame_delta=delta
  clock+=delta; anim_time+=delta*game.speed
  for point in pointer_trail:point.age+=delta
@@ -76,21 +82,21 @@ func tick(delta: float) -> void:
  for g in ghosts: g.age+=delta*game.speed
  particles=particles.filter(func(p): return p.age<1.15)
  floats=floats.filter(func(f): return f.age<1.25)
- ghosts=ghosts.filter(func(g): return g.age<0.8)
+ ghosts=ghosts.filter(func(g): return g.age<1.4)
 
 func geometry() -> void:
  var w=game.logical_size.x; var h=game.logical_size.y; var mobile=game.portrait
  layout={'w':w,'h':h,'mobile':mobile}
  layout.enemy_hero=Rect2(Vector2(w/2-58,38 if mobile else 17),Vector2(116,147))
- layout.player_hero=Rect2(Vector2(w/2-58,h-495 if mobile else h-300),Vector2(116,147))
- layout.enemy_row=h*0.34 if mobile else h*0.34
- layout.player_row=h*0.57 if mobile else h*0.53
+ layout.player_hero=Rect2(Vector2(w/2-(58 if mobile else 48),h-495 if mobile else h-350),Vector2(116,147) if mobile else Vector2(96,120))
+ layout.enemy_row=h*0.34 if mobile else h*0.31
+ layout.player_row=h*0.57 if mobile else h*0.46
  layout.unit_size=Vector2(88,114) if mobile else Vector2(105,133)
  layout.player_drop=Rect2(65,h*0.46,w-130,h*0.27) if mobile else Rect2(155,h*0.43,w-310,h*0.28)
  layout.board_zone=Rect2(50,175,w-100,h-480) if mobile else Rect2(150,145,w-300,h-330)
- layout.end=Rect2(w-190,h*0.465,163,86) if mobile else Rect2(w-228,h*0.445,164,66)
+ layout.end=Rect2(w-190,h*0.465,163,86) if mobile else Rect2(w-260,h*0.445,164,66)
  layout.power=Rect2(w/2+85,h-425 if mobile else h-245,69,69)
- layout.settings=Rect2(w-118,25,86,86) if mobile else Rect2(w-75,25,48,48)
+ layout.settings=Rect2(w-118,25,86,86) if mobile else Rect2(w-148,25,48,48)
  layout.mana=Vector2(w/2-150,h-52)
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
  if game.screen!='battle': return
@@ -110,7 +116,7 @@ func geometry() -> void:
  var spacing=minf(95.0 if mobile else 82.0,((w-170) if mobile else w*0.60)-size.x if hand.size()<=1 else (((w-170) if mobile else w*0.60)-size.x)/maxf(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
-  var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h-(185 if mobile else 27)+absf(f)*3)
+  var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h-(185 if mobile else 115)+absf(f)*3)
   var angle=f*0.045
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
@@ -146,6 +152,10 @@ func prepare() -> void:
    if not hits.is_empty():rect.position.x+=sin(hits[0].age*70)*8
    rect.position.y+=sin(clock*1.8+uid)*1.4
    info.draw_rect=rect
+   var resonating=(anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid) or particles.any(func(p):return p.get('response_id','')==info.unit.id and p.get('target',{}).get('uid',-1)==uid and p.age<0.65)
+   if resonating:
+    var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
+    art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,true,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
    art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-7),true,sin(anim_time*12)*0.09 if anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid else 0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
   for hand in hand_views:
    if game.drag.get('kind','')=='card' and int(game.drag.get('index',-1))==int(hand.index): continue
@@ -160,9 +170,7 @@ func prepare() -> void:
    var p=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    prepare_card('cast',anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   for g in ghosts:
-   var rect: Rect2=g.rect
-   rect.position.y-=g.age*24
-   art('dead'+str(g.uid),slice(creatures,int(game.cards[g.id].art),5,5),rect,true,g.age*0.22,Color(0.85,0.75,1,1-g.age/0.8),2)
+   prepare_remains(g)
   button('end',layout.end,'ENCERRAR\nTURNO' if state.active==0 else 'TURNO DO\nRIVAL',state.active==0 and not game.busy)
   button('settings',layout.settings,'⚙')
   button('power',layout.power,'1 DANO\n2 MANA',state.active==0 and not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
@@ -183,6 +191,41 @@ func prepare() -> void:
   button('home',Rect2(r.position+Vector2(55,r.size.y-105),Vector2(r.size.x-110,60)),'VOLTAR À TAVERNA',true,true)
  for key in nodes.keys():
   if not used.has(key): nodes[key].queue_free(); nodes.erase(key)
+
+func prepare_remains(g: Dictionary) -> void:
+ var t=clampf(float(g.age)/1.4,0,1)
+ var base=slice(creatures,int(game.cards[g.id].art),5,5)
+ var element=str(g.get('element','dark'))
+ for part in range(9):
+  var cache_key=str(game.cards[g.id].art)+':'+str(part)
+  if not fragment_cache.has(cache_key):
+   var piece=AtlasTexture.new();piece.atlas=creatures
+   piece.region=Rect2(base.region.position+Vector2(part%3,part/3)*base.region.size/3,base.region.size/3)
+   fragment_cache[cache_key]=piece
+  var cell=Vector2(part%3,part/3)
+  var rect=Rect2(g.rect.position+cell*g.rect.size/3,g.rect.size/3)
+  var direction=(cell-Vector2.ONE+Vector2(sin(part*7+g.uid)*0.3,-0.15)).normalized()
+  var tint=Color.WHITE
+  if element=='fire':
+   rect.position+=Vector2(sin(part*3+t*6)*t*30,-t*(40+part*9))
+   tint=Color('ffc17d').lerp(Color('342326'),t)
+  elif element=='ice':
+   rect.position+=direction*t*105+Vector2(0,t*t*70)
+   tint=Color('b9efff')
+  elif element in ['dark','arcane']:
+   rect.position=rect.position.lerp(g.rect.get_center()-rect.size/2,t)+Vector2.from_angle(part*2.4+t*5)*t*18
+   tint=Color('c4a0ff')
+  else:
+   rect.position+=direction*t*65+Vector2(0,t*t*90)
+   tint=element_color(element).lightened(0.55)
+  var shrink=1-t*0.7
+  rect=Rect2(rect.get_center()-rect.size*shrink/2,rect.size*shrink)
+  tint.a=clampf(1-t*1.1,0,1)
+  var key='dead'+str(g.uid)+'-'+str(part)
+  art(key,fragment_cache[cache_key],rect,true,t*(part-4)*0.12,tint,2)
+  # Every fragment shares the original oval mask, so no rectangular background leaks.
+  var texture_size=creatures.get_size()
+  nodes[key].material.set_shader_parameter('uv_rect',Vector4(base.region.position.x/texture_size.x,base.region.position.y/texture_size.y,base.region.size.x/texture_size.x,base.region.size.y/texture_size.y))
 
 func prepare_card(key: String,id: String,rect: Rect2,angle=0.0,z=0,tint=Color.WHITE) -> void:
  var card=game.cards[id]
@@ -241,8 +284,15 @@ func finish() -> void:
  anim={}
 
 func ingest(events: Array,before: Array) -> void:
+ var elemental=events.filter(func(event):return event.kind in ['damage','freeze','armor','heal','destroy'])
+ if not elemental.is_empty():
+  var element=str(anim.get('element',elemental[0].get('element','arcane')))
+  scenery.append({'element':element,'age':0.0,'position':target_center(elemental[0].get('target',{}))})
+  if scenery.size()>4:scenery.pop_front()
+ var causes={}
  for event in events:
   var kind=event.kind
+  if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',anim.get('element','dark'))
   if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
    var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ MANA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
@@ -258,8 +308,9 @@ func ingest(events: Array,before: Array) -> void:
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
      var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.unit_size/2,layout.unit_size)
-     ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0})
-     particles.append({'kind':'death','position':rect.get_center(),'color':Color('b79cde'),'age':0.0})
+     var cause=str(causes.get(int(event.uid),anim.get('element','dark')))
+     ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
+     particles.append({'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
 
 func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
  var s=StyleBoxFlat.new();s.bg_color=fill;s.border_color=border;s.set_border_width_all(width);s.set_corner_radius_all(radius);s.shadow_color=Color(0,0,0,0.45);s.shadow_size=7;return s
@@ -290,6 +341,7 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 func paint_base(c: CanvasItem) -> void:
  canvas=c
  canvas.draw_texture_rect(portrait_board if game.portrait else board,Rect2(Vector2.ZERO,game.logical_size),false)
+ fx.environment()
  if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
  if game.screen=='home':
   var x=layout.w/2-285 if game.portrait else 110.0
@@ -407,7 +459,7 @@ func paint_battle() -> void:
  text('%d / %d' % [p.mana,p.max_mana],Rect2(mana_start+Vector2(-75,-17),Vector2(65,30)),20,Color('d7ebff'),true)
  text('TURNO %d' % ((state.turn+1)/2),Rect2(25,25,180,25),18,PAPER,false,true)
  text('Você' if state.active==0 else 'Rival jogando…',Rect2(25,54,220,25),16,PAPER)
- text('BARALHO\n%d' % p.deck.size(),Rect2(layout.w-100,layout.h*0.71,80,60),17,PAPER,true,true)
+ text('BARALHO\n%d' % p.deck.size(),Rect2(layout.w-150,layout.h*0.71,130,60),17,PAPER,true,true)
  text('RIVAL\n%d cartas' % state.players[1].hand.size(),Rect2(26,layout.h*0.15,150,50),15,PAPER)
  if state.turn<4 and state.players[0].board.is_empty() and not game.busy and game.drag.is_empty():
   text('Solte suas criaturas aqui',Rect2(layout.w/2-250,layout.player_row-18,500,40),20,Color('7e5a36'),true)
@@ -502,7 +554,21 @@ func paint_panel() -> void:
   wrapped('Dark Descent — Matthew Pablo, matthewpablo.com. CC BY 3.0. Música convertida e normalizada.\n\nEfeitos elementais — leohpaz, CC BY 4.0. Impactos e criaturas — rubberduck e artisticdude, CC0.\n\nFontes, links e alterações estão descritos no projeto.'.replace('\n',' '),Rect2(rect.position+Vector2(45,110),Vector2(rect.size.x-90,340)),21,PAPER)
  elif game.panel=='result':
   var result=game.rules.outcome
-  text('VITÓRIA!' if result=='win' else 'EMPATE' if result=='draw' else 'DERROTA',Rect2(rect.position+Vector2(35,100),Vector2(rect.size.x-70,70)),48,GOLD,true,true)
-  text('+50 moedas · +35 XP' if result=='win' else '+10 moedas · +12 XP' if result=='draw' else '+5 moedas · +8 XP',Rect2(rect.position+Vector2(35,220),Vector2(rect.size.x-70,50)),24,PAPER,true)
+  var center=rect.position+Vector2(rect.size.x/2,85)
+  var medal_color=GOLD if result=='win' else Color('92bdd7')
+  fx.c=canvas;fx.ring(center,48,medal_color,0.8,clock*0.3)
+  text('★' if result=='win' else '✦',Rect2(center-Vector2(30,36),Vector2(60,65)),49,medal_color,true,true)
+  text('VITÓRIA!' if result=='win' else 'EMPATE' if result=='draw' else 'DERROTA',Rect2(rect.position+Vector2(35,160),Vector2(rect.size.x-70,65)),48,medal_color,true,true)
+  text('A taverna celebra seu triunfo.' if result=='win' else 'Uma nova estratégia espera por você.',Rect2(rect.position+Vector2(25,242),Vector2(rect.size.x-50,35)),20,PAPER,true)
+  var coins=50 if result=='win' else 10 if result=='draw' else 5
+  var xp=35 if result=='win' else 12 if result=='draw' else 8
+  for i in range(2):
+   var reward=Rect2(rect.position+Vector2(60+i*230,302),Vector2(210,77))
+   canvas.draw_style_box(style(Color('24303a'),Color('6f654f'),12),reward)
+   text(('+'+str(coins)+' MOEDAS') if i==0 else ('+'+str(xp)+' XP'),Rect2(reward.position+Vector2(5,23),reward.size-Vector2(10,20)),24,GOLD if i==0 else Color('a3daff'),true,true)
+  if result=='win':
+   for i in range(12):
+    var point=rect.position+Vector2(30+fposmod(i*43.0+sin(clock+i)*10,rect.size.x-60),fposmod(result_time*40+i*37,rect.size.y-130))
+    canvas.draw_circle(point,2.5,Color(GOLD,0.6))
  for button_info in buttons:
   if button_info.id in ['mute','speed','close','credits'] or game.panel=='result' and button_info.id=='home': paint_button(button_info)

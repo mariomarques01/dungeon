@@ -17,7 +17,7 @@ func _init(owner) -> void:
   limiter.ceiling_db=-1.0
   limiter.threshold_db=-1.0
   AudioServer.add_bus_effect(0,limiter)
- for kind in ["steel","fire","ice","lightning","water","earth","storm","charge","shield","heal","hurt","armor","freeze","ui","card_soft","beast","shadow","arcane","nature","summon_stone","death_soft"]:
+ for kind in ["steel","fire","ice","lightning","water","earth","storm","charge","shield","heal","hurt","armor","freeze","ui","card_soft","beast","shadow","arcane","nature","summon_stone","death_soft","steel_light","steel_heavy","wood_hit","stone_hit","bite_hit","ward_break"]:
   streams[kind]=load("res://assets/v2/audio/"+kind+".ogg")
  music=AudioStreamPlayer.new()
  music.stream=load("res://assets/v2/audio/dungeon-score.ogg")
@@ -53,7 +53,7 @@ func stop_music() -> void:
 func clip_for(art: String) -> String:
  return ROUTES.get(art,"steel")
 
-func play(kind: String, volume = -3.0, pitch = 1.0) -> void:
+func play(kind: String, volume = -3.0, pitch = 1.0,context: Dictionary={}) -> void:
  if not enabled or not streams.has(kind): return
  var voice=AudioStreamPlayer.new()
  voice.stream=streams[kind]
@@ -66,7 +66,7 @@ func play(kind: String, volume = -3.0, pitch = 1.0) -> void:
   if is_instance_valid(oldest): oldest.stop(); oldest.queue_free()
  voice.finished.connect(func(): voices.erase(voice); voice.queue_free())
  voice.play()
- history.append({"kind":kind,"tick":Time.get_ticks_msec()})
+ var entry={"kind":kind,"tick":Time.get_ticks_msec()};entry.merge(context,true);history.append(entry)
  if history.size()>64: history.pop_front()
  if kind!="ui": duck=0.75
 
@@ -83,3 +83,11 @@ func impact(art: String, damage: int, blocked: int, target_enemy: bool) -> void:
  if art=="storm": play("lightning",-6.0)
  if blocked>0: play("shield",-5.0)
  if damage>0: play("hurt" if target_enemy else "armor",-13.0)
+
+func action_clip(id: String,element: String) -> String:
+ if id in ['wolf','panther','serpent','gryphon','token_wolf']:return 'bite_hit'
+ if id in ['treant']:return 'wood_hit'
+ if id in ['stoneguard','golem']:return 'stone_hit'
+ if id in ['orc','knight','shieldbearer','beetle','token_guard']:return 'steel_heavy'
+ if id in ['scout','skeleton','token_skeleton']:return 'steel_light'
+ return clip_for(element)
