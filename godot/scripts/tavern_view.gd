@@ -5,6 +5,9 @@ const INK=Color('30251e')
 var game
 var fx
 var effect_history=[]
+var pointer_trail=[]
+var hand_lifts={}
+var frame_delta=0.016
 var board: Texture2D
 var portrait_board: Texture2D
 var creatures: Texture2D
@@ -60,7 +63,14 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
+ frame_delta=delta
  clock+=delta; anim_time+=delta*game.speed
+ for point in pointer_trail:point.age+=delta
+ pointer_trail=pointer_trail.filter(func(point):return point.age<0.4)
+ if game.drag.get('kind','')=='card':
+  if pointer_trail.is_empty() or pointer_trail[-1].position.distance_to(game.pointer)>8:
+   pointer_trail.append({'position':game.pointer,'id':game.drag.id,'age':0.0})
+   if pointer_trail.size()>18:pointer_trail.pop_front()
  for p in particles: p.age+=delta*game.speed
  for f in floats: f.age+=delta*game.speed
  for g in ghosts: g.age+=delta*game.speed
@@ -103,8 +113,11 @@ func geometry() -> void:
   var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h-(185 if mobile else 27)+absf(f)*3)
   var angle=f*0.045
   var base_rect=Rect2(center-size/2,size)
-  var lifted=game.selected_card==i or game.hover_card==i
-  if lifted and game.drag.is_empty(): center.y-=65 if mobile else 110
+  var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
+  var lift=move_toward(float(hand_lifts.get(i,0)),1.0 if lifted and game.drag.is_empty() else 0.0,frame_delta*9)
+  hand_lifts[i]=lift
+  center.y-=(70 if mobile else 110)*lift
+  angle*=1-lift*0.8
   hand_views.append({'index':i,'id':hand[i],'rect':Rect2(center-size/2,size),'base_rect':base_rect,'angle':angle})
 
 func button(id: String,rect: Rect2,label: String,enabled=true,primary=false) -> void:
@@ -123,7 +136,8 @@ func prepare() -> void:
    if not anim.is_empty() and anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid:
     var target=target_center(anim.target)
     var t=clampf((anim_time-0.1)/0.28,0,1) if anim_time<0.38 else 1.0-clampf((anim_time-0.38)/0.47,0,1)
-    rect.position=rect.position.lerp(target-rect.size/2,t*0.9)
+    if fx.ranged(str(info.unit.id)):rect.position.y-=sin(t*PI)*12
+    else:rect.position=rect.position.lerp(target-rect.size/2,t*0.9)
    var spawn=particles.filter(func(p): return p.get('uid',-1)==uid and p.kind=='summon')
    if not spawn.is_empty():
     var factor=clampf(spawn[0].age/0.35,0.08,1.0)
@@ -235,6 +249,9 @@ func ingest(events: Array,before: Array) -> void:
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
    particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
+   if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
+    for unit in before[int(event.target.side)].board:
+     if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
   elif kind=='summon':
    particles.append({'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
   elif kind=='death':
@@ -322,10 +339,11 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
 
 func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
  var points=PackedVector2Array()
- for i in range(65):
+ for i in range(64):
   var angle=i*TAU/64
   points.append(rect.get_center()+Vector2(cos(angle)*rect.size.x/2,sin(angle)*rect.size.y/2))
  if fill.a>0:canvas.draw_colored_polygon(points,fill)
+ points.append(points[0])
  canvas.draw_polyline(points,edge,width,true)
 
 func badge(center: Vector2,value: String,color: Color,radius=21.0) -> void:
@@ -358,14 +376,20 @@ func paint_battle() -> void:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
   if not anim.is_empty() and anim.get('kind','')=='card' and anim.get('side',0)==0 and anim.index==hand.index and not anim.get('resolved',false): continue
   paint_card(hand.id,hand.rect,hand.angle)
+  if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
   if game.cards[hand.id].cost<=state.players[0].mana and state.active==0 and not game.busy:
    # A light accent under the physical card makes playable cards readable without neon frames.
    canvas.draw_arc(hand.rect.get_center()+Vector2(0,hand.rect.size.y*0.40),hand.rect.size.x*0.45,0,PI,24,Color(0.4,0.95,0.65,0.65),2)
+ fx.trail()
  if not game.drag.is_empty():
   paint_targets()
   if game.drag.kind=='card':
    var size=Vector2(178,267) if game.portrait else Vector2(175,262)
-   paint_card(game.drag.id,Rect2(game.pointer-size*Vector2(0.5,0.68),size))
+   var held_rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
+   paint_card(game.drag.id,held_rect)
+   fx.aura(game.drag.id,held_rect,1.0)
+   if game.cards[game.drag.id].kind=='minion' and layout.player_drop.has_point(game.pointer):
+    fx.ring(Vector2(game.pointer.x,layout.player_row),108+sin(clock*4)*5,element_color(game.cards[game.drag.id].element),0.8,clock*2)
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
  if not anim.is_empty():
   if anim.kind=='card' and anim_time<0.62:

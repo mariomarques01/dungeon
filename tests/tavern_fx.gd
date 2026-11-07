@@ -8,6 +8,7 @@ func run() -> void:
  game.sound_on=false;game.audio_engine.set_enabled(false)
  var ids=game.cards.keys()
  for id in ids:
+  print("FX CARD: ",id)
   game.start_match();game.rules.players[0].mana=10;game.rules.players[0].max_mana=10
   game.rules.players[0].health=20
   game.rules.players[0].hand=[id]
@@ -23,6 +24,11 @@ func run() -> void:
   if not valid.ok:push_error('Fixture invalid: '+id);failures+=1;continue
   await game.request_play(0,target)
   if game.busy or game.view.effect_history[-1].id!=id:push_error('Animation did not complete: '+id);failures+=1
+  if card.kind=='minion' and not game.rules.players[0].board.is_empty():
+   var unit=game.rules.players[0].board[-1]
+   unit.sleeping=false;unit.attacks=1;unit.frozen=0
+   var victim={'side':1,'hero':true} if game.rules.players[1].board.is_empty() else {'side':1,'uid':game.rules.players[1].board[0].uid}
+   if game.rules.can_attack(0,unit.uid,victim).ok:await game.request_attack(unit.uid,victim)
   for voice in game.audio_engine.voices:
    if is_instance_valid(voice):voice.stop()
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
