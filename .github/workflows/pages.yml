@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'godot/**'
+      - 'scripts/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
@@ -26,6 +28,25 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Instalar Godot e templates Web
+        env:
+          GODOT_VERSION: 4.4.1
+        run: |
+          curl -fsSL --retry 3 "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          curl -fsSL --retry 3 "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o /tmp/templates.zip
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q /tmp/templates.zip 'templates/web*' -d /tmp/godot
+          mv /tmp/godot/templates/web* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+      - name: Exportar jogo Godot para navegador
+        run: |
+          mkdir -p web/godot
+          godot --headless --path godot --editor --import
+          godot --headless --path godot --export-release Web ../web/godot/index.html
+          test -s web/godot/index.html
+          test -s web/godot/index.wasm
+          test -s web/godot/index.pck
       - name: Preparar efeitos sonoros CC0
         run: python3 scripts/prepare_sfx.py
       - name: Validar jogo e arquivos sonoros
