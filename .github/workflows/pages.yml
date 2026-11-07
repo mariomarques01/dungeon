@@ -51,12 +51,14 @@ jobs:
           test -s web/godot/index.html
           test -s "web/godot/$export_base.wasm"
           test -s "web/godot/$export_base.pck"
+          python3 scripts/optimize_web.py web/godot
       - name: Preparar efeitos sonoros CC0
         run: python3 scripts/prepare_sfx.py
       - name: Validar jogo e arquivos sonoros
         run: |
           node --check web/game.js
           node --check tests/tavern_browser.cjs
+          node --check tests/loading_browser.cjs
           test -s web/index.html
           test -s web/style.css
           for sound in steel fire lightning; do

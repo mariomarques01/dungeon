@@ -59,3 +59,7 @@ NODE_PATH=/tmp/dungeon-browser/node_modules node tests/tavern_browser.cjs
 O teste joga por gestos reais: arraste inválido, invocação, espera da criatura, ataque entre criaturas, feitiços com alvo, partida completa, recompensa, persistência e arraste por toque no celular. `DUNGEON_URL`, `SCREENSHOT_DIR` e `CHROMIUM_PATH` podem ser definidos. `?qa=1` expõe um retrato somente de leitura do estado do motor para as verificações; não injeta jogadas.
 
 O GitHub Actions executa os testes de regras e publica o Godot no Pages com pacotes exclusivos por tentativa e arquivos com versão, mantendo o endereço `/classic/` como referência.
+
+As texturas usam compressão com qualidade 0,78. `scripts/optimize_web.py` separa o motor do pacote de cartas usando nomes derivados do conteúdo: atualizar o jogo não invalida o download do motor. Os arquivos grandes são guardados no Cache Storage quando disponível; a abertura continua normalmente se o navegador negar armazenamento. A primeira visita ainda precisa baixar e inicializar o motor WebAssembly.
+
+`tests/loading_browser.cjs` verifica primeira abertura, reabertura sem downloads grandes, armazenamento indisponível e toques/arraste em uma tela móvel com densidade 3. O controle web por toque usa coordenadas relativas ao canvas para compensar resolução e posição da tela, incluindo cancelamento do gesto.

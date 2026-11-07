@@ -35,6 +35,7 @@ var clock=0.0
 var match_serial=0
 var rewarded=false
 var qa_enabled=false
+var web_touch_callback
 var done: bool:
  get: return rules!=null and rules.done
 class TopLayer extends Control:
@@ -52,8 +53,40 @@ func _ready() -> void:
  overlay=TopLayer.new();overlay.game=self;overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(overlay)
  view=View.new(self)
  audio_engine=Audio.new(self);audio_engine.set_enabled(sound_on)
+ if OS.has_feature('web'): install_web_touch()
  if OS.has_feature('web'): qa_enabled=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))=='1'
  layout_board();view.prepare();queue_redraw();overlay.queue_redraw()
+
+func install_web_touch() -> void:
+ web_touch_callback=JavaScriptBridge.create_callback(web_touch)
+ JavaScriptBridge.get_interface('window').dungeonTouch=web_touch_callback
+ JavaScriptBridge.eval("""
+ (() => {
+  const canvas=document.getElementById('canvas');
+  let finger=null;
+  canvas.style.touchAction='none';
+  for(const type of ['touchstart','touchmove','touchend','touchcancel']) {
+   canvas.addEventListener(type,event=>{
+    event.preventDefault();event.stopImmediatePropagation();
+    if(type==='touchstart' && finger===null) finger=event.changedTouches[0].identifier;
+    const touch=Array.from(event.changedTouches).find(t=>t.identifier===finger);
+    if(!touch)return;
+    const rect=canvas.getBoundingClientRect();
+    window.dungeonTouch(type,(touch.clientX-rect.left)/rect.width,(touch.clientY-rect.top)/rect.height);
+    if(type==='touchend'||type==='touchcancel')finger=null;
+   },{capture:true,passive:false});
+  }
+ })();
+ """)
+
+func web_touch(args: Array) -> void:
+ if not view or args.size()<3:return
+ pointer=board_transform.affine_inverse()*(Vector2(float(args[1]),float(args[2]))*size)
+ match str(args[0]):
+  'touchstart':pointer_down()
+  'touchmove':pointer_move()
+  'touchend':pointer_up()
+  'touchcancel':press={};drag={};hover_card=-1
 
 func load_profile() -> void:
  var raw=''
