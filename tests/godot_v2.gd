@@ -15,7 +15,7 @@ func fresh(speed = 30.0) -> void:
 func wait_idle() -> void:
  while game.busy: await process_frame
 func run() -> void:
- game=load("res://scenes/main.tscn").instantiate()
+ game=load("res://scenes/legacy_v2.tscn").instantiate()
  root.add_child(game)
  fresh(1.0)
  game.hand=["sword","shield"]

@@ -1,47 +1,36 @@
-# Dungeon Cards v2 — layout, animation, combat and sound QA
+# Duelos da Taverna — QA
 
 final result: passed
 
-## Reference and implementation
+## Reference
 
-Reference: the user's supplied 720 × 1280 image of the purple stone dungeon, flaming braziers, enemy health at the top, player health at the bottom, five illustrated cards and the large gold end-turn button.
+The user's Hearthstone references establish a tactile painted tabletop, two rows of creature portraits, heroes above/below the field, a fanned hand, mana and targeted card interactions. This revision changes the game rules and presentation accordingly. It uses original board, frame, creature and spell artwork rather than franchise assets.
 
-The new Godot battle uses a 390 × 700 portrait composition. The reference is approximately 390 × 693 after density normalization; browser/device chrome is not part of the scene. The dungeon, character poses and card illustrations were created as separate game assets from this reference. They are rendered and animated by Godot, not a flattened screenshot.
+## Evidence and viewports
 
-Evidence: `docs/qa/v2/battle.png`, `charge.png`, `projectile.png`, `impact.png`, `defense.png`, `result.png`, `credits.png`, `home.png`, `deck.png`, `desktop.png` and `tall.png`. Battle captures are content-only, 390 × 700 pixels at deviceScaleFactor 1; full browser viewport was 390 × 740. Additional windows tested: 390 × 844 and 1024 × 768.
+`docs/qa/tavern/home.png`, `collection.png`, `opening.png`, `summoning-drag.png`, `summoned.png`, `attack-arrow.png`, `combat.png`, `populated-board.png`, `spell-target.png`, `spell-impact.png`, `result.png`, `mobile-touch-drag.png` and `mobile-board.png` are actual Chromium/WebGL2 captures. Desktop viewport: 1280×800 CSS pixels; mobile: 390×844, touch enabled, density 1. No device chrome is recreated in the game.
 
-## Findings and fixes
+## Findings resolved
 
-- [P1, fixed] The previous arena and flat illustrations did not match the new target. Added the painted gothic dungeon, fire lighting, character portraits, four poses per fighter, and an elemental card-art atlas. Removed the large old header/resource blocks from the battle layout to match the supplied hierarchy.
-- [P1, fixed] Card use lacked a distinct attribution/attack/reaction sequence. Added card-to-character transfer, power absorption, casting or sword poses, projectiles or slashes, impact recoil, independent floating damage/block/heal events, and recovery. Ice stops the enemy action; shield effects remain visible until consumed/expired.
-- [P1, fixed] Presentation and damage timing were not synchronized. Absolute animation timestamps now control charge, release, impact and recovery. Combat state changes at impact; new cards and end-turn input remain locked through recovery. A battle serial prevents old pending actions from damaging a restarted match.
-- [P1, fixed] The prior sound bank reused generic magic recordings. Elemental effects now use distinct professionally recorded fire, ice, thunder, water, earth and wind samples, plus sword, armor, shield, healing and creature reaction recordings. A complete orchestral fantasy score replaces the synthesized note loop. Music ducks beneath effects, loops and obeys mute. Master limiting prevents stacked effects from clipping. Source credits and licenses are available in settings and the repository.
-- [P2, fixed] The hero portrait intercepted the speed button. Reduced the portrait input region to leave the speed control reachable; the browser test now verifies transitions through ×1, ×1.5 and ×2.
-- [P2, fixed] Two-line card titles overlapped their effect text. Tightened the title line height and recaptured the final battle view, including two-line names.
+- Replaced the unwanted two-character dungeon duel with a creature-and-spell tabletop game.
+- Rebuilt the game around drag-to-summon, targeted spells and drag-to-attack between persistent minions; invalid drops spend no mana or card.
+- Added original painted board variants, a 25-creature art atlas, a 16-spell atlas and separate physical creature/spell frames.
+- Added summoning, attack travel, recoil, death/fade, elemental projectiles and bursts, shield breaks, freeze, stat changes, ready glows and legal-target guidance.
+- Fixed desktop card hover hit testing so lifted cards remain draggable from their original hand positions.
+- Fixed responsive viewport configuration, portrait hero/hand/mana spacing and collection removal for single-copy cards in a full deck.
+- Replaced heavy body text with a regular reading font and improved stat badge spacing and oval unit frames.
+- Collection cards support press-and-hold reading and explicit removal controls.
 
-## Fidelity review
+## Required visual surfaces
 
-- Typography: high-contrast serif headings and card titles, compact body labels, readable card costs and HP. Card text is native text and remains separate from illustration assets.
-- Layout: top enemy HUD, large illuminated arena, bottom player HUD, a narrow hand/mana strip, five cards, gold primary action. The characters now occupy the arena so their casts, impacts and defensive reactions are visible.
-- Colors: near-black UI, purple stone, orange fire, gold frames, crimson enemy HP, cyan player HP and elemental colors.
-- Assets: painted scenery, silver-haired hooded guardian, green armored orc and matching elemental card art. Sprites use transparent atlases and individual poses. Decorative frame geometry and particles are native Godot drawing.
-- Content: existing 24 abilities, five bosses, 12-card deck, card costs, rewards and saved progress remain functional. Additional audio credits are in settings.
+Typography uses readable serif titles and regular body text. The palette is warm parchment, walnut, brass, jewel blue mana, gold attack and red health. Portrait and landscape layouts use separate board art. Native text remains independent of the painted frames. Cards show cost, name, rules, attack and health; tokens show live combat stats. Creature health, armor, mana, hand size and deck size update from the rules model.
 
-The supplied reference is a visual target, not a promise of pixel-identical painted imagery. The new scene follows its composition and art direction while adding the requested visible fighters and live effects.
+## Functional verification
 
-## Functional validation
+The native rule suite passes 57 checks, including four differently shuffled full duels. Coverage includes 30-card deck validation, mana consumption and growth, seven-unit board limits, hand limits, fatigue, summoning sickness, simultaneous combat, Provocar, Escudo Divino, Investida, Ímpeto, Fúria dos Ventos, Veneno, Roubo de Vida, spellpower, freeze duration, buffs, targeted spells, area damage, deathrattle tokens/healing, hero power limits, lethal damage and legal AI choices.
 
-- Existing rule suite: all checks passed, including mana, damage, shields, burn, freeze, healing, elemental combinations, boss behavior, deck recycling, rewards, progression and ten-round finish.
-- New regression suite: all 24 cards complete their native animation and resolution path. Tests verify no damage during initial charge, damage at impact, recovery lock, duplicate-click protection, partial/full/excess defense, actual HP removal on overkill, negative-damage rejection and cancellation of pending attacks after a restart.
-- Browser integration: passed with an actual native attack and defense, repeated-click attempts, unchanged HP before impact, typed sound events, real music pause/resume, speed controls, full battle, victory, rewards, progression and persisted edited deck after reload. No JavaScript or console errors.
-- Read-only `?qa=1` snapshots expose the native engine state for assertions; they do not inject actions or change rules.
-- Final sound-enabled and visual smoke capture passed after the last text and mix adjustments.
-- GDScript import/export, JavaScript syntax, workflow YAML and git whitespace checks passed.
-
-## Audio attribution
-
-Full attribution and modifications: `godot/assets/v2/audio/CREDITS.txt` and in-game Settings → Audio credits. Music: Matthew Pablo, CC BY 3.0. Elemental samples: leohpaz, CC BY 4.0. Other recordings: rubberduck and artisticdude, CC0.
+The browser integration passed a complete match driven only through real pointer gestures: invalid drag, valid summoning, inability to attack immediately, AI turn, creature combat, targeted spells, reward/persistence and touch-only mobile drag via CDP touch events. One completed run played six creatures, performed nine attacks and resolved spells; console and JavaScript errors were zero. A final smoke check covers collection removal/addition and the final presentation.
 
 ## Remaining notes
 
-Real-device Safari was not available for this pass; browser testing used Chromium/WebGL2. Small font and decorative frame differences from the reference are cosmetic. No blocking functional or visual findings remain.
+Small decorative differences from the inspiration are expected: this is an original game rather than a pixel-identical recreation. Mobile Safari on physical hardware was not available; native touch behavior was verified in Chromium's touch-capable mobile mode.

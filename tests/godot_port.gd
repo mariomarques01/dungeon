@@ -15,7 +15,7 @@ func fresh() -> void:
  game.sound_on=false
  game.audio_engine.set_enabled(false)
 func run() -> void:
- game=load("res://scenes/main.tscn").instantiate()
+ game=load("res://scenes/legacy_v2.tscn").instantiate()
  root.add_child(game)
  game.sound_on=false
  game.audio_engine.set_enabled(false)

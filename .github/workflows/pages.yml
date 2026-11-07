@@ -42,11 +42,9 @@ jobs:
           mv /tmp/godot/templates/web* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
       - name: Exportar jogo Godot para navegador
         run: |
-          node scripts/sync_godot_data.cjs
           mkdir -p web/godot
           godot --headless --path godot --editor --import
-          godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/godot_port.gd"
-          godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/godot_v2.gd"
+          godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/tavern_rules.gd"
           export_base="dungeon-${GITHUB_SHA:0:12}"
           godot --headless --path godot --export-release Web "../web/godot/$export_base.html"
           mv "web/godot/$export_base.html" web/godot/index.html
@@ -58,6 +56,7 @@ jobs:
       - name: Validar jogo e arquivos sonoros
         run: |
           node --check web/game.js
+          node --check tests/tavern_browser.cjs
           test -s web/index.html
           test -s web/style.css
           for sound in steel fire lightning; do

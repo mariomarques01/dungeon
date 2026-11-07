@@ -1,42 +1,61 @@
-# Dungeon Cards
-Jogo de cartas com interface e combate nativos em Godot 4.4.1, exportado para Web sem threads.
+# Dungeon Cards — Duelos da Taverna
 
-## Jogar
-- Godot (endereço principal): https://mariomarques01.github.io/dungeon/
-- Godot (link compatível, redireciona ao endereço principal): https://mariomarques01.github.io/dungeon/godot/
-- Versão web original: https://mariomarques01.github.io/dungeon/classic/
+Jogo de cartas tático em **Godot 4.4.1**, com criaturas no tabuleiro, feitiços com alvos e controles de arrastar com mouse ou toque.
 
-## Layout e combate da versão 2
-Arena de masmorra em roxo e fogo, personagens pintados com quatro poses, retratos novos e cartas ilustradas conforme a referência enviada. Ao jogar, a carta transfere poder ao personagem; a conjuração, o golpe ou a defesa, o impacto e a recuperação acontecem em etapas sincronizadas. A vida e o escudo só mudam no ponto de impacto. Cliques repetidos e encerramento de turno ficam bloqueados durante a ação.
+- Jogo: https://mariomarques01.github.io/dungeon/
+- Link compatível: https://mariomarques01.github.io/dungeon/godot/
+- Implementação web original: https://mariomarques01.github.io/dungeon/classic/
 
-Os efeitos de espada, armadura, escudo, fogo, gelo, trovão, tempestade, terra, água e cura usam gravações distintas. A trilha orquestral **Dark Descent**, de Matthew Pablo, toca em loop com redução de volume durante os efeitos. Créditos e licenças estão disponíveis em Configurações → Créditos de áudio e em `godot/assets/v2/audio/CREDITS.txt`.
+## Como jogar
 
-## Recursos
-24 habilidades, baralho editável de 12 cartas, mão de 5 cartas, 3 de mana por turno, escudos, cura, queimadura, congelamento, ressonância e tríade arcana. Cinco chefes com ações especiais, progressão, moedas e XP. Música, efeitos de combate, detalhes das cartas e personagens, controle de som e velocidade. O progresso e o deck da versão original são reaproveitados no mesmo navegador por meio da chave `dungeon_cards_v15`.
+Arraste uma criatura da mão para o seu lado do tabuleiro. Arraste uma criatura pronta até um inimigo para atacar. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
+
+Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até sete criaturas de cada lado. A mana começa em 1 e aumenta até 10. Criaturas normalmente aguardam o próximo turno para atacar. O botão de encerrar turno entrega a vez à IA, que usa sua própria mão e mana.
+
+O conjunto tem **41 cartas colecionáveis**: 25 criaturas e 16 feitiços, além de três fichas de invocação. Há Provocar, Escudo Divino, Investida, Ímpeto, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
+
+A coleção permite adicionar cartas, remover pelo contador e restaurar o baralho inicial. O limite é de duas cópias por carta e uma cópia por lendária. Todas as cartas estão disponíveis, sem compras.
+
+## Visual e animações
+
+Tabuleiro pintado de taverna, versões horizontal e vertical, cartas físicas com molduras e ilustrações próprias, retratos de criaturas no campo, setas de ataque, alvos válidos destacados, invocações, investidas, partículas elementais, efeitos de dano/cura, escudos e animações de morte. A mão é apresentada em leque; passar o mouse ou selecionar eleva a carta.
+
+As referências de Hearthstone orientaram a composição e o gênero. As artes, nomes e regras do projeto são próprios. Não são usados assets, logos ou personagens dessa franquia.
+
+## Progresso e áudio
+
+Vitórias, derrotas, moedas, XP e baralho são salvos neste navegador. O novo perfil usa `dungeon_tavern_v3`; moedas e estatísticas do perfil anterior são importadas, mas o baralho é reconstruído porque o conjunto de cartas mudou.
+
+Efeitos gravados por elemento e trilha orquestral em loop, com mute e controle de velocidade. Créditos em Configurações → Créditos de áudio e `godot/assets/v2/audio/CREDITS.txt`.
 
 ## Desenvolvimento
-Importe `godot/project.godot` no Godot 4.4.1. As novas artes de arena, personagens e cartas estão em `godot/assets/v2`, geradas para este projeto a partir da referência visual. A interface mantém suporte a toque e janelas de tamanhos diferentes. As definições de cartas e chefes foram portadas de `web/game.js`. A interface e as regras rodam em GDScript; a página HTML apenas carrega o motor.
+
+Importe `godot/project.godot` no Godot 4.4.1. O jogo ativo usa:
+
+- `godot/scripts/tavern_rules.gd`: regras, recursos, combate e decisões da IA.
+- `godot/scripts/tavern_game.gd`: entrada por mouse/toque, arraste, turnos e persistência.
+- `godot/scripts/tavern_view.gd`: composição responsiva, cartas, tabuleiro e animações.
+- `godot/tavern_assets/cards.json`: definições das cartas.
+- `godot/tavern_assets`: ilustrações e molduras.
 
 ```sh
 godot --headless --path godot --editor --import
-godot --headless --path godot --script "$PWD/tests/godot_port.gd"
-godot --headless --path godot --script "$PWD/tests/godot_v2.gd"
+godot --headless --path godot --script "$PWD/tests/tavern_rules.gd"
 godot --headless --path godot --export-release Web ../web/godot/index.html
-python3 -m http.server 8765 --directory web
+python3 -m http.server 8766 --directory web
 ```
 
-O GitHub Actions testa o combate, exporta o Godot e publica as versões no Pages. A pasta `web` mantém a implementação original e pode ser hospedada separadamente.
+As cenas e testes antigos permanecem como referência em `godot/scenes/legacy_v2.tscn`; não são a mecânica atual.
 
-As fontes Noto e DejaVu têm suas licenças incluídas em `godot/assets`.
+## Verificação no navegador
 
-## Teste no navegador
-Com Chromium instalado e um servidor local na porta 8765:
+Com Chromium disponível:
 
 ```sh
 npm install --prefix /tmp/dungeon-browser playwright-core
-NODE_PATH=/tmp/dungeon-browser/node_modules node tests/godot_browser.cjs
+NODE_PATH=/tmp/dungeon-browser/node_modules node tests/tavern_browser.cjs
 ```
 
-O teste cobre edição do deck, configurações, animação de atribuição, momento de impacto, bloqueio de cliques repetidos, defesa, reprodução e mute da música, uma batalha completa e persistência após recarga. Usa uma consulta `?qa=1` somente de leitura para inspecionar o estado real do motor; essa consulta não altera as regras. `DUNGEON_URL` permite testar outro endereço; `CHROMIUM_PATH` permite selecionar o navegador. As capturas são salvas em `artifacts/browser`.
+O teste joga por gestos reais: arraste inválido, invocação, espera da criatura, ataque entre criaturas, feitiços com alvo, partida completa, recompensa, persistência e arraste por toque no celular. `DUNGEON_URL`, `SCREENSHOT_DIR` e `CHROMIUM_PATH` podem ser definidos. `?qa=1` expõe um retrato somente de leitura do estado do motor para as verificações; não injeta jogadas.
 
-A publicação usa um nome de pacote exclusivo por tentativa e compartilha os arquivos do motor pelo endereço principal, evitando duplicações ao reexecutar o deploy.
+O GitHub Actions executa os testes de regras e publica o Godot no Pages com pacotes exclusivos por tentativa e arquivos com versão, mantendo o endereço `/classic/` como referência.

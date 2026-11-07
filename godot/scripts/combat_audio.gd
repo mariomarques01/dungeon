@@ -1,6 +1,6 @@
 extends RefCounted
 # Recorded, element-specific sound events and a licensed orchestral dungeon score.
-const ROUTES = {"sword":"steel","blade":"steel","fire":"fire","shield":"shield","ice":"ice","lightning":"lightning","storm":"storm","earth":"earth","water":"water","heal":"heal","spark":"shield"}
+const ROUTES = {"sword":"steel","blade":"steel","fire":"fire","shield":"shield","ice":"ice","lightning":"lightning","storm":"storm","earth":"earth","water":"water","heal":"heal","spark":"shield","steel":"steel","arcane":"charge","nature":"heal","dark":"storm","bite":"hurt"}
 var game
 var streams: Dictionary = {}
 var music: AudioStreamPlayer
