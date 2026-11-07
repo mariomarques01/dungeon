@@ -137,7 +137,7 @@ func _process(delta: float) -> void:
    var item=view.unit_views[uid];units.append({'uid':uid,'side':item.side,'rect':rect_json(item.rect),'unit':item.unit})
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
-  var snap={'screen':screen,'panel':panel,'busy':busy,'drag':drag,'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':view.anim,'animationTime':view.anim_time,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'screen':screen,'panel':panel,'busy':busy,'drag':drag,'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':view.anim,'animationTime':view.anim_time,'effectHistory':view.effect_history,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -244,6 +244,7 @@ func pointer_move() -> void:
  if press.kind in ['card','unit','power'] and pointer.distance_to(press.origin)>10:
   if press.kind=='unit' and not press.get('can_attack',true):notify('Esta criatura aguarda o próximo turno ou já atacou.');press={};return
   drag=press.duplicate(true)
+  if drag.kind=='card':audio_engine.play('card_soft',-15.0)
   selected_card=-1;selected_attacker=-1
 
 func pointer_up() -> void:
@@ -333,9 +334,12 @@ func request_play(index: int,target: Dictionary={},position = -1,origin=Vector2.
  var before=rules.players.duplicate(true)
  var result=rules.play(side,index,target,position)
  view.anim.resolved=true
+ view.anim.impact_points=[]
+ for event in result.events:
+  if event.kind=='damage':view.anim.impact_points.append(view.target_center(event.target))
  view.ingest(result.events,before)
  play_events(result.events,card.element)
- await at_time(1.05 if card.kind=='spell' else 0.88)
+ await at_time(1.3 if card.kind=='spell' else 1.15)
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
 
@@ -348,7 +352,7 @@ func request_attack(uid: int,target: Dictionary,side=0) -> void:
  var attacker=rules.find_unit(side,uid)
  var element=cards[attacker.id].element
  var destination=view.target_center(target)
- view.begin({'kind':'attack','uid':uid,'side':side,'target':target,'target_position':destination,'origin':view.target_center({'side':side,'uid':uid}),'destination':destination,'element':element})
+ view.begin({'kind':'attack','id':attacker.id,'uid':uid,'side':side,'target':target,'target_position':destination,'origin':view.target_center({'side':side,'uid':uid}),'destination':destination,'element':element})
  await at_time(0.38)
  if serial!=match_serial:return
  var before=rules.players.duplicate(true)
@@ -365,7 +369,7 @@ func request_power(target: Dictionary,side=0) -> void:
  busy=true
  var serial=match_serial
  var destination=view.target_center(target) if side==0 else Vector2(logical_size.x/2,view.layout.enemy_row)
- view.begin({'kind':'power','element':'fire','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target})
+ view.begin({'kind':'power','id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'steel','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target})
  audio_engine.charge('fire');await at_time(0.5)
  if serial!=match_serial:return
  var before=rules.players.duplicate(true)
@@ -379,11 +383,17 @@ func play_events(events: Array,element: String) -> void:
  var damage=false;var heal=false;var shield=false;var summon=false;var death=false
  for event in events:
   damage=damage or event.kind=='damage';heal=heal or event.kind=='heal';shield=shield or event.kind=='shield_break';summon=summon or event.kind=='summon';death=death or event.kind=='death'
- if damage:audio_engine.play(audio_engine.clip_for(element),-4.0)
- if heal:audio_engine.play('heal',-8.0)
+ if damage:audio_engine.play(audio_engine.clip_for(element),-9.0)
+ if heal:audio_engine.play('heal',-12.0)
  if shield:audio_engine.play('shield',-6.0)
- if summon:audio_engine.play('charge',-12.0)
- if death:audio_engine.play('hurt',-11.0)
+ if summon:
+  for event in events:
+   if event.kind=='summon':audio_engine.summon_card(event.id,cards[event.id].element);break
+ if death:audio_engine.play('death_soft',-17.0)
+ if events.any(func(e):return e.kind in ['armor','blocked','shield_break']):audio_engine.play('armor',-13.0)
+ if events.any(func(e):return e.kind=='freeze'):audio_engine.play('freeze',-14.0)
+ if events.any(func(e):return e.kind=='buff'):audio_engine.play('heal',-15.0)
+ if not damage and not summon and not heal and events.any(func(e):return e.kind in ['mana','draw','debuff','destroy']):audio_engine.play(audio_engine.clip_for(element),-15.0)
 
 func end_player_turn() -> void:
  if busy or rules.done or rules.active!=0:return

@@ -19,3 +19,9 @@ Freeze Spell — artisticdude
 Source: https://opengameart.org/content/freeze-spell-0
 License: CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/
 Normalized loudness and converted to Ogg Vorbis.
+
+Tavern action update: card_soft (book_01), beast (creature_roar_01),
+shadow (creature_misc_05), arcane (spell_02), nature (spell_01),
+summon_stone (stones_02), death_soft (creature_die_01) from the same
+80 CC0 RPG SFX archive by rubberduck. Trimmed, faded, loudness normalized.
+Card handling is a short, quiet recording of paper, not the charge spell.

@@ -3,6 +3,8 @@ const GOLD=Color('eac67e')
 const PAPER=Color('f1dfb6')
 const INK=Color('30251e')
 var game
+var fx
+var effect_history=[]
 var board: Texture2D
 var portrait_board: Texture2D
 var creatures: Texture2D
@@ -28,6 +30,7 @@ var clock=0.0
 
 func _init(owner) -> void:
  game=owner
+ fx=preload("res://scripts/tavern_fx.gd").new(self)
  board=load('res://tavern_assets/board.png')
  portrait_board=load('res://tavern_assets/board_portrait.png') if ResourceLoader.exists('res://tavern_assets/board_portrait.png') else board
  creatures=load('res://tavern_assets/creatures.png'); spells=load('res://tavern_assets/spells.png'); frames=load('res://tavern_assets/frames.png')
@@ -61,7 +64,7 @@ func tick(delta: float) -> void:
  for p in particles: p.age+=delta*game.speed
  for f in floats: f.age+=delta*game.speed
  for g in ghosts: g.age+=delta*game.speed
- particles=particles.filter(func(p): return p.age<0.85)
+ particles=particles.filter(func(p): return p.age<1.15)
  floats=floats.filter(func(f): return f.age<1.25)
  ghosts=ghosts.filter(func(g): return g.age<0.8)
 
@@ -119,7 +122,7 @@ func prepare() -> void:
    var opacity=1.0
    if not anim.is_empty() and anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid:
     var target=target_center(anim.target)
-    var t=sin(clampf(anim_time/0.85,0,1)*PI)
+    var t=clampf((anim_time-0.1)/0.28,0,1) if anim_time<0.38 else 1.0-clampf((anim_time-0.38)/0.47,0,1)
     rect.position=rect.position.lerp(target-rect.size/2,t*0.9)
    var spawn=particles.filter(func(p): return p.get('uid',-1)==uid and p.kind=='summon')
    if not spawn.is_empty():
@@ -129,7 +132,7 @@ func prepare() -> void:
    if not hits.is_empty():rect.position.x+=sin(hits[0].age*70)*8
    rect.position.y+=sin(clock*1.8+uid)*1.4
    info.draw_rect=rect
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-7),true,0,Color(1,1,1,opacity),1)
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-7),true,sin(anim_time*12)*0.09 if anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid else 0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
   for hand in hand_views:
    if game.drag.get('kind','')=='card' and int(game.drag.get('index',-1))==int(hand.index): continue
    if not anim.is_empty() and anim.get('kind','')=='card' and anim.get('side',0)==0 and int(anim.get('index',-1))==int(hand.index) and not anim.get('resolved',false): continue
@@ -218,24 +221,26 @@ func target_center(target: Dictionary) -> Vector2:
 
 func begin(action: Dictionary) -> void:
  anim=action.duplicate(true); anim_time=0
+ effect_history.append({'phase':'cast','id':action.get('id','power'),'kind':action.kind,'element':action.get('element','arcane')})
+ if effect_history.size()>60:effect_history.pop_front()
 func finish() -> void:
  anim={}
 
 func ingest(events: Array,before: Array) -> void:
  for event in events:
   var kind=event.kind
-  if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy']:
-   var at=target_center(event.get('target',{}))
-   var label='−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEADO'
-   var color=Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
-   floats.append({'position':at,'text':label,'color':color,'age':0.0})
-   particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0})
+  if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
+   var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
+   var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ MANA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
+   var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
+   floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
+   particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
   elif kind=='summon':
-   particles.append({'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0})
+   particles.append({'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
   elif kind=='death':
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
-     var rect=unit_views[event.uid].rect if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.unit_size/2,layout.unit_size)
+     var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.unit_size/2,layout.unit_size)
      ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0})
      particles.append({'kind':'death','position':rect.get_center(),'color':Color('b79cde'),'age':0.0})
 
@@ -341,6 +346,7 @@ func paint_battle() -> void:
   if rect.size.x>35:
    badge(rect.position+Vector2(14,rect.size.y-6),str(unit.attack),Color('ac853b'),15)
    badge(rect.position+Vector2(rect.size.x-14,rect.size.y-6),str(unit.health),Color('ac2833'),15)
+  fx.status(unit,rect)
   if unit.shield:
    oval(rect.grow(7),Color(1,0.9,0.4,0.08),Color(1,0.9,0.4,0.8),3)
    oval(rect.grow(11),Color.TRANSPARENT,Color(1,0.9,0.4,0.25),5)
@@ -366,7 +372,7 @@ func paint_battle() -> void:
    var size=Vector2(170,255)
    var at=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
-  if anim.kind in ['spell','power'] or anim.get('card_kind','')=='spell':paint_spell()
+  fx.action()
  paint_particles()
  var p=state.players[0]
  var mana_start=Vector2(layout.w-230,layout.h-47) if not game.portrait else Vector2(layout.w/2-128,layout.h-46)
@@ -386,55 +392,6 @@ func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
  canvas.draw_line(a,b,Color(color,0.5),width*2)
  canvas.draw_line(a,b,color.lightened(0.5),width)
-
-func paint_spell() -> void:
- var t=clampf(anim_time/0.55,0,1)
- var origin: Vector2=anim.origin
- var destination: Vector2=anim.destination
- var at=origin.lerp(destination,t)+Vector2(0,-sin(t*PI)*60)
- var color=element_color(anim.get('element','arcane'))
- var element=anim.get('element','arcane')
- var tail=(origin-destination).normalized()
- if element in ['lightning','storm']:
-  var top=destination-Vector2(20,180)
-  var last=top
-  for i in range(8):
-   var next=top.lerp(destination,(i+1)/8.0)+Vector2(sin(i*23+clock*35)*17,0)
-   line_glow(last,next,color,3);last=next
-  if element=='storm':
-   for offset in [-90,90]:line_glow(destination+Vector2(offset,-100),destination+Vector2(offset*0.7,25),color,2)
- elif element=='ice':
-  canvas.draw_colored_polygon(PackedVector2Array([at+Vector2(-16,-24),at+Vector2(17,0),at+Vector2(-16,24),at+Vector2(-27,0)]),Color('91e8ff'))
-  line_glow(at-Vector2(9,16),at+Vector2(9,16),Color('e4fbff'),3)
-  if anim_time>0.5:
-   for i in range(7):
-    var p=destination+Vector2(-60+i*20,40)
-    canvas.draw_colored_polygon(PackedVector2Array([p-Vector2(9,0),p-Vector2(0,50+i%3*15),p+Vector2(9,0)]),Color(0.5,0.88,1,0.55))
- elif element in ['nature','heal']:
-  for i in range(14):
-   var p=destination+Vector2(sin(i*19+clock*3)*55,40-fmod(i*17+anim_time*110,130))
-   canvas.draw_circle(p,4,Color('b6ffc5'))
-   if i%3==0:
-    canvas.draw_line(p-Vector2(6,0),p+Vector2(6,0),Color('e4ffd4'),2)
-    canvas.draw_line(p-Vector2(0,6),p+Vector2(0,6),Color('e4ffd4'),2)
-  canvas.draw_arc(destination,35+sin(clock*8)*8,0,TAU,48,Color(0.55,1,0.65,0.65),4)
- elif element=='dark':
-  for ring in range(3):
-   canvas.draw_arc(destination,15+ring*18,clock*4+ring,clock*4+ring+PI*1.7,48,Color(color,0.7-ring*0.13),4)
- elif element=='shield':
-  canvas.draw_arc(destination,75,0,TAU,64,Color('ffeaa6'),5)
-  canvas.draw_circle(destination,70,Color(1,0.87,0.4,0.15))
- else:
-  for i in range(10):
-   var point=at+tail*(i*9)+Vector2(sin(clock*24+i)*i*1.7,cos(clock*18+i)*i)
-   canvas.draw_circle(point,maxf(2,20-i*1.4),Color(color,0.65-i*0.05))
-  canvas.draw_circle(at,19,Color(color,0.45));canvas.draw_circle(at,10,color.lightened(0.65))
-  if element=='fire':
-   for i in range(8):
-    var p=at+Vector2(sin(i*31+clock*8),cos(i*23))*float(10+i*3)
-    canvas.draw_colored_polygon(PackedVector2Array([p+tail*(15+i*3),p+Vector2(-5,-7),p+Vector2(5,7)]),Color(1,0.5+i*0.05,0.12,0.8))
-  elif element=='arcane':
-   for i in range(3):canvas.draw_circle(at+Vector2(cos(clock*10+i*TAU/3),sin(clock*10+i*TAU/3))*27,8,Color('ddbdff'))
 
 func paint_targets() -> void:
  var candidates=[]
@@ -466,15 +423,10 @@ func paint_particles() -> void:
   var t=clampf(p.age/0.85,0,1)
   var at=p.position
   if p.kind=='summon' and unit_views.has(int(p.uid)): at=unit_views[int(p.uid)].rect.get_center()
-  var color: Color=p.color
-  for i in range(16):
-   var angle=i*TAU/16+float(p.age)
-   var position=at+Vector2(cos(angle),sin(angle))*(20+t*(50+i%4*13))
-   canvas.draw_circle(position,maxf(0.5,4*(1-t)),Color(color,1-t))
-  canvas.draw_arc(at,12+t*70,0,TAU,48,Color(color,1-t),3)
+  fx.event(p)
  for f in floats:
   var pos=f.position-Vector2(0,55+f.age*47)
-  text(f.text,Rect2(pos-Vector2(70,10),Vector2(140,50)),30,Color(f.color,clampf(1.6-f.age,0,1)),true,true)
+  text(f.text,Rect2(pos-Vector2(140,10),Vector2(280,50)),22 if f.text.length()>8 else 34,Color(f.color,clampf(1.6-f.age,0,1)),true,true)
 
 func paint_home() -> void:
  var x=layout.w/2-245 if game.portrait else 150.0

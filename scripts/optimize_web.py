@@ -76,7 +76,8 @@ html = html.replace('</style>', '''
 html = html.replace('<progress id="status-progress">', '<h1 id="loading-title">DUNGEON CARDS</h1><p id="loading-detail" role="status">Abrindo a taverna…<br>A primeira abertura precisa baixar o jogo.</p><progress id="status-progress">')
 html = html.replace('statusProgress.max = total;', '''statusProgress.max = total;
           const percent = Math.min(100, Math.floor(current / total * 100));
-          document.getElementById('loading-detail').textContent = percent >= 100
+          const detail = document.getElementById('loading-detail');
+          if (detail) detail.textContent = percent >= 100
             ? 'Preparando o tabuleiro…' : 'Carregando o jogo… ' + percent + '%';''')
 html_path.write_text(html)
 print(json.dumps({"runtime": runtime, "pack": pack, "packBytes": config["fileSizes"][pack]}))

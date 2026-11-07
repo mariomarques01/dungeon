@@ -1,6 +1,6 @@
 extends RefCounted
 # Recorded, element-specific sound events and a licensed orchestral dungeon score.
-const ROUTES = {"sword":"steel","blade":"steel","fire":"fire","shield":"shield","ice":"ice","lightning":"lightning","storm":"storm","earth":"earth","water":"water","heal":"heal","spark":"shield","steel":"steel","arcane":"charge","nature":"heal","dark":"storm","bite":"hurt"}
+const ROUTES = {"sword":"steel","blade":"steel","fire":"fire","shield":"shield","ice":"ice","lightning":"lightning","storm":"storm","earth":"earth","water":"water","heal":"heal","spark":"shield","steel":"steel","arcane":"arcane","nature":"nature","dark":"shadow","bite":"beast"}
 var game
 var streams: Dictionary = {}
 var music: AudioStreamPlayer
@@ -17,7 +17,7 @@ func _init(owner) -> void:
   limiter.ceiling_db=-1.0
   limiter.threshold_db=-1.0
   AudioServer.add_bus_effect(0,limiter)
- for kind in ["steel","fire","ice","lightning","water","earth","storm","charge","shield","heal","hurt","armor","freeze","ui"]:
+ for kind in ["steel","fire","ice","lightning","water","earth","storm","charge","shield","heal","hurt","armor","freeze","ui","card_soft","beast","shadow","arcane","nature","summon_stone","death_soft"]:
   streams[kind]=load("res://assets/v2/audio/"+kind+".ogg")
  music=AudioStreamPlayer.new()
  music.stream=load("res://assets/v2/audio/dungeon-score.ogg")
@@ -71,7 +71,11 @@ func play(kind: String, volume = -3.0, pitch = 1.0) -> void:
  if kind!="ui": duck=0.75
 
 func charge(art: String) -> void:
- play("charge",-13.0,0.96 if art=="earth" else 1.0)
+ play("card_soft",-10.0)
+
+func summon_card(id: String,element: String) -> void:
+ var kind='beast' if id in ['wolf','panther','gryphon','dragon','demon','token_wolf'] else 'summon_stone' if element=='earth' else clip_for(element)
+ play(kind,-13.0,0.85 if id in ['golem','dragon','demon'] else 1.0)
 
 func impact(art: String, damage: int, blocked: int, target_enemy: bool) -> void:
  var kind=clip_for(art)
