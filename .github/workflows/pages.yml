@@ -6,6 +6,7 @@ on:
       - 'web/**'
       - 'godot/**'
       - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
@@ -41,12 +42,16 @@ jobs:
           mv /tmp/godot/templates/web* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
       - name: Exportar jogo Godot para navegador
         run: |
+          node scripts/sync_godot_data.cjs
           mkdir -p web/godot
           godot --headless --path godot --editor --import
-          godot --headless --path godot --export-release Web ../web/godot/index.html
+          godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/godot_port.gd"
+          export_base="dungeon-${GITHUB_SHA:0:12}"
+          godot --headless --path godot --export-release Web "../web/godot/$export_base.html"
+          mv "web/godot/$export_base.html" web/godot/index.html
           test -s web/godot/index.html
-          test -s web/godot/index.wasm
-          test -s web/godot/index.pck
+          test -s "web/godot/$export_base.wasm"
+          test -s "web/godot/$export_base.pck"
       - name: Preparar efeitos sonoros CC0
         run: python3 scripts/prepare_sfx.py
       - name: Validar jogo e arquivos sonoros
@@ -62,10 +67,17 @@ jobs:
           test -f web/index.html
           cp web/index.html web/404.html
           touch web/.nojekyll
+          mkdir -p site/classic site/godot
+          cp -R web/godot/. site/
+          cp -R web/godot/. site/godot/
+          cp -R web/. site/classic/
+          rm -rf site/classic/godot
+          cp site/index.html site/404.html
+          touch site/.nojekyll
       - name: Enviar arquivos
         uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: site
       - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4

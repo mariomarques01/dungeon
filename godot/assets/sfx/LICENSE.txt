@@ -1,0 +1,4 @@
+CC0 RPG sound effects by rubberduck, OpenGameArt.
+Original pack: https://opengameart.org/sites/default/files/80-CC0-RPG-SFX_0.zip
+License: CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0/
+Selected using the same scripts/prepare_sfx.py as the original web game.

@@ -7,7 +7,7 @@ run/main_scene="res://scenes/main.tscn"
 
 [display]
 window/size/viewport_width=390
-window/size/viewport_height=844
+window/size/viewport_height=740
 window/stretch/mode="canvas_items"
 
 [rendering]
