@@ -242,6 +242,7 @@ func prepare_home() -> void:
  var y=h*0.66 if game.portrait else h*0.57
  button('start',Rect2(x,y,490,78),'DUELAR',game.rules.valid_deck(game.profile.deck),true)
  button('collection',Rect2(x,y+98,490,65),'COLEÇÃO E BARALHO')
+ button('arena',Rect2(x,y+183,490,55),'VOLTAR À MASMORRA')
  button('settings',layout.settings,'⚙')
 
 func prepare_collection() -> void:

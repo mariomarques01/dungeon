@@ -2,7 +2,7 @@ extends SceneTree
 var failures=0
 func _initialize() -> void:call_deferred('run')
 func run() -> void:
- var game=load('res://scenes/main.tscn').instantiate();root.add_child(game)
+ var game=load('res://scenes/tavern.tscn').instantiate();root.add_child(game)
  await process_frame
  game.speed=2.0
  game.sound_on=false;game.audio_engine.set_enabled(false)
