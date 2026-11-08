@@ -4,6 +4,7 @@ const REFERENCE = preload('res://mutable_assets/reference.jpg')
 const BACKGROUND = preload('res://mutable_assets/arena.png')
 const FONT = preload('res://assets/title.ttf')
 const BODY = preload('res://tavern_assets/reading.ttf')
+var visuals
 var sprites: Texture2D
 var rules = Rules.new()
 var selected = -1
@@ -11,6 +12,7 @@ var ability_selected = false
 var mode = 'home'
 var side = 0
 var elapsed = 0.0
+var visual_age = 0.0
 var factor = 1.0
 var origin = Vector2.ZERO
 var ui: Control
@@ -38,6 +40,7 @@ func _ready() -> void:
  if OS.has_feature('web') and bool(JavaScriptBridge.eval("new URLSearchParams(location.search).get('mode') === 'classic' && !window.dungeonClassicOpened")):
   JavaScriptBridge.eval('window.dungeonClassicOpened=true;');set_process(false);call_deferred('open_classic');return
  sprites = load('res://mutable_assets/units.png') if ResourceLoader.exists('res://mutable_assets/units.png') else null
+ visuals = preload('res://scripts/mutable_visuals.gd').new(self)
  ui = Control.new();add_child(ui)
  load_profile()
  if OS.has_feature('web'):
@@ -88,6 +91,7 @@ func save_profile() -> void:
   JavaScriptBridge.eval("try{localStorage.setItem('dungeon_mutable_v1',"+JSON.stringify(JSON.stringify(profile))+")}catch(e){}")
 func _process(dt: float) -> void:
  elapsed += dt;toast_life -= dt
+ visual_age = minf(0.15,visual_age+dt) if mode == 'online' else 0.0
  factor = minf(size.x/720.0,size.y/1280.0)
  origin = (size-Vector2(720,1280)*factor)/2
  ui.position = origin;ui.scale = Vector2.ONE*factor
@@ -190,9 +194,9 @@ func poll_network(dt: float) -> void:
     var box = panel('SALA '+room_code,'Compartilhe o código acima.\nAguardando o segundo invocador…')
     button(box,'COPIAR CÓDIGO',func():DisplayServer.clipboard_set(room_code);notify('Código: '+room_code))
     button(box,'CANCELAR',func():disconnect_server();show_rooms())
-   'start':rules.state = data.state;rewarded = false;mode = 'online';selected = -1;ability_selected = false;status = '';clear_ui()
+   'start':visual_age = 0.0;rules.state = data.state;rewarded = false;mode = 'online';selected = -1;ability_selected = false;status = '';clear_ui()
    'state':
-    if mode == 'online' and not rewarded:rules.state = data.state
+    if mode == 'online' and not rewarded:rules.state = data.state;visual_age = 0.0
    'error':notify(str(data.message))
    'ended':
     status = str(data.reason)
@@ -275,13 +279,7 @@ func _draw() -> void:
   text_at(['RUNA','PONTE VIVA','ARMADILHAS'][phase]+' · '+str(next_change)+'s',Vector2(417,93),12,colors[phase],true)
   if phase == 2:draw_rect(Rect2(405,490,165,150),Color(1,0.32,0.06,0.10+sin(elapsed*4)*0.04))
  draw_arc(Vector2(360,532),50+sin(elapsed*3)*3,0,TAU,64,Color(colors[phase],0.6),2,true)
- var units: Array = rules.state.units.duplicate();units.sort_custom(func(a,b):return a.y < b.y if side == 0 else a.y > b.y)
- for u in units:draw_unit(u)
- for fx in rules.state.effects:
-  var p = Vector2(fx.x,fx.y)
-  if side == 1:p = Vector2(720-p.x,985-p.y)
-  var c = Color('#61f8b3') if fx.kind == 'heal' else Color('#ffaf3a')
-  draw_circle(p,12+(0.6-float(fx.life))*70,Color(c,clampf(float(fx.life),0,0.65)),false,4,true)
+ visuals.paint()
  for i in range(4):draw_card(i)
  draw_next_card()
  draw_rect(Rect2(98,1222,81,36),Color('#171e2d'));text_at('%d/10' % int(rules.state.energy[side]),Vector2(138,1249),27,Color('#fff4d0'),true)
@@ -308,32 +306,13 @@ func draw_card(i: int) -> void:
   var c: Dictionary = Rules.CARDS[id]
   if c.get('sprite',-1) >= 0:draw_sprite(int(c.sprite),Rect2(r.position+Vector2(8,15),Vector2(127,135)))
   else:
-   draw_circle(r.position+Vector2(72,83),35,Color('#ef8834') if id == 'fire' else Color('#4cd7ac'))
-   text_at('✦',r.position+Vector2(72,99),45,Color.WHITE,true)
+   draw_spell_symbol(id,r.position+Vector2(72,83))
   draw_rect(Rect2(r.position+Vector2(10,142),Vector2(122,27)),Color('#382b24'));text_at(str(c.name),r.position+Vector2(71,163),17,Color('#ffedcc'),true)
   draw_rect(Rect2(r.position+Vector2(6,9),Vector2(28,28)),Color('#146c9d'));text_at(str(c.cost),r.position+Vector2(20,32),27,Color.WHITE,true)
  if float(rules.state.energy[side]) < Rules.CARDS[id].cost:draw_rect(r,Color(0.02,0.03,0.08,0.5))
  if selected == i:draw_rect(r.grow(3),Color('#51f5fb'),false,3)
 func draw_sprite(index: int, destination: Rect2) -> void:
- if sprites == null:return
- var cell = sprites.get_size()/Vector2(3,2)
- draw_texture_rect_region(sprites,destination,Rect2(Vector2(index%3,int(index/3))*cell,cell))
-func draw_unit(u: Dictionary) -> void:
- var c: Dictionary = Rules.CARDS[u.id]
- var p = Vector2(u.x,u.y)
- if side == 1:p = Vector2(720-p.x,985-p.y)
- var friendly = int(u.side) == side
- draw_ellipse_shadow(p)
- var width = 158.0 if u.id in ['golem','orc'] else 125.0
- var height = width*1.05
- var bounce = sin(elapsed*6+float(u.uid))*2
- if int(c.get('sprite',-1)) >= 0:draw_sprite(int(c.sprite),Rect2(p.x-width/2,p.y-height+bounce,width,height))
- else:
-  draw_circle(p-Vector2(0,25),18+sin(elapsed*4)*3,Color('#4ceaf3'));draw_arc(p-Vector2(0,25),25,elapsed,elapsed+4.0,24,Color('#b894ff'),4,true)
- if float(u.flash) > 0:draw_arc(p-Vector2(0,height/2),width/3,0,TAU,32,Color('#ffda8d'),3,true)
- draw_rect(Rect2(p.x-28,p.y-height,56,9),Color('#101526'));draw_rect(Rect2(p.x-26,p.y-height+2,52*maxf(0,float(u.hp)/float(u.max_hp)),5),Color('#37dfef') if friendly else Color('#ee454e'))
-func draw_ellipse_shadow(p: Vector2) -> void:
- draw_set_transform(origin+(p*factor),0,Vector2(factor,factor*0.3));draw_circle(Vector2.ZERO,33,Color(0,0,0,0.36));draw_set_transform(origin,0,Vector2.ONE*factor)
+ visuals.sprite(index,destination)
 
 func draw_next_card() -> void:
  var id: String = rules.state.queues[side][0]
@@ -348,3 +327,17 @@ func draw_next_card() -> void:
   draw_rect(Rect2(653,1141,52,17),Color('#382b24'));text_at(str(c.name),Vector2(679,1153),8,Color.WHITE,true)
   draw_rect(Rect2(650,1083,16,17),Color('#12618e'));text_at(str(c.cost),Vector2(658,1098),15,Color.WHITE,true)
  text_at('A SEGUIR',Vector2(680,1074),10,Color('#e6d9b7'),true)
+
+func draw_spell_symbol(id: String, p: Vector2) -> void:
+ var color = Color('#ffa333') if id == 'fire' else Color('#65e8b0')
+ draw_circle(p,37,Color(color,0.12));draw_circle(p,25,Color(color,0.2))
+ if id == 'fire':
+  for i in range(3):draw_line(p+Vector2(10-i*11,-8),p+Vector2(31-i*8,-43-i*2),Color(color,0.65),7-i,true)
+  draw_circle(p,17,color);draw_circle(p+Vector2(-3,-3),9,Color('#fff2bb'))
+ elif id == 'heal':
+  draw_line(p-Vector2(0,22),p+Vector2(0,22),color,12,true);draw_line(p-Vector2(22,0),p+Vector2(22,0),color,12,true)
+  draw_arc(p,31,0.2,5.5,40,Color(color,0.8),2,true)
+ else:
+  var points = PackedVector2Array()
+  for i in range(8):points.append(p+Vector2.from_angle(i*PI/4)*(27 if i%2 == 0 else 8))
+  draw_colored_polygon(points,color)
