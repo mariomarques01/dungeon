@@ -44,7 +44,11 @@ class TopLayer extends Control:
  func _draw() -> void:
   game.view.paint_overlay(self)
 
+func _exit_tree() -> void:
+ if OS.has_feature('web'):JavaScriptBridge.eval('window.dungeonClassicActive=false;')
+
 func _ready() -> void:
+ if OS.has_feature('web'):JavaScriptBridge.eval('window.dungeonClassicActive=true;')
  title_font.fallbacks=[preload('res://assets/symbols.ttf')]
  body_font.fallbacks=[preload('res://assets/symbols.ttf')]
  cards=JSON.parse_string(FileAccess.get_file_as_string('res://tavern_assets/cards.json'))
@@ -68,6 +72,7 @@ func install_web_touch() -> void:
   canvas.style.touchAction='none';
   for(const type of ['touchstart','touchmove','touchend','touchcancel']) {
    canvas.addEventListener(type,event=>{
+    if(!window.dungeonClassicActive)return;
     event.preventDefault();event.stopImmediatePropagation();
     if(type==='touchstart' && finger===null) finger=event.changedTouches[0].identifier;
     const touch=Array.from(event.changedTouches).find(t=>t.identifier===finger);
@@ -286,6 +291,7 @@ func drop_position(point: Vector2) -> int:
 
 func activate_button(id: String) -> void:
  match id:
+  'arena':get_tree().change_scene_to_file('res://scenes/main.tscn')
   'start':start_match()
   'collection':screen='collection';collection_page=0;selected_card=-1
   'home':screen='home';panel='';inspect_id='';match_serial+=1;busy=false;audio_engine.stop_music()

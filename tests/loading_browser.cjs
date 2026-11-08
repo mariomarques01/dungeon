@@ -15,7 +15,7 @@ const assert = require('node:assert/strict');
     if (/\.(wasm|pck)$/.test(e.request.url)) downloads.push(e.request.url);
   });
   const url = new URL(process.env.DUNGEON_URL || 'http://127.0.0.1:8766/godot/');
-  url.searchParams.set('qa','1');
+  url.searchParams.set('qa','1');url.searchParams.set('mode','classic');
   const start = Date.now();
   await page.goto(url.href,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.__dungeonState,null,{timeout:120000});

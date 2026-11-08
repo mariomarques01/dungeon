@@ -7,6 +7,7 @@ on:
       - 'godot/**'
       - 'scripts/**'
       - 'tests/**'
+      - 'server/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
@@ -44,6 +45,7 @@ jobs:
         run: |
           mkdir -p web/godot
           godot --headless --path godot --editor --import
+          godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/mutable_rules.gd"
           godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/tavern_rules.gd"
           godot --headless --path godot --script "$GITHUB_WORKSPACE/tests/tavern_fx.gd"
           export_base="dungeon-${GITHUB_SHA:0:12}"
@@ -53,6 +55,17 @@ jobs:
           test -s "web/godot/$export_base.wasm"
           test -s "web/godot/$export_base.pck"
           python3 scripts/optimize_web.py web/godot
+      - name: Validar salas com dois clientes reais
+        run: |
+          npm install --prefix /tmp/dungeon-network ws
+          godot --headless --path godot --script "$GITHUB_WORKSPACE/server/rooms.gd" > /tmp/rooms.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for i in $(seq 1 30); do
+            if grep -q DUNGEON_ROOMS_READY /tmp/rooms.log; then break; fi
+            sleep 1
+          done
+          NODE_PATH=/tmp/dungeon-network/node_modules node tests/mutable_rooms.cjs
       - name: Preparar efeitos sonoros CC0
         run: python3 scripts/prepare_sfx.py
       - name: Validar jogo e arquivos sonoros
@@ -60,6 +73,8 @@ jobs:
           node --check web/game.js
           node --check tests/tavern_browser.cjs
           node --check tests/loading_browser.cjs
+          node --check tests/mutable_browser.cjs
+          node --check tests/mutable_rooms.cjs
           test -s web/index.html
           test -s web/style.css
           for sound in steel fire lightning; do

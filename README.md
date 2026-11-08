@@ -1,4 +1,55 @@
-# Dungeon Cards — Duelos da Taverna
+# Dungeon — Masmorra Mutável
+
+Duelo de invocadores em **Godot 4.4.1 / GDScript**, com arena vertical baseada na referência aprovada “Duelo arcano na masmorra mutável”. O modo anterior de taverna continua disponível no menu e permite retornar à masmorra.
+
+- Jogar: https://mariomarques01.github.io/dungeon/
+- Taverna diretamente: https://mariomarques01.github.io/dungeon/?mode=classic
+- Implementação web histórica: https://mariomarques01.github.io/dungeon/classic/
+
+## Duelo da masmorra
+
+Partidas em tempo real de até quatro minutos. Escolha uma das quatro cartas na mão e toque no seu lado da arena, ou arraste a carta até lá. Cada carta gasta energia e é substituída pela próxima de um baralho circular de dez cartas. A energia regenera até dez, mais rápido no minuto final. Invocações marcham e lutam automaticamente; muralhas protegem, portais invocam duas ossadas e feitiços causam dano ou curam na área escolhida. O botão de fogo ativa a habilidade do invocador com recarga de 22 segundos.
+
+A cada 30 segundos, a arena alterna entre rotas abertas, aceleração na rota esquerda e dano na rota direita. Destrua o núcleo rival; ao fim do tempo, vence o núcleo com mais vida. Empates são possíveis. O treino tem IA. Pausar interrompe somente o treino; abrir o menu online mantém a partida em andamento.
+
+O cliente preserva a proporção 720 × 1280 inteira em telas móveis, desktop e ao girar o dispositivo; usa margens quando a tela tem outra proporção. Retratos, molduras e as quatro cartas iniciais usam a arte aprovada. O piso sem personagens e as peças independentes foram reconstruídos a partir da referência: os combatentes são objetos vivos e os valores do HUD refletem a simulação. A arte de fundo reconstruída não é uma reprodução pixel a pixel da referência.
+
+Vitórias, derrotas, moedas, XP e contagem de invocações para maestria são salvos neste navegador, separados do perfil clássico. A coleção mostra todas as dez cartas e uma insígnia de liga baseada nas vitórias locais. Não há vantagem comprada, desbloqueios pagos, ranking global ou temporadas nesta versão.
+
+## PvP disponível
+
+Há salas privadas com código, servidor autoritativo em GDScript, sincronização e resultado por desconexão. **O cliente web publicado precisa de um servidor WSS acessível para jogar pela internet. Nenhum servidor público é fornecido pelo GitHub Pages.** O formulário de Salas solicita esse endereço e trata falhas de conexão. Consulte [server/README.md](server/README.md) para executar ou hospedar o servidor.
+
+## Desenvolvimento e validação da masmorra
+
+- `godot/scripts/mutable_rules.gd`: simulação compartilhada, sem interface ou rede.
+- `godot/scripts/mutable_game.gd`: interface, entrada, treino, persistência e cliente WebSocket.
+- `server/rooms.gd`: salas, validação das intenções, simulação e snapshots.
+- `godot/mutable_assets/`: referência aprovada, cenário limpo e atlas de peças transparentes.
+- `godot/scenes/tavern.tscn`: modo anterior preservado.
+
+```sh
+godot --headless --path godot --editor --import --quit
+godot --headless --path godot --script "$PWD/tests/mutable_rules.gd"
+godot --headless --path godot --script "$PWD/tests/tavern_rules.gd"
+godot --headless --path godot --script "$PWD/tests/tavern_fx.gd"
+godot --headless --path godot --export-release Web ../web/godot/index.html
+python3 -m http.server 8766 --directory web
+# Em outro terminal, execute o servidor conforme server/README.md.
+npm install --prefix /tmp/dungeon-browser playwright-core ws
+NODE_PATH=/tmp/dungeon-browser/node_modules node tests/mutable_rooms.cjs
+NODE_PATH=/tmp/dungeon-browser/node_modules node tests/mutable_browser.cjs
+```
+
+Os testes de navegador usam gestos reais e `?qa=1` para observar o estado sem injetar jogadas. Capturam desktop, retrato, celular com densidade 3 e paisagem; verificam invocação inválida/válida, habilidade, pausa, rotação, ida/volta ao clássico, dois navegadores em PvP e desconexão. O CI executa regras dos dois modos, efeitos clássicos, teste de salas com dois clientes e exportação antes do Pages.
+
+## Histórico da recuperação
+
+Em 08/11/2026, o GitHub tinha apenas `main` em `9bb1635`, sem PRs encontrados; a consulta ao commit `0ce60bd` retornou “No commit found”. Não havia checkout anterior em `/workspace`, `/tmp` ou `/home/agent` na busca inicial. A arena e as salas desta versão foram reconstruídas; testes alegados no histórico anterior não foram contabilizados.
+
+---
+
+# Modo clássico — Duelos da Taverna
 
 Jogo de cartas tático em **Godot 4.4.1**, com criaturas no tabuleiro, feitiços com alvos e controles de arrastar com mouse ou toque.
 

@@ -74,7 +74,7 @@ html = html.replace('</style>', '''
 #loading-detail { color: #d2c3ac; font: 14px system-ui, sans-serif; text-align: center; max-width: 290px; line-height: 1.6; }
 #status-progress { position: static; width: 65%; max-width: 320px; margin-top: 24px; accent-color: #dba94c; }
 </style>''', 1)
-html = html.replace('<progress id="status-progress">', '<h1 id="loading-title">DUNGEON CARDS</h1><p id="loading-detail" role="status">Abrindo a taverna…<br>A primeira abertura precisa baixar o jogo.</p><progress id="status-progress">')
+html = html.replace('<progress id="status-progress">', '<h1 id="loading-title">DUNGEON</h1><p id="loading-detail" role="status">Abrindo a masmorra…<br>A primeira abertura precisa baixar o jogo.</p><progress id="status-progress">')
 html = html.replace('statusProgress.max = total;', '''statusProgress.max = total;
           const percent = Math.min(100, Math.floor(current / total * 100));
           const detail = document.getElementById('loading-detail');

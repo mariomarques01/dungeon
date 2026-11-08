@@ -7,7 +7,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
- const url=new URL(process.env.DUNGEON_URL||'http://127.0.0.1:8766/godot/');url.searchParams.set('qa','1');
+ const url=new URL(process.env.DUNGEON_URL||'http://127.0.0.1:8766/godot/');url.searchParams.set('qa','1');url.searchParams.set('mode','classic');
  const initial={deck:['scout','scout','stoneguard','stoneguard','wolf','wolf','apprentice','apprentice','drake','drake','shieldbearer','shieldbearer','dryad','dryad','bolt','bolt','healing','healing','frost','frost','blessing','blessing','barrier','barrier','rune_blade','rune_blade','crystal','crystal','wisdom','wisdom'],coins:50,xp:35,wins:1,losses:0};
  await page.addInitScript(profile=>{if(!localStorage.getItem('tavern_test_seed')){localStorage.setItem('dungeon_tavern_v3',JSON.stringify(profile));localStorage.setItem('dungeon_battle_speed','2');localStorage.setItem('dungeon_sound','on');localStorage.setItem('tavern_test_seed','1')}},initial);
  await page.goto(url.href,{waitUntil:'networkidle',timeout:120000});await page.waitForFunction(()=>window.__dungeonState,null,{timeout:60000});
@@ -58,7 +58,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
    const c=cards[s.players[0].hand[choice]],mana=s.players[0].mana,count=s.players[0].hand.length;
    const destination=c.kind==='minion'?center(s.drop):target?targetPoint(s,target):{x:s.logical.x/2,y:s.logical.y*0.45};
    await drag(cardPoint(s,choice),destination,c.kind==='spell'&&!spellPlayed?'spell-target':undefined);
-   const after=await state();assert(after.busy===false);assert(after.players[0].mana<=10);assert(after.players[0].hand.length!==count||c.effect==='draw'||c.effect==='weaken','A released legal card should resolve');
+   const after=await state();assert(after.busy===false);assert(after.players[0].mana<=10);assert(after.players[0].hand.length!==count||c.effect==='draw'||c.effect==='weaken','A released legal card should resolve: '+JSON.stringify({card:c.id||c.name,choice,mana,count,hand:after.players[0].hand,afterMana:after.players[0].mana,toast:after.toast,turn:after.turn,active:after.active}));
    if(c.kind==='spell'){spellPlayed=true;if(!fs.existsSync(path.join(out,'spell-impact.png')))await shot('spell-impact')}else creaturesPlayed++;
    if(!fs.existsSync(path.join(out,'populated-board.png'))&&after.players[0].board.length>=3)await shot('populated-board');
   }
