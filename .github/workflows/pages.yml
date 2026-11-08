@@ -74,6 +74,7 @@ jobs:
           node --check tests/tavern_browser.cjs
           node --check tests/loading_browser.cjs
           node --check tests/mutable_browser.cjs
+          node --check tests/mutable_actions_browser.cjs
           node --check tests/mutable_rooms.cjs
           test -s web/index.html
           test -s web/style.css

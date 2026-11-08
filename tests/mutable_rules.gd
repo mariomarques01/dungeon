@@ -1,9 +1,10 @@
 extends SceneTree
 const Rules = preload('res://scripts/mutable_rules.gd')
 var count = 0
+var failures = 0
 func check(ok: bool, label: String) -> void:
- if not ok:push_error('FAIL: '+label);quit(1);assert(ok,label)
- count += 1;print('PASS: '+label)
+ if not ok:failures += 1;push_error('FAIL: '+label)
+ else:count += 1;print('PASS: '+label)
 func _initialize() -> void:
  var r = Rules.new()
  check(r.state.hands[0].size() == 4 and r.state.queues[0].size() == 6,'10 cards, four in hand')
@@ -15,8 +16,41 @@ func _initialize() -> void:
  check(r.state.energy[0] == 3 and r.state.hands[0][0] == 'skeleton' and r.state.units.size() == 1,'summon charges once and rotates queue')
  check(r.play(0,0,300,550).is_empty(),'second legal summon')
  check(not r.play(0,1,350,550).is_empty(),'insufficient energy blocked')
- r.reset();r.play(0,3,300,550)
- check(r.state.units.size() == 2 and r.state.units[0].id == 'skeleton','portal summons two units')
+ r.reset();r.spawn(0,'golem',300,550);r.spawn(1,'orc',350,480);r.spawn(1,'skeleton',460,510);r.spawn(1,'wall',440,360)
+ var friendly = r.state.units[0];var enemy = r.state.units[1];var enemy_hp = enemy.hp
+ r.begin_strike(enemy,friendly,Vector2(friendly.x,friendly.y),-1)
+ r.play(0,3,300,550)
+ check(enemy.y <= 335 and enemy.hp == enemy_hp and enemy.warp_time > 0,'portal returns enemies to their base without damaging them')
+ check(friendly.y == 550 and r.state.units[3].y == 360,'portal preserves allies and enemy fortifications')
+ check(r.state.strikes.is_empty() and r.state.effects.any(func(fx):return fx.kind == 'portal'),'portal cancels attacks in transit and emits vortex animation')
+ var destination = Vector2(enemy.x,enemy.y)
+ for i in range(6):r.step(0.1)
+ check(Vector2(enemy.x,enemy.y) == destination,'banished enemy cannot move or attack during transition')
+ for i in range(10):r.step(0.1)
+ check(enemy.warp_time == 0 and Vector2(enemy.x,enemy.y) != destination,'enemy resumes from base after portal animation')
+ r.reset();r.spawn(0,'goblin',350,450);r.play(1,3,400,400)
+ check(r.state.units[0].y >= 650,'opponent portal returns blue units to blue base')
+ r.reset();r.play(0,2,300,620);r.state.energy[0] = 10;r.state.hands[0][2] = 'wall';r.play(0,2,380,600)
+ var w0 = r.state.units[0];var w1 = r.state.units[1]
+ check(Vector2(w1.x-w0.x,w1.y-w0.y) == Rules.WALL_STEP,'nearby walls snap end to end on the isometric baseline')
+ check(w0.links == [1] and w1.links == [-1],'adjacent walls maintain reciprocal connections')
+ r.state.energy[0] = 10;r.state.hands[0][2] = 'wall';r.play(0,2,465,570)
+ check(r.state.units.size() == 3 and r.state.units[1].links.size() == 2,'three walls form a continuous chain')
+ r.receive_hit(w1,1000,Vector2(300,500));r.step(0.1)
+ check(r.state.units[0].links.is_empty() and r.state.units[1].links.is_empty(),'destroying middle wall removes stale connections')
+ r.reset();r.spawn(0,'golem',350,510);r.spawn(1,'orc',350,470)
+ r.state.units[0].spawn_time = 0;r.state.units[0].attack = 0
+ r.state.units[1].spawn_time = 0;r.state.units[1].attack = 2
+ r.step(0.05)
+ check(r.state.units[0].strike_time > 0 and r.state.units[1].hp == 530 and not r.state.strikes.is_empty(),'melee windup precedes damage')
+ for i in range(5):r.step(0.05)
+ check(r.state.units[1].hp < 530 and r.state.units[1].hurt_time > 0,'melee impact triggers defender recoil')
+ r.reset();r.spawn(0,'goblin',350,510);r.spawn(1,'orc',350,410)
+ r.state.units[0].spawn_time = 0;r.state.units[0].attack = 0;r.state.units[1].spawn_time = 0;r.state.units[1].attack = 2
+ r.step(0.05)
+ check(r.state.strikes[0].ranged and r.state.units[1].hp == 530,'ranged attack launches visible projectile before damage')
+ for i in range(10):r.step(0.05)
+ check(r.state.units[1].hp < 530,'projectile deals damage at impact')
  r.reset();r.spawn(0,'golem',350,510);r.spawn(1,'orc',350,470)
  for i in range(20):r.step(0.1)
  check(r.state.units[0].hp < 640 and r.state.units[1].hp < 530,'real time creatures damage each other')
@@ -41,4 +75,4 @@ func _initialize() -> void:
  r.reset()
  for i in range(2401):r.step(0.1,true)
  check(r.state.winner != -2 and r.state.casts[1] > 0,'full practice game finishes with AI playing')
- print('MUTABLE_RULES_OK ',count);quit()
+ print('MUTABLE_RULES_RESULT ',count,' passed, ',failures,' failed');quit(1 if failures > 0 else 0)

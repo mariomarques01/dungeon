@@ -8,7 +8,7 @@ Duelo de invocadores em **Godot 4.4.1 / GDScript**, com arena vertical baseada n
 
 ## Duelo da masmorra
 
-Partidas em tempo real de até quatro minutos. Escolha uma das quatro cartas na mão e toque no seu lado da arena, ou arraste a carta até lá. Cada carta gasta energia e é substituída pela próxima de um baralho circular de dez cartas. A energia regenera até dez, mais rápido no minuto final. Invocações marcham e lutam automaticamente; muralhas protegem, portais invocam duas ossadas e feitiços causam dano ou curam na área escolhida. O botão de fogo ativa a habilidade do invocador com recarga de 22 segundos.
+Partidas em tempo real de até quatro minutos. Escolha uma das quatro cartas na mão e toque no seu lado da arena, ou arraste a carta até lá. Cada carta gasta energia e é substituída pela próxima de um baralho circular de dez cartas. A energia regenera até dez, mais rápido no minuto final. Invocações apoiam os pés no piso e lutam com preparação do golpe, projéteis, impacto e reação de defesa; muralhas próximas se encaixam em uma linha isométrica e protegem, portais banem as criaturas adversárias para a própria base, com animações de saída e chegada e feitiços causam dano ou curam na área escolhida. O botão de fogo ativa a habilidade do invocador com recarga de 22 segundos.
 
 A cada 30 segundos, a arena alterna entre rotas abertas, aceleração na rota esquerda e dano na rota direita. Destrua o núcleo rival; ao fim do tempo, vence o núcleo com mais vida. Empates são possíveis. O treino tem IA. Pausar interrompe somente o treino; abrir o menu online mantém a partida em andamento.
 
@@ -24,6 +24,7 @@ Há salas privadas com código, servidor autoritativo em GDScript, sincronizaç�
 
 - `godot/scripts/mutable_rules.gd`: simulação compartilhada, sem interface ou rede.
 - `godot/scripts/mutable_game.gd`: interface, entrada, treino, persistência e cliente WebSocket.
+- `godot/scripts/mutable_visuals.gd`: apoio no chão, poses de caminhada/golpe/recuo, projéteis, morte e vórtices de transporte.
 - `server/rooms.gd`: salas, validação das intenções, simulação e snapshots.
 - `godot/mutable_assets/`: referência aprovada, cenário limpo e atlas de peças transparentes.
 - `godot/scenes/tavern.tscn`: modo anterior preservado.
@@ -39,6 +40,7 @@ python3 -m http.server 8766 --directory web
 npm install --prefix /tmp/dungeon-browser playwright-core ws
 NODE_PATH=/tmp/dungeon-browser/node_modules node tests/mutable_rooms.cjs
 NODE_PATH=/tmp/dungeon-browser/node_modules node tests/mutable_browser.cjs
+NODE_PATH=/tmp/dungeon-browser/node_modules node tests/mutable_actions_browser.cjs
 ```
 
 Os testes de navegador usam gestos reais e `?qa=1` para observar o estado sem injetar jogadas. Capturam desktop, retrato, celular com densidade 3 e paisagem; verificam invocação inválida/válida, habilidade, pausa, rotação, ida/volta ao clássico, dois navegadores em PvP e desconexão. O CI executa regras dos dois modos, efeitos clássicos, teste de salas com dois clientes e exportação antes do Pages.

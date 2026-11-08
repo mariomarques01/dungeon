@@ -1,5 +1,7 @@
 # Verificação da masmorra mutável — 08/11/2026
 
+As correções posteriores de apoio no chão, combate, portal e encaixe de muralhas estão em [mutable-actions](../mutable-actions/README.md).
+
 Versão reconstruída a partir da `main` `9bb1635`. O commit histórico `0ce60bd` não estava disponível no GitHub nem num checkout anterior deste ambiente.
 
 ## Referência e resultado
