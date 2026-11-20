@@ -35,6 +35,9 @@ var clock=0.0
 var match_serial=0
 var rewarded=false
 var qa_enabled=false
+var qa_sample_start=0
+var qa_frames=0
+var qa_frame_label=''
 var previous_viewport=Vector2.ZERO
 var web_touch_callback
 var done: bool:
@@ -178,6 +181,15 @@ func _process(delta: float) -> void:
   inspect_id=press.id;press={};selected_card=-1
  view.prepare();queue_redraw();overlay.queue_redraw()
  if qa_enabled:
+  var now=Time.get_ticks_usec()
+  if qa_sample_start==0:qa_sample_start=now
+  qa_frames+=1
+  var elapsed=now-qa_sample_start
+  if elapsed>=500000:
+   var ms=elapsed/1000.0/qa_frames
+   qa_frame_label='%.0f FPS · %.1f ms' % [1000.0/ms,ms]
+   qa_sample_start=now
+   qa_frames=0
   var hand=[]
   for item in view.hand_views:hand.append({'index':item.index,'id':item.id,'rect':rect_json(item.rect),'angle':item.angle})
   var units=[]

@@ -434,6 +434,11 @@ func paint_overlay(c: CanvasItem) -> void:
   canvas.draw_style_box(style(Color(0.025,0.03,0.055,0.94),Color('d8ba7a'),12),Rect2(layout.w/2-width/2,layout.h*0.19,width,56))
   text(game.toast_text,Rect2(layout.w/2-width/2+14,layout.h*0.19+15,width-28,30),18,PAPER,true)
 
+ if game.qa_enabled and not game.qa_frame_label.is_empty():
+  var meter=Rect2(8,layout.h-30,174,28)
+  canvas.draw_rect(meter,Color(0.02,0.03,0.04,0.92))
+  text(game.qa_frame_label,meter,18,Color.WHITE,true)
+
 func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
  var card=game.cards[id]
  var transform=Transform2D(angle,rect.get_center())
