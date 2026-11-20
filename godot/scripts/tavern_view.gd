@@ -98,7 +98,11 @@ func geometry() -> void:
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
  layout.gold_size=Vector2(gold_width,h*0.114)
- layout.power=Rect2(Vector2(w*0.253,h*0.67)-layout.gold_size/2,layout.gold_size)
+ layout.supports=[]
+ for x in [0.253,0.747]:
+  layout.supports.append(Rect2(Vector2(w*x,h*0.675)-layout.gold_size/2,layout.gold_size))
+ var power_size=clampf(w*0.055,36,52)
+ layout.power=Rect2(w*0.94-power_size/2,h*0.73-power_size/2,power_size,power_size)
  var gear_size=clampf(w*0.066,44,62)
  layout.settings=Rect2(w*0.986-gear_size,h*0.011,gear_size,gear_size)
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
@@ -421,6 +425,21 @@ func paint_battle() -> void:
  var name_size=int(minf(plate.size.x*0.155,plate.size.y*0.34))
  text('Jogador 2',plate,name_size,Color.WHITE,true,true)
  text('Clã das Sombras',Rect2(plate.position+Vector2(0,name_size*1.35),plate.size),int(name_size*0.65),PAPER,true,true)
+ for slot in range(state.supports.size()):
+  var support=state.supports[slot]
+  var rect: Rect2=layout.supports[slot]
+  var label='Defesa' if support.defense else 'Ataque'
+  if support.id!='':
+   var card=game.cards[support.id]
+   var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
+   var inset=Rect2(rect.position+rect.size*0.15,rect.size*0.70)
+   canvas.draw_texture_rect(picture,inset,false)
+   label+=' +%d' % state.support_strength(support.id)
+  if slot==game.pending_support:
+   canvas.draw_rect(rect,Color('ffdb65'),false,3,true)
+  var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
+  canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
+  text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
  for hero in hero_views:
   var p=state.players[int(hero.side)]
   var center=hero.rect.get_center()
@@ -541,6 +560,7 @@ func paint_button(info: Dictionary) -> void:
  var enabled=info.enabled
  var primary=info.primary
  if info.id=='power':
+  canvas.draw_texture_rect(slice(spells,0,4,4),rect,false)
   badge(rect.position+rect.size*Vector2(0.81,0.83),'2',Color('287cb2') if enabled else Color('414054'),12)
   return
  var fill=Color('c9a362') if primary else Color('382a25')
