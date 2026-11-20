@@ -34,6 +34,59 @@ var unit_views={}
 var hero_views=[]
 var buttons=[]
 var collection_views=[]
+# The scene owns these CanvasItems. Only active effects request redraws.
+class EffectSprite extends Node2D:
+ var owner_view: WeakRef
+ var record: Dictionary
+ var category: StringName
+
+ func _draw() -> void:
+  if record.is_empty():return
+  var view=owner_view.get_ref()
+  if view==null:return
+  var previous=view.canvas
+  view.canvas=self
+  match category:
+   &"particle":view.fx.event(record)
+   &"number":view.draw_float(record)
+   &"remains":view.draw_remains(record)
+  view.canvas=previous
+
+var free_effects={&"particle":[],&"number":[],&"remains":[]}
+
+func acquire_effect(active: Array,category: StringName,record: Dictionary) -> void:
+ var free: Array=free_effects[category]
+ var sprite: EffectSprite
+ if free.is_empty():
+  sprite=EffectSprite.new()
+  sprite.owner_view=weakref(self)
+  sprite.category=category
+  sprite.z_index=2 if category==&"remains" else 90
+  game.art_layer.add_child(sprite)
+ else:sprite=free.pop_back()
+ sprite.record=record
+ record.sprite=sprite
+ active.append(record)
+ sprite.show()
+ sprite.queue_redraw()
+
+func advance_effects(active: Array,elapsed: float,lifetime: float) -> void:
+ for i in range(active.size()-1,-1,-1):
+  var record=active[i]
+  var sprite: EffectSprite=record.sprite
+  record.age+=elapsed
+  if record.age>=lifetime:
+   active.remove_at(i)
+   sprite.hide()
+   sprite.record={}
+   free_effects[sprite.category].append(sprite)
+  else:sprite.queue_redraw()
+
+func reset_effects() -> void:
+ advance_effects(particles,INF,1.15)
+ advance_effects(floats,INF,1.25)
+ advance_effects(ghosts,INF,1.4)
+
 var ghosts=[]
 var particles=[]
 var floats=[]
@@ -89,12 +142,9 @@ func tick(delta: float) -> void:
   if pointer_trail.is_empty() or pointer_trail[-1].position.distance_to(game.pointer)>8:
    pointer_trail.append({'position':game.pointer,'id':game.drag.id,'age':0.0})
    if pointer_trail.size()>18:pointer_trail.pop_front()
- for p in particles: p.age+=delta*game.speed
- for f in floats: f.age+=delta*game.speed
- for g in ghosts: g.age+=delta*game.speed
- particles=particles.filter(func(p): return p.age<1.15)
- floats=floats.filter(func(f): return f.age<1.25)
- ghosts=ghosts.filter(func(g): return g.age<1.4)
+ advance_effects(particles,delta*game.speed,1.15)
+ advance_effects(floats,delta*game.speed,1.25)
+ advance_effects(ghosts,delta*game.speed,1.4)
 
 func geometry() -> void:
  var w=game.logical_size.x; var h=game.logical_size.y; var mobile=game.portrait
@@ -210,8 +260,6 @@ func prepare() -> void:
    var size=Vector2(170,255)
    var p=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    prepare_card('cast',anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
-  for g in ghosts:
-   prepare_remains(g)
   button('settings',layout.settings,'⚙')
   if state.solar_ready() and not game.busy:
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
@@ -237,7 +285,7 @@ func prepare() -> void:
  for key in nodes.keys():
   if not used.has(key): nodes[key].queue_free(); nodes.erase(key)
 
-func prepare_remains(g: Dictionary) -> void:
+func draw_remains(g: Dictionary) -> void:
  var t=clampf(float(g.age)/1.4,0,1)
  var base=slice(creatures,int(game.cards[g.id].art),5,5)
  var element=str(g.get('element','dark'))
@@ -266,8 +314,9 @@ func prepare_remains(g: Dictionary) -> void:
   var shrink=1-t*0.7
   rect=Rect2(rect.get_center()-rect.size*shrink/2,rect.size*shrink)
   tint.a=clampf(1-t*1.1,0,1)
-  var key='dead'+str(g.uid)+'-'+str(part)
-  art(key,fragment_cache[cache_key],rect,false,t*(part-4)*0.12,tint,2)
+  canvas.draw_set_transform(rect.get_center(),t*(part-4)*0.12)
+  canvas.draw_texture_rect(fragment_cache[cache_key],Rect2(-rect.size/2,rect.size),false,tint)
+
 
 func prepare_card(key: String,id: String,rect: Rect2,angle=0.0,z=0,tint=Color.WHITE) -> void:
  var card=game.cards[id]
@@ -334,7 +383,7 @@ func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
  var defeated=events.filter(func(event):return event.kind=='death' and event.side!=action.get('side',-1))
  if defeated.size()>=2 and action.has('side'):
   var banner_at=Vector2(layout.w*0.5,(layout.enemy_row+layout.player_row)*0.5)
-  floats.append({'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
+  acquire_effect(floats,&"number",{'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
  var causes={}
  for event in events:
   var kind=event.kind
@@ -344,23 +393,23 @@ func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
    var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    if not event.get('target',{}).has('uid'):
-    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
-   particles.append({'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+    acquire_effect(floats,&"number",{'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+   acquire_effect(particles,&"particle",{'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
   elif kind=='support':
    var slot_rect: Rect2=layout.supports[event.slot] if event.side==0 else layout.enemy_supports[event.slot]
-   particles.append({'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'defense':event.defense,'id':event.id})
+   acquire_effect(particles,&"particle",{'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'defense':event.defense,'id':event.id})
   elif kind=='summon':
-   particles.append({'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
+   acquire_effect(particles,&"particle",{'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
   elif kind=='death':
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
      var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.slot_sizes[event.side]/2,layout.slot_sizes[event.side])
      var cause=str(causes.get(int(event.uid),action.get('element','dark')))
-     ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
-     particles.append({'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
+     acquire_effect(ghosts,&"remains",{'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
+     acquire_effect(particles,&"particle",{'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
 
 func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
  var s=StyleBoxFlat.new();s.bg_color=fill;s.border_color=border;s.set_border_width_all(width);s.set_corner_radius_all(radius);s.shadow_color=Color(0,0,0,0.45);s.shadow_size=7;return s
@@ -606,7 +655,6 @@ func paint_battle() -> void:
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   fx.action(anim,anim_time)
  if not rival_anim.is_empty():fx.action(rival_anim,rival_time)
- paint_particles()
  var p=state.players[0]
  if p.health<=10:
   var strength=0.10+0.05*sin(clock*3.0)
@@ -692,15 +740,9 @@ func arrow(a: Vector2,b: Vector2,color: Color) -> void:
  var direction=(b-a).normalized();var normal=direction.orthogonal()
  canvas.draw_colored_polygon(PackedVector2Array([b,b-direction*24+normal*13,b-direction*24-normal*13]),color)
 
-func paint_particles() -> void:
- for p in particles:
-  var t=clampf(p.age/0.85,0,1)
-  var at=p.position
-  if p.kind=='summon' and unit_views.has(int(p.uid)): at=unit_views[int(p.uid)].rect.get_center()
-  fx.event(p)
- for f in floats:
-  var pos=f.position-Vector2(0,55+f.age*47)
-  text(f.text,Rect2(pos-Vector2(140,10),Vector2(280,50)),22 if f.text.length()>8 else 34,Color(f.color,clampf(1.6-f.age,0,1)),true,true)
+func draw_float(f: Dictionary) -> void:
+ var pos=f.position-Vector2(0,55+f.age*47)
+ text(f.text,Rect2(pos-Vector2(140,10),Vector2(280,50)),22 if f.text.length()>8 else 34,Color(f.color,clampf(1.6-f.age,0,1)),true,true)
 
 func paint_home() -> void:
  var x=layout.w/2-245 if game.portrait else 150.0
