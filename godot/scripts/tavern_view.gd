@@ -13,6 +13,12 @@ var scenery=[]
 var fragment_cache={}
 var board: Texture2D
 var portrait_board: Texture2D
+const ROYAL_ARENA = preload("res://tavern_assets/royal/arena.webp")
+const ROYAL_PLAYER = preload("res://tavern_assets/royal/player.webp")
+const ROYAL_ENEMY = preload("res://tavern_assets/royal/enemy.webp")
+const ROYAL_GOLD = preload("res://tavern_assets/royal/gold.webp")
+const ROYAL_BLUE = preload("res://tavern_assets/royal/blue.webp")
+const ROYAL_RED = preload("res://tavern_assets/royal/red.webp")
 var creatures: Texture2D
 var spells: Texture2D
 var frames: Texture2D
@@ -87,15 +93,16 @@ func tick(delta: float) -> void:
 func geometry() -> void:
  var w=game.logical_size.x; var h=game.logical_size.y; var mobile=game.portrait
  layout={'w':w,'h':h,'mobile':mobile}
- layout.enemy_hero=Rect2(Vector2(w/2-58,38 if mobile else 17),Vector2(116,147))
- layout.player_hero=Rect2(Vector2(w/2-(58 if mobile else 48),h-495 if mobile else h-350),Vector2(116,147) if mobile else Vector2(96,120))
- layout.enemy_row=h*0.34 if mobile else h*0.31
- layout.player_row=h*0.57 if mobile else h*0.46
- layout.unit_size=Vector2(88,114) if mobile else Vector2(105,133)
- layout.player_drop=Rect2(65,h*0.46,w-130,h*0.27) if mobile else Rect2(155,h*0.43,w-310,h*0.28)
+ var hero_size=Vector2.ONE*minf(h*0.13,w*0.17)
+ layout.enemy_hero=Rect2(Vector2(w*0.5,h*0.13)-hero_size/2,hero_size)
+ layout.player_hero=Rect2(Vector2(w*0.5,h*0.76)-hero_size/2,hero_size)
+ layout.enemy_row=h*0.355
+ layout.player_row=h*0.615
+ layout.unit_size=Vector2(105,133)
+ layout.player_drop=Rect2(w*0.12,h*0.51,w*0.76,h*0.19)
  layout.board_zone=Rect2(50,175,w-100,h-480) if mobile else Rect2(150,145,w-300,h-330)
- layout.end=Rect2(w-190,h*0.465,163,86) if mobile else Rect2(w-260,h*0.445,164,66)
- layout.power=Rect2(w/2+85,h-425 if mobile else h-245,69,69)
+ layout.end=Rect2(w-162,h*0.47,150,65) if mobile else Rect2(w-260,h*0.445,164,66)
+ layout.power=Rect2(w/2+hero_size.x*0.65,h*0.755,69,69)
  layout.settings=Rect2(w-118,25,86,86) if mobile else Rect2(w-148,25,48,48)
  layout.mana=Vector2(w/2-150,h-52)
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
@@ -104,19 +111,19 @@ func geometry() -> void:
  for side in range(2):
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
-  var gap=minf(145.0,(w-140)/maxf(1,list.size())) if mobile else 114.0
+  var gap=minf(w*0.137,w*0.76/maxi(5,list.size()))
   var row=float(layout.player_row if side==0 else layout.enemy_row)
   for i in range(list.size()):
    var center=Vector2(w/2+(i-(list.size()-1)/2.0)*gap,row)
    var uid=int(list[i].uid)
-   var size=Vector2(minf(132,gap-10),minf(165,(gap-10)*1.25)) if mobile else layout.unit_size
+   var size=Vector2.ONE*minf(gap*0.83,h*0.12)*Vector2(1,1.28)
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
- var size=Vector2(158,237) if mobile else Vector2(146,219)
+ var size=Vector2(1,1.5)*minf(158,h*0.125)
  var spacing=minf(95.0 if mobile else 82.0,((w-170) if mobile else w*0.60)-size.x if hand.size()<=1 else (((w-170) if mobile else w*0.60)-size.x)/maxf(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
-  var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h-(185 if mobile else 115)+absf(f)*3)
+  var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h*0.90+absf(f)*3)
   var angle=f*0.045
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
@@ -133,8 +140,8 @@ func prepare() -> void:
  used={}; geometry()
  if game.screen=='battle':
   var state=game.rules
-  art('hero0',slice(creatures,3,5,5),layout.player_hero.grow(-7),true)
-  art('hero1',slice(creatures,9,5,5),layout.enemy_hero.grow(-7),true)
+  art('hero0',ROYAL_PLAYER,layout.player_hero)
+  art('hero1',ROYAL_ENEMY,layout.enemy_hero)
   art('power',slice(spells,0,4,4),layout.power.grow(-5),true)
   for uid in unit_views:
    var info=unit_views[uid]; var rect: Rect2=info.rect
@@ -340,8 +347,24 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 
 func paint_base(c: CanvasItem) -> void:
  canvas=c
- canvas.draw_texture_rect(portrait_board if game.portrait else board,Rect2(Vector2.ZERO,game.logical_size),false)
- fx.environment()
+ var bounds=Rect2(Vector2.ZERO,game.logical_size)
+ if game.screen=='battle':
+  canvas.draw_rect(bounds,Color('19132b'))
+  canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
+  var slot_width=minf(layout.w*0.112,layout.h*0.10)
+  var slot_size=Vector2(slot_width,slot_width*1.30)
+  var gold_size=layout.player_hero.size*0.74
+  for side in range(2):
+   var row=layout.player_row if side==0 else layout.enemy_row
+   for column in range(5):
+    var center=Vector2(layout.w*(0.5+(column-2)*0.137),row)
+    canvas.draw_texture_rect(ROYAL_BLUE if side==0 else ROYAL_RED,Rect2(center-slot_size/2,slot_size),false)
+   for x in [0.27,0.73]:
+    var center=Vector2(layout.w*x,layout.h*(0.755 if side==0 else 0.23))
+    canvas.draw_texture_rect(ROYAL_GOLD,Rect2(center-gold_size/2,gold_size),false)
+ else:
+  canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
+  fx.environment()
  if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
  if game.screen=='home':
   var x=layout.w/2-285 if game.portrait else 110.0
@@ -357,7 +380,7 @@ func paint_base(c: CanvasItem) -> void:
    var ready=int(info.side)==0 and game.rules.active==0 and int(unit.attacks)>0 and not game.busy
    if ready: oval(rect.grow(7),Color(0.2,1,0.45,0.08),Color(0.35,1,0.52,0.65+sin(clock*4)*0.15),3)
    oval(rect,Color('30261f'),Color('b7b2a2') if 'taunt' in unit.keywords else Color('ab8150'),6 if 'taunt' in unit.keywords else 4)
-  for hero in hero_views: canvas.draw_style_box(style(Color('30261f'),Color('bc995c'),35,6),hero.rect)
+
 
 func paint_overlay(c: CanvasItem) -> void:
  canvas=c
@@ -407,7 +430,7 @@ func paint_battle() -> void:
  for hero in hero_views:
   var p=state.players[int(hero.side)]
   var center=hero.rect.get_center()
-  badge(hero.rect.position+Vector2(hero.rect.size.x-8,hero.rect.size.y-8),str(p.health),Color('a51e2c'),22)
+  badge(hero.rect.position+Vector2(hero.rect.size.x*0.84,hero.rect.size.y*0.86),str(p.health),Color('a51e2c'),22)
   if p.armor>0:badge(hero.rect.position+Vector2(10,hero.rect.size.y-8),str(p.armor),Color('667e9a'),18)
   text('ELYRA' if hero.side==0 else 'MALGRUK',Rect2(hero.rect.position+Vector2(-26,hero.rect.size.y+17),Vector2(hero.rect.size.x+52,25)),17,PAPER,true,true)
  for uid in unit_views:
