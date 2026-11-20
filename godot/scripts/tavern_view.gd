@@ -150,10 +150,14 @@ func prepare() -> void:
    var info=unit_views[uid]; var rect: Rect2=info.rect
    var opacity=1.0
    if not anim.is_empty() and anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid:
-    var target=target_center(anim.target)
-    var t=clampf((anim_time-0.1)/0.28,0,1) if anim_time<0.38 else 1.0-clampf((anim_time-0.38)/0.47,0,1)
-    if fx.ranged(str(info.unit.id)):rect.position.y-=sin(t*PI)*12
-    else:rect.position=rect.position.lerp(target-rect.size/2,t*0.9)
+    var direction: Vector2=(anim.destination-anim.origin).normalized()
+    var windup=sin(PI*clampf(anim_time/0.12,0,1))
+    var advance=smoothstep(0.12,0.38,anim_time)*(1.0-smoothstep(0.38,0.80,anim_time))
+    if fx.ranged(str(info.unit.id)):
+     rect.position-=direction*(windup*6+advance*10)
+    else:
+     rect.position-=direction*windup*16
+     rect.position=rect.position.lerp(anim.destination-rect.size/2,advance*0.9)
    var spawn=particles.filter(func(p): return p.get('uid',-1)==uid and p.kind=='summon')
    if not spawn.is_empty():
     var factor=clampf(spawn[0].age/0.35,0.08,1.0)
@@ -292,6 +296,10 @@ func ingest(events: Array,before: Array) -> void:
   var element=str(anim.get('element',elemental[0].get('element','arcane')))
   scenery.append({'element':element,'age':0.0,'position':target_center(elemental[0].get('target',{}))})
   if scenery.size()>4:scenery.pop_front()
+ var defeated=events.filter(func(event):return event.kind=='death' and event.side!=anim.get('side',-1))
+ if defeated.size()>=2 and anim.has('side'):
+  var banner_at=Vector2(layout.w*0.5,(layout.enemy_row+layout.player_row)*0.5)
+  floats.append({'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
  var causes={}
  for event in events:
   var kind=event.kind
@@ -529,7 +537,7 @@ func paint_targets() -> void:
    canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65+sin(clock*7)*0.2),4)
 
 func element_color(element: String) -> Color:
- return {'fire':Color('ff8a40'),'ice':Color('7edcff'),'lightning':Color('91bdff'),'storm':Color('c49aff'),'nature':Color('85db71'),'heal':Color('8be6ae'),'dark':Color('a085e8'),'steel':Color('ffdd8f'),'earth':Color('c4a16d')}.get(element,Color('b28bff'))
+ return {'fire':Color('ff8a40'),'ice':Color('7edcff'),'lightning':Color('91bdff'),'storm':Color('c49aff'),'nature':Color('85db71'),'heal':Color('8be6ae'),'dark':Color('a085e8'),'shield':Color('ffe39b'),'bite':Color('ffb79c'),'steel':Color('ffdd8f'),'earth':Color('c4a16d')}.get(element,Color('b28bff'))
 
 func arrow(a: Vector2,b: Vector2,color: Color) -> void:
  var last=a

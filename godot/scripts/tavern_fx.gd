@@ -146,8 +146,6 @@ func action() -> void:
     var offset=normal*(i-1)*10
     var tip=origin.lerp(dest,travel)+offset
     beam(tip-direction*(18+32*sin(travel*PI)),tip,color,3-i*0.5,sin(travel*PI))
-  var phase=clampf((time-0.27)/0.34,0,1)
-  if phase>0 and phase<1:impact(dest,element,phase,1.0,id)
   if ranged(id) and time<0.38:
    projectile(origin,dest,clampf(time/0.38,0,1),element,color)
   return
@@ -164,6 +162,12 @@ func action() -> void:
  if time<0.5:ring(origin,20+sin(t*PI)*24,color,0.8,time*4)
  match id:
   'solar':
+   var corona=origin if time<0.52 else dest
+   var radius=70-42*t if time<0.52 else 28+100*(1-fade)
+   for ray in range(12):
+    var angle=ray*TAU/12+0.5*t
+    var radial=Vector2.from_angle(angle)
+    shard(corona+radial*radius,angle,12+16*fade,Color('ffdb74'),fade)
    if time<0.52:
     ring(origin,24+42*t,Color('ffd65d'),1-t*0.4,time*3)
     projectile(origin,dest,t,'fire',Color('ffb33e'))
@@ -231,6 +235,14 @@ func action() -> void:
    if time<0.52:projectile(origin,dest,t,element,color)
    else:impact(dest,element,clampf((time-0.52)/0.65,0,1),fade,id)
 func projectile(origin: Vector2,dest: Vector2,t: float,element: String,color: Color) -> void:
+ # Sample the same arc as the projectile so the tail follows its trajectory.
+ for i in range(4):
+  var head=maxf(0,t-i*0.042)
+  var tail=maxf(0,head-0.042)
+  if head<=tail:break
+  var start=origin.lerp(dest,tail)-Vector2.DOWN*sin(tail*PI)*55
+  var end=origin.lerp(dest,head)-Vector2.DOWN*sin(head*PI)*55
+  c.draw_line(start,end,Color(color,0.53-i*0.11),8-i*1.5,true)
  var at=origin.lerp(dest,t)+Vector2(0,-sin(t*PI)*55)
  var direction=(dest-origin).normalized()
  if element in ['storm','lightning']:
@@ -324,6 +336,14 @@ func event(p: Dictionary) -> void:
     var angle=i*TAU/6+t*0.8
     shard(at+Vector2.from_angle(angle)*(26+38*t),angle,14*fade,color,fade)
   'shield_break':
+   var corners=[Vector2(-38,-36),Vector2(0,-49),Vector2(38,-36),Vector2(30,13),Vector2(0,48),Vector2(-30,13)]
+   for i in range(corners.size()):
+    var edge: Vector2=corners[i]
+    var next: Vector2=corners[(i+1)%corners.size()]
+    var drift=(edge+next).normalized()*54*t+Vector2.DOWN*30*t*t
+    var fragment=PackedVector2Array([at+drift,at+edge+drift,at+next+drift])
+    c.draw_colored_polygon(fragment,Color(1,0.78,0.36,0.32*fade))
+    c.draw_line(fragment[1],fragment[2],Color(1,0.91,0.64,fade),3,true)
    for i in range(10):shard(at+Vector2.from_angle(i*TAU/10)*(35+t*65),i*TAU/10,22,Color('ffe49b'),fade)
   'heal','buff':
    leaves(at,t,Color('a3ffd1') if kind=='heal' else Color('ffe197'),fade)
