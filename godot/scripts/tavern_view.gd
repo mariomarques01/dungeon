@@ -57,7 +57,7 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
  used[key]=true
  if not nodes.has(key):
   var node=TextureRect.new(); node.mouse_filter=Control.MOUSE_FILTER_IGNORE
-  node.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; node.stretch_mode=TextureRect.STRETCH_SCALE
+  node.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; node.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
   var material=ShaderMaterial.new(); material.shader=shader; node.material=material
   game.art_layer.add_child(node); nodes[key]=node
  var node=nodes[key]
@@ -119,11 +119,14 @@ func geometry() -> void:
    var offset=i+floori((5-list.size())/2.0)-2 if list.size()<=5 else i-(list.size()-1)/2.0
    var center=Vector2(w/2+offset*gap,row)
    var uid=int(list[i].uid)
-   var size=Vector2(minf(w*0.104,gap*0.85),h*(0.109 if side==1 else 0.104))
+   var width=minf(gap*0.94,h*0.112*0.74)
+   var size=Vector2(width,width/0.74)
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
- var size=Vector2(1,1.5)*minf(w*0.167,h*0.110)
- var spacing=minf(size.x*0.99,(w*0.83-size.x)/maxi(1,hand.size()-1))
+ var frame_ratio=float(HAND_FRAME.get_width())/HAND_FRAME.get_height()
+ var width=minf(w*0.22,h*0.18*frame_ratio)
+ var size=Vector2(width,width/frame_ratio)
+ var spacing=minf(size.x*1.025,(w*0.92-size.x)/maxi(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
   var center=Vector2(w/2+f*spacing,h*0.857)
@@ -397,13 +400,19 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
  wrapped(card.text,Rect2(local.position+local.size*Vector2(0.16,0.65),local.size*Vector2(0.69,0.20)),int(10*factor),Color('3b2d24'),true)
  canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
 
+func draw_card_picture(picture: AtlasTexture,window: Rect2,tint=Color.WHITE) -> void:
+ var region=picture.region
+ var scale=maxf(window.size.x/region.size.x,window.size.y/region.size.y)
+ var crop=window.size/scale
+ canvas.draw_texture_rect_region(picture.atlas,window,Rect2(region.get_center()-crop/2,crop),tint)
+
 func paint_hand_card(hand: Dictionary,available: bool) -> void:
  var r: Rect2=hand.rect
  var card=game.cards[hand.id]
  var tint=Color.WHITE if available else Color('c6bccb')
  var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
  var window=Rect2(r.position+r.size*Vector2(0.055,0.055),r.size*Vector2(0.90,0.62))
- canvas.draw_texture_rect(picture,window,false,tint)
+ draw_card_picture(picture,window,tint)
  canvas.draw_texture_rect(HAND_FRAME,r,false,tint)
  var label=Rect2(r.position+r.size*Vector2(0.115,0.565),r.size*Vector2(0.77,0.11))
  var font_size=maxi(9,int(r.size.x*0.10))
@@ -440,7 +449,7 @@ func paint_battle() -> void:
     var card=game.cards[support.id]
     var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
     var inset=Rect2(rect.position+rect.size*0.15,rect.size*0.70)
-    canvas.draw_texture_rect(picture,inset,false)
+    draw_card_picture(picture,inset)
    if side==0 and slot==game.pending_support:
     canvas.draw_rect(rect,Color('ffdb65'),false,3,true)
    var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
