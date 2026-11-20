@@ -7,6 +7,10 @@ var fx
 var effect_history=[]
 var pointer_trail=[]
 var hand_lifts={}
+var ready_mask=0
+var observed_match=-1
+var pulse_ends=PackedFloat64Array([0,0,0,0,0])
+var energy_pulse_end=0.0
 var frame_delta=0.016
 var result_time=0.0
 var scenery=[]
@@ -538,6 +542,12 @@ func paint_battle() -> void:
   var radius=minf(rect.size.x*0.18,rect.size.y*0.15)
   badge(Vector2(rect.position.x+radius+2,rect.end.y-radius-2),str(unit.attack),Color('845018'),radius)
   badge(rect.end-Vector2.ONE*(radius+2),str(unit.health),Color('922a38'),radius)
+ var opening=observed_match!=game.match_serial
+ if opening:
+  observed_match=game.match_serial
+  ready_mask=0
+  pulse_ends.fill(0)
+  energy_pulse_end=0
  for hand in hand_views:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
   var remaining=float(state.players[0].cooldowns.get(hand.index,0))
@@ -546,7 +556,16 @@ func paint_battle() -> void:
   var target_rule=card.get('target','none')
   var missing_target=(target_rule=='enemy_minion' and state.players[1].board.is_empty()) or (target_rule=='friendly_minion' and state.players[0].board.is_empty())
   var ready=not missing_target and remaining==0 and card.cost<=state.players[0].mana and not full
+  var bit=1<<int(hand.index)
+  if ready:
+   if not opening and (ready_mask & bit)==0:
+    pulse_ends[hand.index]=clock+0.6
+    energy_pulse_end=clock+0.6
+   ready_mask|=bit
+  else:ready_mask &= ~bit
   paint_hand_card(hand,ready)
+  if ready and pulse_ends[hand.index]>clock:
+   canvas.draw_rect(hand.rect.grow(3),Color(0.65,1,0.82,(pulse_ends[hand.index]-clock)/0.6),false,5,true)
   if remaining>0:
    var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
    var radius=hand.rect.size.x*0.16
@@ -590,6 +609,8 @@ func paint_battle() -> void:
  var bar=energy_bar()
  var bar_width=bar.size.x
  canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
+ if energy_pulse_end>clock:
+  canvas.draw_rect(bar.grow(2),Color(0.58,0.90,1,(energy_pulse_end-clock)/0.6),false,5,true)
  var cells=Rect2(bar.position+Vector2(bar_width*0.42,5),Vector2(bar_width*0.55,bar.size.y-10))
  var charge=float(p.mana)+game.energy_elapsed/game.ENERGY_SECONDS
  for i in range(int(p.max_mana)):
@@ -599,8 +620,8 @@ func paint_battle() -> void:
  text('Energia  %d/%d' % [p.mana,p.max_mana],Rect2(bar.position+Vector2(3,1),Vector2(bar_width*0.41,bar.size.y)),int(bar.size.y*0.57),PAPER,true,true)
 
 func energy_bar() -> Rect2:
- var width=minf(layout.w*0.55,390.0)
- return Rect2((layout.w-width)/2,layout.h*0.951,width,clampf(layout.h*0.03,22,32))
+ var width=minf(layout.w*0.76,540.0)
+ return Rect2((layout.w-width)/2,layout.h*0.954,width,clampf(layout.h*0.04,29,48))
 
 func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
