@@ -111,9 +111,9 @@ func geometry() -> void:
   layout.slot_sizes.append(size)
   for x in SLOT_COLUMNS:
    var center=Vector2(x*arena_scale.x,layout.player_row if side==0 else layout.enemy_row)
-   var painted_center=Vector2(x,285 if side==0 else 167.5)
+   var floor_sample=Rect2(42,258 if side==0 else 139,22,54)
    layout.slots[side].append(Rect2(center-size/2,size))
-   layout.slot_sources[side].append(Rect2((painted_center-original_size/2)*texture_scale,original_size*texture_scale))
+   layout.slot_sources[side].append(Rect2(floor_sample.position*texture_scale,floor_sample.size*texture_scale))
  layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
@@ -388,7 +388,9 @@ func paint_base(c: CanvasItem) -> void:
   canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
   for side in range(2):
    for column in range(SLOT_COLUMNS.size()):
-    canvas.draw_texture_rect_region(ROYAL_ARENA,layout.slots[side][column],layout.slot_sources[side][column])
+    var slot: Rect2=layout.slots[side][column]
+    canvas.draw_texture_rect_region(ROYAL_ARENA,slot,layout.slot_sources[side][column])
+    canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
   fx.environment()
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
