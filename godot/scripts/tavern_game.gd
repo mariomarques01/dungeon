@@ -350,7 +350,7 @@ func pointer_up() -> void:
   'collection':cycle_card(held.id)
   'collection_remove':
    if held.id in profile.deck:profile.deck.erase(held.id);save_profile()
-  'card':selected_card=int(held.index);notify('Arraste para jogar, ou toque no campo/alvo.')
+  'card':selected_attacker=-1;selected_card=int(held.index);notify('Arraste para jogar, ou toque no campo/alvo.')
   'unit':
    if held.get('can_attack',true):selected_attacker=int(held.uid);notify('Arraste esta criatura até um inimigo.')
    else:inspect_id=held.id
@@ -364,6 +364,13 @@ func drop_position(point: Vector2) -> int:
 
 func activate_button(id: String) -> void:
  match id:
+  'exchange':
+   if screen!='battle' or busy or not panel.is_empty():return
+   var result=rules.exchange_card(0,selected_card)
+   if not result.ok:notify(result.reason);return
+   selected_card=-1;hover_card=-1
+   audio_engine.play('card_soft',-15.0)
+   notify('Nova carta: '+str(cards[result.id].name))
   'solar':request_solar()
   'start':start_match()
   'collection':screen='collection';collection_page=0;selected_card=-1

@@ -199,6 +199,9 @@ func prepare() -> void:
   button('settings',layout.settings,'⚙')
   if state.solar_ready() and not game.busy:
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
+  if game.selected_card>=0 and not game.busy and not state.done:
+   var exchange_rect=Rect2(layout.w*0.5-108,layout.h*0.448-22,216,44)
+   button('exchange',exchange_rect,'Trocar · 1 energia',state.players[0].mana>=1 and not state.players[0].deck.is_empty())
   button('power',layout.power,'1 DANO\n2 ENERGIA',not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
  elif game.screen=='home': prepare_home()
  elif game.screen=='collection': prepare_collection()
@@ -509,6 +512,9 @@ func paint_battle() -> void:
    canvas.draw_style_box(style(Color(0.2,0.75,1,0.15),Color('94e6ff'),30,3),rect.grow(4))
   if unit.sleeping and unit.attacks==0: text('Z',Rect2(rect.end-Vector2(14,rect.size.y-2),Vector2(30,30)),22,Color('c3dcec'),true,true)
   if 'windfury' in unit.keywords: text('↟',Rect2(rect.position-Vector2(7,20),Vector2(30,30)),20,GOLD,true)
+  var radius=minf(rect.size.x*0.18,rect.size.y*0.15)
+  badge(Vector2(rect.position.x+radius+2,rect.end.y-radius-2),str(unit.attack),Color('845018'),radius)
+  badge(rect.end-Vector2.ONE*(radius+2),str(unit.health),Color('922a38'),radius)
  for hand in hand_views:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
   var remaining=float(state.players[0].cooldowns.get(hand.index,0))
@@ -526,9 +532,13 @@ func paint_battle() -> void:
    var reason='Campo cheio' if full else 'Sem energia' if card.cost>state.players[0].mana else 'Sem alvo'
    text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
   if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
+ if game.drag.is_empty():
+  if game.selected_card>=0:
+   paint_targets({'kind':'card','index':game.selected_card,'id':state.players[0].hand[game.selected_card]})
+  elif game.selected_attacker>=0:paint_targets({'kind':'unit','uid':game.selected_attacker})
  fx.trail()
  if not game.drag.is_empty():
-  paint_targets()
+  paint_targets(game.drag)
   if game.drag.kind=='card':
    var size=Vector2(178,267) if game.portrait else Vector2(175,262)
    var held_rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
@@ -566,15 +576,15 @@ func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.5),width*2)
  canvas.draw_line(a,b,color.lightened(0.5),width)
 
-func paint_targets() -> void:
+func paint_targets(selection: Dictionary) -> void:
  var candidates=[]
  for uid in unit_views:candidates.append({'side':unit_views[uid].side,'uid':uid})
  for side in range(2):candidates.append({'side':side,'hero':true})
  for target in candidates:
   var valid=false
-  if game.drag.kind=='card' and game.cards[game.drag.id].get('target','none')!='none':valid=game.rules.can_play(0,int(game.drag.index),target).ok
-  elif game.drag.kind=='unit':valid=game.rules.can_attack(0,int(game.drag.uid),target).ok
-  elif game.drag.kind=='power':valid=game.rules.can_power(0,target).ok
+  if selection.kind=='card' and game.cards[selection.id].get('target','none')!='none':valid=game.rules.can_play(0,int(selection.index),target).ok
+  elif selection.kind=='unit':valid=game.rules.can_attack(0,int(selection.uid),target).ok
+  elif selection.kind=='power':valid=game.rules.can_power(0,target).ok
   if valid:
    var center=target_center(target)
    canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65+sin(clock*7)*0.2),4)
