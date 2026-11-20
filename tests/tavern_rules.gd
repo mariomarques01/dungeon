@@ -23,7 +23,7 @@ func _initialize() -> void:
  check(unit.attack==1 and unit.health==2 and unit.attacks==0,'Criatura entra com atributos e precisa esperar')
  check(not rules.can_attack(0,unit.uid,{'side':1,'hero':true}).ok,'Não ataca no turno de invocação')
  rules.end_turn();rules.end_turn()
- check(unit.attacks==1 and rules.players[0].max_mana==2,'Próximo turno renova criatura e aumenta mana')
+ check(unit.attacks==1 and rules.players[0].mana==0,'Próximo turno renova criatura e preserva energia gasta')
  var hp=rules.players[1].health
  check(rules.attack(0,unit.uid,{'side':1,'hero':true}).ok and rules.players[1].health==hp-1,'Criatura ataca o herói escolhido')
  check(not rules.can_attack(0,unit.uid,{'side':1,'hero':true}).ok,'Criatura não repete ataque no mesmo turno')

@@ -65,7 +65,13 @@ func draw(side: int, count=1) -> void:
 func start_turn(side: int) -> void:
  active=side
  var p=players[side]
- p.max_mana=mini(10,int(p.max_mana)+1); p.mana=p.max_mana; p.power_used=false
+ if side==1:
+  p.max_mana=mini(10,int(p.max_mana)+1)
+  p.mana=p.max_mana
+ elif turn==1:
+  p.max_mana=10
+  p.mana=1
+ p.power_used=false
  for unit in p.board:
   unit.sleeping=false;unit.frozen_lock=false
   if unit.frozen>0: unit.frozen-=1; unit.attacks=0;unit.frozen_lock=true
@@ -106,7 +112,7 @@ func can_play(side: int,index: int,target: Dictionary={}) -> Dictionary:
  var p=players[side]
  if index<0 or index>=p.hand.size(): return failure('Carta indisponível.')
  var c=cards[p.hand[index]]
- if int(c.cost)>int(p.mana): return failure('Mana insuficiente.')
+ if int(c.cost)>int(p.mana): return failure('Energia insuficiente.')
  if c.kind=='minion':
   if p.board.size()>=MAX_BOARD: return failure('Seu campo já tem 7 criaturas.')
   return {'ok':true}
@@ -297,7 +303,7 @@ func can_power(side: int,target: Dictionary={}) -> Dictionary:
  if done or side!=active: return failure('Aguarde seu turno.')
  var p=players[side]
  if p.power_used: return failure('Poder já usado neste turno.')
- if p.mana<2: return failure('O poder custa 2 de mana.')
+ if p.mana<2: return failure('O poder custa 2 de energia.')
  if side==0 and (not target_exists(target) or int(target.side)==side): return failure('Arraste o poder até um inimigo.')
  if side==1 and p.board.size()>=MAX_BOARD: return failure('Campo cheio.')
  return {'ok':true}

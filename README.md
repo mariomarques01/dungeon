@@ -8,7 +8,7 @@ Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos por turnos cont
 
 Arraste uma criatura da mão para o seu lado do tabuleiro. Arraste uma criatura pronta até um inimigo para atacar. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
 
-Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até sete criaturas de cada lado. A mana começa em 1 e aumenta até 10. Criaturas normalmente aguardam o próximo turno para atacar. O botão de encerrar turno entrega a vez à IA, que usa sua própria mão e mana.
+Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até sete criaturas de cada lado. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. O contador abaixo da mão indica quando cada carta pode ser jogada. A IA age automaticamente a cada 12 segundos do seu tempo de jogo.
 
 O conjunto tem **41 cartas colecionáveis**: 25 criaturas e 16 feitiços, além de três fichas de invocação. Há Provocar, Escudo Divino, Investida, Ímpeto, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
 
