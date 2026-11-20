@@ -98,8 +98,10 @@ func geometry() -> void:
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
  layout.gold_size=Vector2(gold_width,h*0.114)
+ layout.enemy_supports=[]
  layout.supports=[]
  for x in [0.253,0.747]:
+  layout.enemy_supports.append(Rect2(Vector2(w*x,h*0.202)-layout.gold_size/2,layout.gold_size))
   layout.supports.append(Rect2(Vector2(w*x,h*0.675)-layout.gold_size/2,layout.gold_size))
  var power_size=clampf(w*0.055,36,52)
  layout.power=Rect2(w*0.94-power_size/2,h*0.73-power_size/2,power_size,power_size)
@@ -117,7 +119,7 @@ func geometry() -> void:
    var offset=i+floori((5-list.size())/2.0)-2 if list.size()<=5 else i-(list.size()-1)/2.0
    var center=Vector2(w/2+offset*gap,row)
    var uid=int(list[i].uid)
-   var size=Vector2.ONE*minf(gap*0.83,h*0.12)*Vector2(1,1.28)
+   var size=Vector2(minf(w*0.104,gap*0.85),h*(0.109 if side==1 else 0.104))
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
  var size=Vector2(1,1.5)*minf(w*0.167,h*0.110)
@@ -155,13 +157,12 @@ func prepare() -> void:
     rect=Rect2(rect.get_center()-rect.size*factor/2,rect.size*factor)
    var hits=particles.filter(func(p): return p.kind=='damage' and int(p.get('target',{}).get('uid',-1))==uid and p.age<0.28)
    if not hits.is_empty():rect.position.x+=sin(hits[0].age*70)*8
-   rect.position.y+=sin(clock*1.8+uid)*1.4
    info.draw_rect=rect
    var resonating=(anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid) or particles.any(func(p):return p.get('response_id','')==info.unit.id and p.get('target',{}).get('uid',-1)==uid and p.age<0.65)
    if resonating:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
-    art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,true,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-7),true,sin(anim_time*12)*0.09 if anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid else 0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
+    art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
   if not game.drag.is_empty() and game.drag.kind=='card':
    var size=Vector2(178,267) if game.portrait else Vector2(175,262)
    var rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
@@ -222,10 +223,7 @@ func prepare_remains(g: Dictionary) -> void:
   rect=Rect2(rect.get_center()-rect.size*shrink/2,rect.size*shrink)
   tint.a=clampf(1-t*1.1,0,1)
   var key='dead'+str(g.uid)+'-'+str(part)
-  art(key,fragment_cache[cache_key],rect,true,t*(part-4)*0.12,tint,2)
-  # Every fragment shares the original oval mask, so no rectangular background leaks.
-  var texture_size=creatures.get_size()
-  nodes[key].material.set_shader_parameter('uv_rect',Vector4(base.region.position.x/texture_size.x,base.region.position.y/texture_size.y,base.region.size.x/texture_size.x,base.region.size.y/texture_size.y))
+  art(key,fragment_cache[cache_key],rect,false,t*(part-4)*0.12,tint,2)
 
 func prepare_card(key: String,id: String,rect: Rect2,angle=0.0,z=0,tint=Color.WHITE) -> void:
  var card=game.cards[id]
@@ -297,11 +295,15 @@ func ingest(events: Array,before: Array) -> void:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
    var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
-   floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
+   if not event.get('target',{}).has('uid'):
+    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
    particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
+  elif kind=='support':
+   var slot_rect: Rect2=layout.supports[event.slot] if event.side==0 else layout.enemy_supports[event.slot]
+   particles.append({'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'defense':event.defense,'id':event.id})
   elif kind=='summon':
    particles.append({'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
   elif kind=='death':
@@ -360,8 +362,10 @@ func paint_base(c: CanvasItem) -> void:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
    var unit=info.unit
    var ready=int(info.side)==0 and game.rules.active==0 and int(unit.attacks)>0 and not game.busy
-   if ready: oval(rect.grow(7),Color(0.2,1,0.45,0.08),Color(0.35,1,0.52,0.65+sin(clock*4)*0.15),3)
-   oval(rect,Color('30261f'),Color('b7b2a2') if 'taunt' in unit.keywords else Color('ab8150'),6 if 'taunt' in unit.keywords else 4)
+   var rim=Color('64b7ff') if info.side==0 else Color('ff8b57')
+   canvas.draw_rect(rect,Color('30261f'))
+   canvas.draw_rect(rect,rim,false,3,true)
+   if ready:canvas.draw_rect(rect.grow(2),Color(rim,0.45+0.2*sin(clock*3)),false,3,true)
 
 
 func paint_overlay(c: CanvasItem) -> void:
@@ -425,21 +429,21 @@ func paint_battle() -> void:
  var name_size=int(minf(plate.size.x*0.155,plate.size.y*0.34))
  text('Jogador 2',plate,name_size,Color.WHITE,true,true)
  text('Clã das Sombras',Rect2(plate.position+Vector2(0,name_size*1.35),plate.size),int(name_size*0.65),PAPER,true,true)
- for slot in range(state.supports.size()):
-  var support=state.supports[slot]
-  var rect: Rect2=layout.supports[slot]
-  var label='Defesa' if support.defense else 'Ataque'
-  if support.id!='':
-   var card=game.cards[support.id]
-   var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
-   var inset=Rect2(rect.position+rect.size*0.15,rect.size*0.70)
-   canvas.draw_texture_rect(picture,inset,false)
-   label+=' +%d' % state.support_strength(support.id)
-  if slot==game.pending_support:
-   canvas.draw_rect(rect,Color('ffdb65'),false,3,true)
-  var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
-  canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
-  text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
+ for side in range(2):
+  for slot in range(state.players[side].supports.size()):
+   var support=state.players[side].supports[slot]
+   var rect: Rect2=layout.supports[slot] if side==0 else layout.enemy_supports[slot]
+   var label='Defesa' if support.defense else 'Ataque'
+   if support.id!='':
+    var card=game.cards[support.id]
+    var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
+    var inset=Rect2(rect.position+rect.size*0.15,rect.size*0.70)
+    canvas.draw_texture_rect(picture,inset,false)
+   if side==0 and slot==game.pending_support:
+    canvas.draw_rect(rect,Color('ffdb65'),false,3,true)
+   var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
+   canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
+   text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
  for hero in hero_views:
   var p=state.players[int(hero.side)]
   var center=hero.rect.get_center()
@@ -447,10 +451,7 @@ func paint_battle() -> void:
   if p.armor>0:badge(hero.rect.position+Vector2(10,hero.rect.size.y-8),str(p.armor),Color('667e9a'),18)
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
-  oval(rect.grow(-2),Color.TRANSPARENT,Color('d6b56f'),2)
-  if rect.size.x>35:
-   badge(rect.position+Vector2(14,rect.size.y-6),str(unit.attack),Color('ac853b'),15)
-   badge(rect.position+Vector2(rect.size.x-14,rect.size.y-6),str(unit.health),Color('ac2833'),15)
+  canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
   fx.status(unit,rect)
   if unit.shield:
    oval(rect.grow(7),Color(1,0.9,0.4,0.08),Color(1,0.9,0.4,0.8),3)

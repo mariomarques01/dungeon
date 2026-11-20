@@ -126,10 +126,26 @@ func action() -> void:
  var time=v.anim_time;var element=str(a.get('element','arcane'));var id=str(a.get('id',''))
  var color=v.element_color(element);var origin: Vector2=a.origin;var dest: Vector2=a.destination
  var card=v.game.cards.get(id,{})
+ if a.kind=='power':
+  var charge=clampf(time/0.52,0,1)
+  var focus=origin.lerp(dest,smoothstep(0.12,0.52,time))
+  for i in range(3):
+   var twist=Vector2.from_angle(i*TAU/3+time*10)*(1-charge)*32
+   beam(focus+twist,focus+twist.rotated(-0.55),color,3,1-charge)
+  if time<0.52:glow(focus,9+12*charge,color)
+  elif a.side==1:shield(dest,1.4,color,clampf(1-(time-0.52)*2,0,1))
  if a.kind=='attack':
   var frame=Rect2(origin-Vector2(53,65),Vector2(106,130))
   if v.unit_views.has(int(a.get('uid',-1))):frame=v.unit_views[int(a.uid)].get('draw_rect',v.unit_views[int(a.uid)].rect)
   aura(id,frame,0.9,time)
+  if not ranged(id) and time>0.10 and time<0.42:
+   var travel=smoothstep(0.10,0.39,time)
+   var direction=(dest-origin).normalized()
+   var normal=direction.orthogonal()
+   for i in range(3):
+    var offset=normal*(i-1)*10
+    var tip=origin.lerp(dest,travel)+offset
+    beam(tip-direction*(18+32*sin(travel*PI)),tip,color,3-i*0.5,sin(travel*PI))
   var phase=clampf((time-0.27)/0.34,0,1)
   if phase>0 and phase<1:impact(dest,element,phase,1.0,id)
   if ranged(id) and time<0.38:
@@ -202,7 +218,7 @@ func action() -> void:
     c.draw_rect(rect,Color(0.91,0.76,0.45,fade*0.3));c.draw_rect(rect,Color(0.95,0.85,0.61,fade),false,2)
     for j in range(3):beam(p+Vector2(-12,-12+j*10),p+Vector2(12,-12+j*10),color,1,fade)
   'crystal':
-   var p=dest.lerp(v.layout.mana+Vector2(140,0),t)
+   var p=dest.lerp(Vector2(v.layout.w*0.5,v.layout.h*0.966),t)
    shard(p,-PI/2,36,Color('81deff'),fade);ring(p,43,Color('7fcfff'),fade,time*3)
   _:
    if time<0.52:projectile(origin,dest,t,element,color)
@@ -265,6 +281,13 @@ func event(p: Dictionary) -> void:
   aura(str(p.response_id),Rect2(at-Vector2(50,62),Vector2(100,124)),fade,p.age)
  if kind=='summon' and v.unit_views.has(int(p.uid)):at=v.unit_views[int(p.uid)].rect.get_center()
  match kind:
+  'support':
+   var travel=clampf(t/0.52,0,1)
+   if travel<1:
+    ring(p.origin,14+22*travel,color,1-travel,travel*PI)
+    projectile(p.origin,at,travel,element,color)
+   elif p.defense:shield(at,1+0.4*sin(PI*(t-0.52)/0.48),color,fade*2)
+   else:impact(at,element,(t-0.52)/0.48,fade*2,p.id)
   'damage':
    if p.age<0.18:c.draw_circle(at,57,Color(1,0.23,0.12,(0.18-p.age)*1.8))
    impact(at,element,t,1,str(p.get('id','')))
@@ -288,7 +311,11 @@ func event(p: Dictionary) -> void:
    elif element=='earth':impact(at,'earth',t,0.7)
    else:
     for i in range(8):glow(at+Vector2.from_angle(i*2.4+p.age)*float(65*(1-t)),6,color,fade)
-  'armor','blocked':shield(at,1.3+sin(t*PI)*0.15,Color('ffe3a0'),fade)
+  'armor','blocked':
+   shield(at,1.3+sin(t*PI)*0.15,Color('ffe3a0'),fade)
+   for i in range(6):
+    var angle=i*TAU/6+t*0.8
+    shard(at+Vector2.from_angle(angle)*(26+38*t),angle,14*fade,color,fade)
   'shield_break':
    for i in range(10):shard(at+Vector2.from_angle(i*TAU/10)*(35+t*65),i*TAU/10,22,Color('ffe49b'),fade)
   'heal','buff':

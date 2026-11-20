@@ -17,12 +17,12 @@ func _init(definitions: Dictionary) -> void:
  cards=definitions
  random.randomize()
 
-var supports: Array=[]
 
-func equip_support(slot: int,index: int) -> Dictionary:
- if done or active!=0:return failure('Aguarde sua vez.')
+func equip_support(slot: int,index: int,side=0) -> Dictionary:
+ if done or active!=side:return failure('Aguarde sua vez.')
+ var supports: Array=players[side].supports
  if slot<0 or slot>=supports.size():return failure('Escolha uma casa dourada.')
- var player=players[0]
+ var player=players[side]
  if index<0 or index>=player.hand.size():return failure('Carta indisponível.')
  var id=player.hand[index]
  var cost=int(cards[id].cost)
@@ -35,19 +35,34 @@ func equip_support(slot: int,index: int) -> Dictionary:
 func support_strength(id: String) -> int:
  return clampi(ceili(float(cards[id].cost)/2),1,4)
 
-func resolve_supports() -> void:
- for support in supports:
+func choose_rival_support() -> void:
+ var rival=players[1]
+ if rival.board.is_empty() and turn<=2:return
+ for slot in range(2):
+  var support=rival.supports[slot]
+  support.defense=rival.health<14 or (slot==1 and players[0].health>10)
+  if support.id!='':continue
+  var best=-1
+  for i in range(rival.hand.size()):
+   var cost=int(cards[rival.hand[i]].cost)
+   if cost<=rival.mana and (best<0 or support_strength(rival.hand[i])>support_strength(rival.hand[best])):best=i
+  if best>=0:equip_support(slot,best,1)
+
+func resolve_supports(side: int) -> void:
+ for slot in range(2):
+  var support=players[side].supports[slot]
   if support.id=='':continue
   var amount=support_strength(support.id)
+  var target={'side':side if support.defense else 1-side,'hero':true}
+  events.append({'kind':'support','slot':slot,'side':side,'id':support.id,'target':target,'defense':support.defense,'element':cards[support.id].element})
   if support.defense:
-   players[0].armor+=amount
-   events.append({'kind':'armor','side':0,'target':{'side':0,'hero':true},'amount':amount})
+   players[side].armor+=amount
+   events.append({'kind':'armor','side':side,'target':target,'amount':amount})
   else:
-   damage({'side':1,'hero':true},amount,cards[support.id].element)
+   damage(target,amount,cards[support.id].element)
 
 func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
  if random_seed>=0: random.seed=random_seed
- supports=[{'id':'','defense':false},{'id':'','defense':true}]
  players=[]; active=0; turn=1; done=false; outcome=''; next_uid=1; events=[]
  for side in range(2):
   var chosen=deck if side==0 else enemy_deck if not enemy_deck.is_empty() else DEFAULT_DECK
@@ -55,7 +70,7 @@ func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
   for i in range(pile.size()-1,0,-1):
    var j=random.randi_range(0,i)
    var swap=pile[i]; pile[i]=pile[j]; pile[j]=swap
-  players.append({'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false})
+  players.append({'supports':[{'id':'','defense':false},{'id':'','defense':true}],'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false})
   for i in range(3): draw(side)
   # An opening one-cost creature keeps the first match interactive for both sides.
   var opening: Array=players[side].hand
@@ -112,10 +127,9 @@ func end_turn() -> Dictionary:
  if done: return failure('A partida terminou.')
  events=[]
  for unit in players[active].board:unit.frozen_lock=false
- if active==0:
-  resolve_supports()
-  check_end()
-  if done:return success()
+ resolve_supports(active)
+ check_end()
+ if done:return success()
  turn+=1
  start_turn(1-active)
  return success()

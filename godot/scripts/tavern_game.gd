@@ -268,10 +268,10 @@ func pointer_down() -> void:
  var slot=support_at(pointer)
  if slot>=0:
   if selected_card>=0:place_support(slot,selected_card)
-  elif rules.supports[slot].id!='':
+  elif rules.players[0].supports[slot].id!='':
    pending_support=-1
-   rules.supports[slot].defense=not rules.supports[slot].defense
-   notify('Apoio em defesa.' if rules.supports[slot].defense else 'Apoio em ataque.')
+   rules.players[0].supports[slot].defense=not rules.players[0].supports[slot].defense
+   notify('Apoio em defesa.' if rules.players[0].supports[slot].defense else 'Apoio em ataque.')
   else:
    pending_support=slot
    notify('Escolha uma carta da mão para este apoio.')
@@ -485,6 +485,7 @@ func run_rival_turn() -> void:
  if rules.done:return
  await get_tree().create_timer(0.45/speed).timeout
  if serial!=match_serial:return
+ rules.choose_rival_support()
  for i in range(12):
   if rules.done or serial!=match_serial:return
   var plan=rules.ai_play()
