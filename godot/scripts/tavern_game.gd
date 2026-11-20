@@ -291,7 +291,6 @@ func drop_position(point: Vector2) -> int:
 
 func activate_button(id: String) -> void:
  match id:
-  'arena':get_tree().change_scene_to_file('res://scenes/main.tscn')
   'start':start_match()
   'collection':screen='collection';collection_page=0;selected_card=-1
   'home':screen='home';panel='';inspect_id='';match_serial+=1;busy=false;audio_engine.stop_music()
