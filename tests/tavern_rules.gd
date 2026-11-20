@@ -137,4 +137,10 @@ func _initialize() -> void:
  var armor_before=rules.players[0].armor
  rules.end_turn()
  check(rules.players[0].armor==armor_before-2 and rules.players[1].armor==1,'Os apoios rivais atacam e defendem o lado correto')
+ fresh()
+ rules.players[0].mana=9
+ check(not rules.solar_flare().ok and rules.players[0].mana==9,'Especial bloqueado antes da carga completa')
+ rules.players[0].mana=10
+ check(rules.solar_flare().ok and rules.players[1].health==24 and rules.players[0].armor==4,'Erupção Solar causa dano e concede armadura')
+ check(rules.players[0].mana==0 and not rules.solar_flare().ok,'Especial consome a carga uma única vez')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
