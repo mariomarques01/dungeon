@@ -163,6 +163,13 @@ func action() -> void:
  var fade=clampf(1.0-(time-0.52)/0.62,0,1)
  if time<0.5:ring(origin,20+sin(t*PI)*24,color,0.8,time*4)
  match id:
+  'solar':
+   if time<0.52:
+    ring(origin,24+42*t,Color('ffd65d'),1-t*0.4,time*3)
+    projectile(origin,dest,t,'fire',Color('ffb33e'))
+   else:
+    impact(dest,'fire',clampf((time-0.52)/0.60,0,1),fade)
+    shield(origin,1.25,Color('ffda70'),fade)
   'meteor':
    var row=v.layout.enemy_row if a.get('side',0)==0 else v.layout.player_row
    for i in range(5):

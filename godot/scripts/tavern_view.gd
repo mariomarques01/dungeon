@@ -174,6 +174,8 @@ func prepare() -> void:
   for g in ghosts:
    prepare_remains(g)
   button('settings',layout.settings,'⚙')
+  if state.solar_ready() and not game.busy:
+   button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
   button('power',layout.power,'1 DANO\n2 ENERGIA',state.active==0 and not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
  elif game.screen=='home': prepare_home()
  elif game.screen=='collection': prepare_collection()
@@ -484,8 +486,8 @@ func paint_battle() -> void:
   fx.action()
  paint_particles()
  var p=state.players[0]
- var bar_width=minf(layout.w*0.55,390.0)
- var bar=Rect2((layout.w-bar_width)/2,layout.h*0.951,bar_width,clampf(layout.h*0.03,22,32))
+ var bar=energy_bar()
+ var bar_width=bar.size.x
  canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
  var cells=Rect2(bar.position+Vector2(bar_width*0.42,5),Vector2(bar_width*0.55,bar.size.y-10))
  var charge=float(p.mana)+game.energy_elapsed/game.ENERGY_SECONDS
@@ -494,6 +496,10 @@ func paint_battle() -> void:
   canvas.draw_rect(cell,Color('302c4b'))
   canvas.draw_rect(Rect2(cell.position,Vector2(cell.size.x*clampf(charge-i,0,1),cell.size.y)),Color('53b6ff'))
  text('Energia  %d/%d' % [p.mana,p.max_mana],Rect2(bar.position+Vector2(3,1),Vector2(bar_width*0.41,bar.size.y)),int(bar.size.y*0.57),PAPER,true,true)
+
+func energy_bar() -> Rect2:
+ var width=minf(layout.w*0.55,390.0)
+ return Rect2((layout.w-width)/2,layout.h*0.951,width,clampf(layout.h*0.03,22,32))
 
 func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
@@ -560,6 +566,11 @@ func paint_button(info: Dictionary) -> void:
  var rect: Rect2=info.rect
  var enabled=info.enabled
  var primary=info.primary
+ if info.id=='solar':
+  var bar=energy_bar()
+  canvas.draw_style_box(style(Color('703515'),Color('ffce60').lerp(Color.WHITE,0.25+0.2*sin(clock*4)),8,2),bar)
+  text('10/10   ·   '+info.label,Rect2(bar.position+Vector2(0,1),bar.size),int(bar.size.y*0.58),Color('fff0ba'),true,true)
+  return
  if info.id=='power':
   canvas.draw_texture_rect(slice(spells,0,4,4),rect,false)
   badge(rect.position+rect.size*Vector2(0.81,0.83),'2',Color('287cb2') if enabled else Color('414054'),12)

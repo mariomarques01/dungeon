@@ -346,6 +346,20 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  resolve_deaths()
  return success()
 
+const SOLAR_COST=10
+
+func solar_ready() -> bool:
+ return not done and active==0 and players[0].mana>=SOLAR_COST
+
+func solar_flare() -> Dictionary:
+ if not solar_ready():return failure('Aguarde sua vez e carregue 10 de energia.')
+ events=[]
+ players[0].mana-=SOLAR_COST
+ damage({'side':1,'hero':true},6,'fire')
+ players[0].armor+=4
+ events.append({'kind':'armor','side':0,'target':{'side':0,'hero':true},'amount':4})
+ return success()
+
 func can_power(side: int,target: Dictionary={}) -> Dictionary:
  if done or side!=active: return failure('Aguarde seu turno.')
  var p=players[side]

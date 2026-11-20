@@ -345,6 +345,7 @@ func drop_position(point: Vector2) -> int:
 
 func activate_button(id: String) -> void:
  match id:
+  'solar':request_solar()
   'start':start_match()
   'collection':screen='collection';collection_page=0;selected_card=-1
   'home':screen='home';panel='';inspect_id='';match_serial+=1;busy=false;audio_engine.stop_music()
@@ -423,6 +424,24 @@ func request_attack(uid: int,target: Dictionary,side=0) -> void:
  var result=rules.attack(side,uid,target)
  view.ingest(result.events,before);play_events(result.events,element,before)
  await at_time(0.85)
+ if serial!=match_serial:return
+ view.finish();busy=false;check_result()
+
+func request_solar() -> void:
+ if screen!='battle' or busy or not panel.is_empty() or not inspect_id.is_empty() or not rules.solar_ready():return
+ busy=true
+ selected_card=-1;selected_attacker=-1;pending_support=-1
+ var serial=match_serial
+ var target={'side':1,'hero':true}
+ view.begin({'kind':'power','side':0,'id':'solar','card_kind':'spell','element':'fire','origin':view.layout.player_hero.get_center(),'destination':view.target_center(target),'target':target})
+ audio_engine.charge('fire')
+ await at_time(0.52)
+ if serial!=match_serial:return
+ var before=rules.players.duplicate(true)
+ var result=rules.solar_flare()
+ energy_elapsed=0.0
+ view.ingest(result.events,before);play_events(result.events,'fire',before)
+ await at_time(1.12)
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
 
