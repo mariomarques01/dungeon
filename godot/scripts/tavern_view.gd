@@ -95,11 +95,11 @@ func geometry() -> void:
  layout={'w':w,'h':h,'mobile':mobile}
  layout.enemy_hero=Rect2(w*0.40,h*0.032,w*0.20,h*0.128)
  layout.player_hero=Rect2(w*0.374,h*0.614,w*0.252,h*0.139)
- var slot_width=w*0.95/game.rules.MAX_BOARD
- var unit_width=minf(slot_width*0.95,h*0.134*0.74)
- layout.unit_size=Vector2(unit_width,unit_width/0.74)
- layout.enemy_row=h*0.328
- layout.player_row=h*0.545
+ # Coordinates measured on a 384 x 512 reference of the painted arena.
+ var arena_scale=Vector2(w/384.0,h/512.0)
+ layout.slot_sizes=[Vector2(40,54)*arena_scale,Vector2(40,57)*arena_scale]
+ layout.player_row=285*arena_scale.y
+ layout.enemy_row=167.5*arena_scale.y
  layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
@@ -120,11 +120,12 @@ func geometry() -> void:
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
   var row=float(layout.player_row if side==0 else layout.enemy_row)
+  var first_slot=floori((state.MAX_BOARD-list.size())/2.0)
   for i in range(list.size()):
-   var offset=i-(list.size()-1)/2.0
-   var center=Vector2(w/2+offset*minf(slot_width,layout.unit_size.x*1.08),row)
+   var column=first_slot+i
+   var center=Vector2([89,141,192,243,295][column]*arena_scale.x,row)
    var uid=int(list[i].uid)
-   var size: Vector2=layout.unit_size
+   var size: Vector2=layout.slot_sizes[side]
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
  var frame_ratio=float(HAND_FRAME.get_width())/HAND_FRAME.get_height()
@@ -326,7 +327,7 @@ func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
   elif kind=='death':
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
-     var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.unit_size/2,layout.unit_size)
+     var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.slot_sizes[event.side]/2,layout.slot_sizes[event.side])
      var cause=str(causes.get(int(event.uid),action.get('element','dark')))
      ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
      particles.append({'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
