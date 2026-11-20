@@ -130,10 +130,31 @@ func layout_board() -> void:
  art_layer.position=board_transform.origin;art_layer.scale=Vector2(factor,factor)
  overlay.position=board_transform.origin;overlay.scale=Vector2(factor,factor)
 
+const ENERGY_SECONDS=3.0
+const RIVAL_SECONDS=12.0
+var energy_elapsed=0.0
+var rival_elapsed=0.0
+
+func advance_battle(delta: float) -> void:
+ if screen!='battle' or rules.done or not panel.is_empty() or not inspect_id.is_empty():return
+ var player=rules.players[0]
+ if player.mana<player.max_mana:
+  energy_elapsed+=delta
+  var earned=floori(energy_elapsed/ENERGY_SECONDS)
+  player.mana=mini(player.max_mana,player.mana+earned)
+  energy_elapsed=fmod(energy_elapsed,ENERGY_SECONDS)
+ if player.mana>=player.max_mana:energy_elapsed=0.0
+ if rules.active!=0:return
+ rival_elapsed+=delta
+ if rival_elapsed>=RIVAL_SECONDS and not busy and drag.is_empty() and press.is_empty():
+  rival_elapsed=0.0
+  run_rival_turn()
+
 func _process(delta: float) -> void:
  if not view:return
  clock+=delta;toast_time=maxf(0,toast_time-delta)
  layout_board();view.tick(delta);audio_engine.update(delta)
+ advance_battle(delta*speed)
  if not press.is_empty() and drag.is_empty() and clock-float(press.time)>0.6 and press.kind in ['card','unit','collection']:
   inspect_id=press.id;press={};selected_card=-1
  view.prepare();queue_redraw();overlay.queue_redraw()
@@ -281,7 +302,7 @@ func pointer_up() -> void:
   'unit':
    if held.get('can_attack',true):selected_attacker=int(held.uid);notify('Arraste esta criatura até um inimigo.')
    else:inspect_id=held.id
-  'power':notify('Arraste o poder até um inimigo. Custa 2 de mana.')
+  'power':notify('Arraste o poder até um inimigo. Custa 2 de energia.')
 
 func drop_position(point: Vector2) -> int:
  var board: Array=rules.players[0].board
@@ -303,7 +324,6 @@ func activate_button(id: String) -> void:
   'speed':
    speed=1.5 if speed==1.0 else 2.0 if speed==1.5 else 1.0
    if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('dungeon_battle_speed','"+str(speed)+"')")
-  'end':end_player_turn()
   'previous':collection_page=maxi(0,collection_page-1)
   'next':collection_page+=1
   'filter':collection_filter=(collection_filter+1)%3;collection_page=0
@@ -319,6 +339,7 @@ func cycle_card(id: String) -> void:
 func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';busy=false;rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
+ energy_elapsed=0.0; rival_elapsed=0.0
  rules.start(profile.deck)
  view.anim={};view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
  audio_engine.start_music();toast_time=0
@@ -421,14 +442,13 @@ func play_events(events: Array,element: String,before: Array=[]) -> void:
   if not sound.is_empty() and not played.has(sound):
    audio_engine.play(sound,gain,1.0,{'card':source,'event':kind,'element':event_element});played[sound]=true
 
-func end_player_turn() -> void:
+func run_rival_turn() -> void:
  if busy or rules.done or rules.active!=0:return
  selected_card=-1;selected_attacker=-1;drag={};inspect_id=''
  var serial=match_serial
  var before=rules.players.duplicate(true)
  var result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
  if rules.done:return
- notify('Turno do rival')
  await get_tree().create_timer(0.45/speed).timeout
  if serial!=match_serial:return
  for i in range(12):
@@ -446,7 +466,6 @@ func end_player_turn() -> void:
  if serial!=match_serial or rules.done:return
  before=rules.players.duplicate(true)
  result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
- if not rules.done:notify('Seu turno · +1 cristal de mana')
 
 func check_result() -> void:
  if not rules.done:return

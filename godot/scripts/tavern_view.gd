@@ -98,23 +98,20 @@ func geometry() -> void:
  layout.player_hero=Rect2(Vector2(w*0.5,h*0.694)-Vector2(hero_width/2,h*0.074),Vector2(hero_width,h*0.148))
  layout.enemy_row=h*0.328
  layout.player_row=h*0.558
- layout.player_drop=Rect2(w*0.085,h*0.468,w*0.83,h*0.196)
- layout.board_zone=Rect2(w*0.05,h*0.15,w*0.9,h*0.57)
- var end_size=Vector2(minf(w*0.16,140),clampf(h*0.048,40,60))
- layout.end=Rect2(Vector2(w*0.986-end_size.x,h*0.454-end_size.y/2),end_size)
+ layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
+ layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
  layout.gold_size=Vector2(gold_width,h*0.114)
- layout.power=Rect2(Vector2(w*0.253,h*0.67)-layout.gold_size/2,layout.gold_size)
+ layout.power=Rect2(Vector2(w*0.234,h*0.67)-layout.gold_size/2,layout.gold_size)
  var gear_size=clampf(w*0.066,44,62)
  layout.settings=Rect2(w*0.986-gear_size,h*0.011,gear_size,gear_size)
- layout.mana=Vector2(w/2-150,h-52)
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
  if game.screen!='battle': return
  var state=game.rules
  for side in range(2):
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
-  var gap=minf(w*0.134,w*0.76/maxi(5,list.size()))
+  var gap=minf(w*0.159,w*0.90/maxi(5,list.size()))
   var row=float(layout.player_row if side==0 else layout.enemy_row)
   for i in range(list.size()):
    var center=Vector2(w/2+(i-(list.size()-1)/2.0)*gap,row)
@@ -122,11 +119,11 @@ func geometry() -> void:
    var size=Vector2.ONE*minf(gap*0.83,h*0.12)*Vector2(1,1.28)
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
- var size=Vector2(1,1.5)*minf(w*0.168,h*0.113)
+ var size=Vector2(1,1.5)*minf(w*0.167,h*0.110)
  var spacing=minf(size.x*0.99,(w*0.83-size.x)/maxi(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
-  var center=Vector2(w/2+f*spacing,h*0.864)
+  var center=Vector2(w/2+f*spacing,h*0.857)
   var angle=0.0
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
@@ -166,10 +163,6 @@ func prepare() -> void:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,true,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
    art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-7),true,sin(anim_time*12)*0.09 if anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid else 0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
-  for hand in hand_views:
-   if game.drag.get('kind','')=='card' and int(game.drag.get('index',-1))==int(hand.index): continue
-   if not anim.is_empty() and anim.get('kind','')=='card' and anim.get('side',0)==0 and int(anim.get('index',-1))==int(hand.index) and not anim.get('resolved',false): continue
-   prepare_card('hand'+str(hand.index),hand.id,hand.rect,hand.angle,10+int(hand.index))
   if not game.drag.is_empty() and game.drag.kind=='card':
    var size=Vector2(178,267) if game.portrait else Vector2(175,262)
    var rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
@@ -180,9 +173,8 @@ func prepare() -> void:
    prepare_card('cast',anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   for g in ghosts:
    prepare_remains(g)
-  button('end',layout.end,'ENCERRAR\nTURNO' if state.active==0 else 'TURNO DO\nRIVAL',state.active==0 and not game.busy)
   button('settings',layout.settings,'⚙')
-  button('power',layout.power,'1 DANO\n2 MANA',state.active==0 and not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
+  button('power',layout.power,'1 DANO\n2 ENERGIA',state.active==0 and not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
  elif game.screen=='home': prepare_home()
  elif game.screen=='collection': prepare_collection()
  if not game.inspect_id.is_empty():
@@ -304,7 +296,7 @@ func ingest(events: Array,before: Array) -> void:
   if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',anim.get('element','dark'))
   if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
-   var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ MANA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
+   var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
    particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
@@ -353,18 +345,18 @@ func paint_base(c: CanvasItem) -> void:
  if game.screen=='battle':
   canvas.draw_rect(bounds,Color('19132b'))
   canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
-  var slot_width=minf(layout.w*0.110,layout.h*0.094)
+  var slot_width=minf(layout.w*0.124,layout.h*0.094)
   var slot_size=Vector2(slot_width,layout.h*0.113)
   var gold_size: Vector2=layout.gold_size
   for side in range(2):
    var row=layout.player_row if side==0 else layout.enemy_row
    for column in range(5):
-    var center=Vector2(layout.w*(0.5+(column-2)*0.134),row)
+    var center=Vector2(layout.w*(0.5+(column-2)*0.159),row)
     var glow=Color("2986ff") if side==0 else Color("ff6023")
     var slot=Rect2(center-slot_size/2,slot_size).grow(-2)
     canvas.draw_rect(slot.grow(2),Color(glow,0.16),false,7,true)
     canvas.draw_texture_rect(ROYAL_BLUE if side==0 else ROYAL_RED,Rect2(center-slot_size/2,slot_size),false)
-   for x in [0.253,0.747]:
+   for x in [0.234,0.766]:
     var center=Vector2(layout.w*x,layout.h*(0.67 if side==0 else 0.202))
     canvas.draw_texture_rect(ROYAL_GOLD,Rect2(center-gold_size/2,gold_size),false)
  else:
@@ -412,10 +404,22 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
  text(str(int(card.cost)),Rect2(local.position+local.size*Vector2(0.025,0.024),local.size*Vector2(0.22,0.16)),int(23*factor),Color.WHITE,true,true)
  text(card.name,Rect2(local.position+local.size*Vector2(0.11,0.525),local.size*Vector2(0.79,0.10)),int((11 if card.name.length()>20 else 12)*factor),Color('3b281b'),true,true)
  wrapped(card.text,Rect2(local.position+local.size*Vector2(0.16,0.65),local.size*Vector2(0.69,0.20)),int(10*factor),Color('3b2d24'),true)
- if card.kind=='minion':
-  text(str(int(card.attack)),Rect2(local.position+local.size*Vector2(0.05,0.815),local.size*Vector2(0.23,0.14)),int(24*factor),Color.WHITE,true,true)
-  text(str(int(card.health)),Rect2(local.position+local.size*Vector2(0.75,0.815),local.size*Vector2(0.23,0.14)),int(24*factor),Color.WHITE,true,true)
  canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+func paint_hand_card(hand: Dictionary,available: bool) -> void:
+ var r: Rect2=hand.rect
+ var card=game.cards[hand.id]
+ var scale=r.size.x/150.0
+ var edge=Color('438dff') if available else Color('544960')
+ canvas.draw_style_box(style(Color('382137'),edge,10,3),r.grow(2))
+ canvas.draw_style_box(style(Color('422740'),Color('eeb04f'),8,3),r)
+ var inset=r.grow(-5*scale)
+ var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
+ canvas.draw_texture_rect(picture,Rect2(inset.position,inset.size*Vector2(1,0.75)),false,Color.WHITE if available else Color('bab0b8'))
+ var label=Rect2(inset.position+Vector2(0,inset.size.y*0.73),inset.size*Vector2(1,0.27))
+ canvas.draw_style_box(style(Color('e6be80'),Color('99632e'),5,2),label)
+ text(card.name,Rect2(label.position+Vector2(1,label.size.y*0.16),label.size-Vector2(2,0)),maxi(9,int((12 if card.name.length()>19 else 14)*scale)),INK,true,true)
+ badge(r.position+Vector2(11,12)*scale,str(card.cost),Color('185788'),15*scale)
 
 func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
  var points=PackedVector2Array()
@@ -454,7 +458,7 @@ func paint_battle() -> void:
  for hand in hand_views:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
   if not anim.is_empty() and anim.get('kind','')=='card' and anim.get('side',0)==0 and anim.index==hand.index and not anim.get('resolved',false): continue
-  paint_card(hand.id,hand.rect,hand.angle)
+  paint_hand_card(hand,game.cards[hand.id].cost<=state.players[0].mana)
   if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
   if game.cards[hand.id].cost<=state.players[0].mana and state.active==0 and not game.busy:
    # A light accent under the physical card makes playable cards readable without neon frames.
@@ -478,13 +482,16 @@ func paint_battle() -> void:
   fx.action()
  paint_particles()
  var p=state.players[0]
- var mana_start=Vector2(layout.w/2-88,layout.h*0.969)
- for i in range(10):
-  var at=mana_start+Vector2(i*18,0)
-  var color=Color('48aaf4') if i<int(p.mana) else Color('274364') if i<int(p.max_mana) else Color('3b353c')
-  canvas.draw_colored_polygon(PackedVector2Array([at+Vector2(0,-9),at+Vector2(8,0),at+Vector2(0,9),at+Vector2(-8,0)]),color)
- text('%d / %d' % [p.mana,p.max_mana],Rect2(mana_start+Vector2(-75,-17),Vector2(65,30)),20,Color('d7ebff'),true)
- text('Turno %d  ·  %d no baralho' % [int((state.turn+1)/2),p.deck.size()],Rect2(layout.w*0.70,layout.h*0.958,layout.w*0.28,25),13,PAPER,true,true)
+ var bar_width=minf(layout.w*0.55,390.0)
+ var bar=Rect2((layout.w-bar_width)/2,layout.h*0.951,bar_width,clampf(layout.h*0.03,22,32))
+ canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
+ var cells=Rect2(bar.position+Vector2(bar_width*0.42,5),Vector2(bar_width*0.55,bar.size.y-10))
+ var charge=float(p.mana)+game.energy_elapsed/game.ENERGY_SECONDS
+ for i in range(int(p.max_mana)):
+  var cell=Rect2(cells.position+Vector2(cells.size.x*i/p.max_mana,0),Vector2(cells.size.x/p.max_mana-2,cells.size.y))
+  canvas.draw_rect(cell,Color('302c4b'))
+  canvas.draw_rect(Rect2(cell.position,Vector2(cell.size.x*clampf(charge-i,0,1),cell.size.y)),Color('53b6ff'))
+ text('Energia  %d/%d' % [p.mana,p.max_mana],Rect2(bar.position+Vector2(3,1),Vector2(bar_width*0.41,bar.size.y)),int(bar.size.y*0.57),PAPER,true,true)
 
 func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
@@ -560,7 +567,6 @@ func paint_button(info: Dictionary) -> void:
  canvas.draw_line(rect.position+Vector2(12,5),rect.position+Vector2(rect.size.x-12,5),Color(1,0.92,0.65,0.35),2)
  var font_size=25 if primary else 19
  if info.id=='settings': font_size=28
- if info.id=='end': font_size=14
  if info.id=='power': font_size=13
  var lines=info.label.split('\n').size()
  var y=rect.position.y+(rect.size.y-font_size*1.16*lines)/2
