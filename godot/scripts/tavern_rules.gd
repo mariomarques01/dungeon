@@ -35,6 +35,18 @@ func equip_support(slot: int,index: int,side=0) -> Dictionary:
  supports[slot].id=id
  return {'ok':true}
 
+func exchange_card(side: int,index: int) -> Dictionary:
+ var player=players[side]
+ if done or not realtime or index<0 or index>=player.hand.size():return failure('Carta indisponível.')
+ if player.cooldowns.has(index):return failure('Carta recarregando.')
+ if player.deck.is_empty():return failure('O baralho está vazio.')
+ if player.mana<1:return failure('Trocar custa 1 de energia.')
+ var replacement=player.deck.pop_back()
+ player.deck.push_front(player.hand[index])
+ player.hand[index]=replacement
+ player.mana-=1
+ return {'ok':true,'id':replacement}
+
 func consume_slot(player: Dictionary,index: int) -> void:
  if realtime:player.cooldowns[index]=REUSE_SECONDS
  else:player.hand.remove_at(index)
@@ -474,11 +486,11 @@ func ai_attack() -> Dictionary:
   for target in enemy_targets(1):
    if not can_attack(1,int(unit.uid),target).ok: continue
    var score=float(unit.attack)*0.5
-   if target.get('hero',false): score+=10000 if unit.attack>=players[0].health else 3
+   if target.get('hero',false): score+=10000 if unit.attack>=players[0].health+players[0].armor else 3
    else:
     var enemy=find_unit(0,int(target.uid))
-    if unit.attack>=enemy.health or 'poison' in unit.keywords: score+=int(cards[enemy.id].cost)*3+4
-    if enemy.attack>=unit.health: score-=int(cards[unit.id].cost)*2
+    if not enemy.shield and (unit.attack>=enemy.health or 'poison' in unit.keywords): score+=int(cards[enemy.id].cost)*3+4
+    if not unit.shield and (enemy.attack>=unit.health or (enemy.attack>0 and 'poison' in enemy.keywords)): score-=int(cards[unit.id].cost)*2
     if 'taunt' in enemy.keywords: score+=5
    if score>best_score: best_score=score; best={'kind':'attack','uid':unit.uid,'target':target}
  return best

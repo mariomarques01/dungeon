@@ -10,6 +10,8 @@ Arraste uma criatura da mão para o seu lado do tabuleiro. Arraste uma criatura 
 
 Cada herói começa com 30 de vida. Cada jogador tem um baralho de 30 cartas, até cinco cartas na mão e espaço para cinco criaturas no campo. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. Ao jogar uma carta ou equipá-la como apoio, ela permanece na mão e recarrega por 5 segundos. A borda azul mostra o progresso e a verde indica uma carta disponível. Cada cópia recarrega separadamente. A IA age durante o duelo e os apoios ativam a cada 12 segundos de jogo.
 
+Toque em uma carta pronta e escolha **Trocar · 1 energia** para colocá-la no fundo do baralho e receber a carta do topo no mesmo espaço. Ao selecionar uma criatura pronta para atacar ou um feitiço com alvo, os alvos válidos ficam destacados. Cada criatura mostra ataque em dourado e vida atual em vermelho.
+
 Com 10/10 de energia, toque em **Lançar Erupção Solar** na barra abaixo da mão. A habilidade consome os 10 pontos, causa 6 de dano ao herói rival e concede 4 de armadura à sua heroína. Você também pode guardar a carga para jogar cartas.
 
 O conjunto tem **41 cartas colecionáveis**: 25 criaturas e 16 feitiços, além de três fichas de invocação. Há Provocar, Escudo Divino, Investida, Ímpeto, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.

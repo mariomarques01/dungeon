@@ -154,4 +154,10 @@ func _initialize() -> void:
  check(not rules.can_play(0,0).ok,'Carta indisponível antes de cinco segundos')
  rules.advance_cooldowns(0.11)
  check(rules.can_play(0,0).ok and rules.players[1].board[0].attacks==1,'Carta e criatura prontas após cinco segundos')
+ var player=rules.players[0]
+ player.hand=['wolf','scout'];player.deck=['orc','dragon'];player.mana=1
+ player.cooldowns[1]=3.0
+ check(not rules.exchange_card(0,1).ok and player.mana==1,'Recarga bloqueia troca sem cobrar energia')
+ check(rules.exchange_card(0,0).ok and player.hand==['dragon','scout'] and player.deck==['wolf','orc'] and player.cooldowns[1]==3.0,'Troca preserva as posições e coloca a carta no fundo')
+ check(not rules.exchange_card(0,0).ok and player.deck==['wolf','orc'] and player.mana==0,'Troca sem energia preserva o baralho')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
