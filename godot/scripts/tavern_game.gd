@@ -234,6 +234,20 @@ func _input(event: InputEvent) -> void:
   if panel=='result':activate_button('home');return
   drag={};press={};selected_card=-1;selected_attacker=-1;inspect_id='';panel=''
 
+var pending_support = -1
+
+func support_at(point: Vector2) -> int:
+ for i in range(view.layout.supports.size()):
+  if view.layout.supports[i].has_point(point):return i
+ return -1
+
+func place_support(slot: int,index: int) -> void:
+ pending_support=-1;selected_card=-1;selected_attacker=-1
+ var result=rules.equip_support(slot,index)
+ if not result.ok:notify(result.reason);return
+ audio_engine.play('card_soft',-15.0)
+ notify('Apoio equipado. Toque nele para alternar ataque e defesa.')
+
 func pointer_down() -> void:
  if not inspect_id.is_empty():inspect_id='';press={};return
  for i in range(view.buttons.size()-1,-1,-1):
@@ -251,7 +265,22 @@ func pointer_down() -> void:
    if item.rect.has_point(pointer):press={'kind':'collection','id':item.id,'time':clock};return
   return
  if screen!='battle' or busy or rules.active!=0 or rules.done:return
+ var slot=support_at(pointer)
+ if slot>=0:
+  if selected_card>=0:place_support(slot,selected_card)
+  elif rules.supports[slot].id!='':
+   pending_support=-1
+   rules.supports[slot].defense=not rules.supports[slot].defense
+   notify('Apoio em defesa.' if rules.supports[slot].defense else 'Apoio em ataque.')
+  else:
+   pending_support=slot
+   notify('Escolha uma carta da mão para este apoio.')
+  return
  var index=hand_at(pointer)
+ if pending_support>=0 and index>=0:
+  place_support(pending_support,index)
+  return
+ pending_support=-1
  if index>=0:
   press={'kind':'card','index':index,'id':rules.players[0].hand[index],'origin':pointer,'time':clock};return
  var target=target_at(pointer)
@@ -282,6 +311,10 @@ func pointer_up() -> void:
  if not drag.is_empty():
   var released=drag.duplicate(true);drag={}
   if released.kind=='card':
+   var slot=support_at(pointer)
+   if slot>=0:
+    place_support(slot,released.index)
+    return
    if cards[released.id].kind=='minion':
     if view.layout.player_drop.has_point(pointer):request_play(int(released.index),{},drop_position(pointer),released.origin)
     else:notify('Solte a criatura no seu lado do tabuleiro.')
@@ -339,6 +372,7 @@ func cycle_card(id: String) -> void:
 func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';busy=false;rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
+ pending_support=-1
  energy_elapsed=0.0; rival_elapsed=0.0
  rules.start(profile.deck)
  view.anim={};view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
@@ -444,7 +478,7 @@ func play_events(events: Array,element: String,before: Array=[]) -> void:
 
 func run_rival_turn() -> void:
  if busy or rules.done or rules.active!=0:return
- selected_card=-1;selected_attacker=-1;drag={};inspect_id=''
+ pending_support=-1;selected_card=-1;selected_attacker=-1;drag={};inspect_id=''
  var serial=match_serial
  var before=rules.players.duplicate(true)
  var result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()

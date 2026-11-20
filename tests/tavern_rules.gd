@@ -122,4 +122,12 @@ func _initialize() -> void:
      else:rules.end_turn()
    check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=7 and p.hand.size()<=10),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
   check(rules.done,'Duelo completo sem travamento %d' % match_index)
+ fresh()
+ rules.players[0].hand=['scout','fireball']
+ check(not rules.equip_support(1,1).ok and rules.players[0].hand.size()==2,'Energia insuficiente preserva a mão')
+ check(rules.equip_support(0,0).ok and rules.players[0].mana==0,'Equipar cobra energia uma vez')
+ rules.players[0].mana=4
+ check(rules.equip_support(1,0).ok and rules.players[0].hand.is_empty(),'Dois apoios independentes aceitam criatura e feitiço')
+ rules.end_turn()
+ check(rules.players[1].health==29 and rules.players[0].armor==2,'Ataque e defesa dos apoios antes da ação rival')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)

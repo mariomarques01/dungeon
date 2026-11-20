@@ -17,8 +17,37 @@ func _init(definitions: Dictionary) -> void:
  cards=definitions
  random.randomize()
 
+var supports: Array=[]
+
+func equip_support(slot: int,index: int) -> Dictionary:
+ if done or active!=0:return failure('Aguarde sua vez.')
+ if slot<0 or slot>=supports.size():return failure('Escolha uma casa dourada.')
+ var player=players[0]
+ if index<0 or index>=player.hand.size():return failure('Carta indisponível.')
+ var id=player.hand[index]
+ var cost=int(cards[id].cost)
+ if player.mana<cost:return failure('Energia insuficiente.')
+ player.mana-=cost
+ player.hand.remove_at(index)
+ supports[slot].id=id
+ return {'ok':true}
+
+func support_strength(id: String) -> int:
+ return clampi(ceili(float(cards[id].cost)/2),1,4)
+
+func resolve_supports() -> void:
+ for support in supports:
+  if support.id=='':continue
+  var amount=support_strength(support.id)
+  if support.defense:
+   players[0].armor+=amount
+   events.append({'kind':'armor','side':0,'target':{'side':0,'hero':true},'amount':amount})
+  else:
+   damage({'side':1,'hero':true},amount,cards[support.id].element)
+
 func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
  if random_seed>=0: random.seed=random_seed
+ supports=[{'id':'','defense':false},{'id':'','defense':true}]
  players=[]; active=0; turn=1; done=false; outcome=''; next_uid=1; events=[]
  for side in range(2):
   var chosen=deck if side==0 else enemy_deck if not enemy_deck.is_empty() else DEFAULT_DECK
@@ -83,6 +112,10 @@ func end_turn() -> Dictionary:
  if done: return failure('A partida terminou.')
  events=[]
  for unit in players[active].board:unit.frozen_lock=false
+ if active==0:
+  resolve_supports()
+  check_end()
+  if done:return success()
  turn+=1
  start_turn(1-active)
  return success()
