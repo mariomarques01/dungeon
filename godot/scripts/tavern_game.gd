@@ -13,7 +13,7 @@ var art_layer: Control
 var overlay: Control
 var screen='home'
 var panel=''
-var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0}
+var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'support_hint_seen':false}
 var sound_on=true
 var speed=1.0
 var busy=false
@@ -104,6 +104,7 @@ func load_profile() -> void:
  elif FileAccess.file_exists('user://tavern-profile.json'):raw=FileAccess.get_file_as_string('user://tavern-profile.json')
  var data=JSON.parse_string(raw) if not raw.is_empty() else null
  if data is Dictionary:
+  profile.support_hint_seen=data.get('support_hint_seen',false)==true
   if data.get('deck',null) is Array and data.deck.all(func(id): return cards.has(id) and not cards[id].get('token',false)):profile.deck=data.deck
   for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(data.get(key,0)))
  elif OS.has_feature('web'):
@@ -264,7 +265,12 @@ func place_support(slot: int,index: int) -> void:
  var result=rules.equip_support(slot,index)
  if not result.ok:notify(result.reason);return
  audio_engine.play('card_soft',-15.0)
- notify('Apoio equipado. Toque nele para alternar ataque e defesa.')
+ if not profile.support_hint_seen:
+  notify('A cada 12 s: Ataque causa dano ao herói rival. Defesa dá armadura.')
+  toast_time=5.0
+  profile.support_hint_seen=true
+  save_profile()
+ else:notify('Apoio equipado. Toque nele para alternar ataque e defesa.')
 
 func pointer_down() -> void:
  if not inspect_id.is_empty():inspect_id='';press={};return
