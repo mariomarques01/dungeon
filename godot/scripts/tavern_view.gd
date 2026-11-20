@@ -486,6 +486,18 @@ func badge(center: Vector2,value: String,color: Color,radius=21.0) -> void:
  canvas.draw_circle(center,radius+2,Color('312317'));canvas.draw_circle(center,radius,color);canvas.draw_arc(center,radius,0,TAU,36,Color('e8d7a6'),2)
  text(value,Rect2(center-Vector2(radius,radius*0.77),Vector2(radius*2,radius*1.6)),int(radius*1.3),Color.WHITE,true,true)
 
+var heart=PackedVector2Array([Vector2(0,24),Vector2(-21,4),Vector2(-24,-6),Vector2(-21,-16),Vector2(-12,-20),Vector2(-5,-18),Vector2(0,-12),Vector2(5,-18),Vector2(12,-20),Vector2(21,-16),Vector2(24,-6),Vector2(21,4)])
+var shield=PackedVector2Array([Vector2(-22,-18),Vector2(0,-23),Vector2(22,-18),Vector2(19,6),Vector2(12,17),Vector2(0,25),Vector2(-12,17),Vector2(-19,6)])
+
+func hero_stat(at: Vector2,value: int,armor: bool) -> void:
+ canvas.draw_set_transform(at)
+ var shape=shield if armor else heart
+ canvas.draw_colored_polygon(shape,Color('355177') if armor else Color('9c2036'))
+ canvas.draw_polyline(shape,Color('f6dfb5'),2,true)
+ canvas.draw_line(shape[-1],shape[0],Color('f6dfb5'),2,true)
+ text(str(value),Rect2(-22,-16,44,32),23,Color.WHITE,true,true)
+ canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
+
 func paint_battle() -> void:
  var state=game.rules
  var plate=Rect2(layout.w*0.012,layout.h*0.01,layout.w*0.202,layout.h*0.078)
@@ -509,9 +521,8 @@ func paint_battle() -> void:
    text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
  for hero in hero_views:
   var p=state.players[int(hero.side)]
-  var center=hero.rect.get_center()
-  badge(hero.rect.position+Vector2(hero.rect.size.x*0.84,hero.rect.size.y*0.86),str(p.health),Color('a51e2c'),22)
-  if p.armor>0:badge(hero.rect.position+Vector2(10,hero.rect.size.y-8),str(p.armor),Color('667e9a'),18)
+  hero_stat(hero.rect.position+hero.rect.size*Vector2(0.84,0.86),p.health,false)
+  hero_stat(hero.rect.position+hero.rect.size*Vector2(0.16,0.86),p.armor,true)
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
@@ -572,6 +583,10 @@ func paint_battle() -> void:
  if not rival_anim.is_empty():fx.action(rival_anim,rival_time)
  paint_particles()
  var p=state.players[0]
+ if p.health<=10:
+  var strength=0.10+0.05*sin(clock*3.0)
+  for band in range(10):
+   canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size).grow(-band*3.0),Color(0.9,0.02,0.04,strength*(1-band/10.0)*3),false,3.1)
  var bar=energy_bar()
  var bar_width=bar.size.x
  canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
