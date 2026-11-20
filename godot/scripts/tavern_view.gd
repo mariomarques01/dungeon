@@ -165,23 +165,31 @@ func prepare() -> void:
   for uid in unit_views:
    var info=unit_views[uid]; var rect: Rect2=info.rect
    var opacity=1.0
-   if not anim.is_empty() and anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid:
-    var direction: Vector2=(anim.destination-anim.origin).normalized()
-    var windup=sin(PI*clampf(anim_time/0.12,0,1))
-    var advance=smoothstep(0.12,0.38,anim_time)*(1.0-smoothstep(0.38,0.80,anim_time))
+   var action: Dictionary=rival_anim if info.side==1 else anim
+   var attack_time=rival_time if info.side==1 else anim_time
+   var attacking=action.get('kind','')=='attack' and action.get('uid',-1)==uid
+   if attacking:
+    var direction: Vector2=(action.destination-action.origin).normalized()
+    var windup=sin(PI*clampf(attack_time/0.12,0,1))
+    var advance=smoothstep(0.12,0.38,attack_time)*(1.0-smoothstep(0.38,0.80,attack_time))
     if fx.ranged(str(info.unit.id)):
      rect.position-=direction*(windup*6+advance*10)
     else:
      rect.position-=direction*windup*16
-     rect.position=rect.position.lerp(anim.destination-rect.size/2,advance*0.9)
+     rect.position=rect.position.lerp(action.destination-rect.size/2,advance*0.9)
    var spawn=particles.filter(func(p): return p.get('uid',-1)==uid and p.kind=='summon')
    if not spawn.is_empty():
-    var factor=clampf(spawn[0].age/0.35,0.08,1.0)
+    var arrival=clampf(spawn[0].age/0.46,0,1)
+    var factor=lerpf(0.12,1.0,ease(arrival,0.35))+0.12*sin(PI*arrival)
     rect=Rect2(rect.get_center()-rect.size*factor/2,rect.size*factor)
    var hits=particles.filter(func(p): return p.kind=='damage' and int(p.get('target',{}).get('uid',-1))==uid and p.age<0.28)
-   if not hits.is_empty():rect.position.x+=sin(hits[0].age*70)*8
+   if not hits.is_empty():
+    var hit=hits[-1]
+    var recovery=clampf(hit.age/0.28,0,1)
+    var recoil=clampf(hit.amount*2.0,4,16)*sin(recovery*TAU)*(1-recovery)
+    rect.position.y+=recoil*(1 if info.side==0 else -1)
    info.draw_rect=rect
-   var resonating=(anim.get('kind','')=='attack' and int(anim.get('uid',-1))==uid) or particles.any(func(p):return p.get('response_id','')==info.unit.id and p.get('target',{}).get('uid',-1)==uid and p.age<0.65)
+   var resonating=attacking or particles.any(func(p):return p.get('response_id','')==info.unit.id and p.get('target',{}).get('uid',-1)==uid and p.age<0.65)
    if resonating:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
@@ -329,7 +337,7 @@ func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    if not event.get('target',{}).has('uid'):
     floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
-   particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+   particles.append({'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
@@ -381,9 +389,9 @@ func paint_base(c: CanvasItem) -> void:
   for side in range(2):
    for column in range(SLOT_COLUMNS.size()):
     canvas.draw_texture_rect_region(ROYAL_ARENA,layout.slots[side][column],layout.slot_sources[side][column])
+  fx.environment()
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
-  fx.environment()
  if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
  if game.screen=='home':
   var x=layout.w/2-285 if game.portrait else 110.0

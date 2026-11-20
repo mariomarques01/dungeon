@@ -307,12 +307,22 @@ func event(p: Dictionary) -> void:
    elif p.defense:shield(at,1+0.4*sin(PI*(t-0.52)/0.48),color,fade*2)
    else:impact(at,element,(t-0.52)/0.48,fade*2,p.id)
   'damage':
-   if p.age<0.18:c.draw_circle(at,57,Color(1,0.23,0.12,(0.18-p.age)*1.8))
+   var shock=clampf(p.age/0.32,0,1)
+   if shock<1:
+    var radius=(14+48*ease(shock,0.45))*clampf(0.65+0.09*p.amount,0.7,1.4)
+    for i in range(4):
+     var angle=i*PI/2+shock*0.3
+     c.draw_arc(at,radius,angle,angle+1.1,12,Color(color.lightened(0.45),1-shock),3,true)
    impact(at,element,t,1,str(p.get('id','')))
    if p.has('response_id') and p.age<0.65:
     aura(str(p.response_id),Rect2(at-Vector2(50,62),Vector2(100,124)),(1-p.age/0.65)*0.85,p.age)
   'summon':
-   ring(at+Vector2(0,35),65*(0.6+t*0.6),color,fade,p.age*3)
+   var base=at+Vector2(0,35)
+   ring(base,65*(0.6+t*0.6),color,fade,p.age*3)
+   for i in range(6):
+    var angle=i*TAU/6+p.age*2
+    var start=base+Vector2(cos(angle)*44,sin(angle)*15)
+    beam(start,start-Vector2(0,48*sin(PI*t)),color,1.6,fade*0.75)
    var id=str(p.get('id',''))
    if id in ['dragon','drake','firelord','demon']:
     for i in range(9):
