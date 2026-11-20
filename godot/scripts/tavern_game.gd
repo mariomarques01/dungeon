@@ -161,7 +161,7 @@ func advance_battle(delta: float) -> void:
   for side in range(2):
    rules.resolve_supports(side)
    if rules.done:break
-   if rules.players[side].hand.size()<5:rules.draw(side)
+   if rules.players[side].hand.size()<rules.MAX_HAND:rules.draw(side)
   rules.check_end()
   view.ingest(rules.events,before);play_events(rules.events,'dark',before);check_result()
  if rival_elapsed>=3.0 and not rules.done:

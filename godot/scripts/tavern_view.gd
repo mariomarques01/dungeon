@@ -94,10 +94,12 @@ func geometry() -> void:
  var w=game.logical_size.x; var h=game.logical_size.y; var mobile=game.portrait
  layout={'w':w,'h':h,'mobile':mobile}
  layout.enemy_hero=Rect2(w*0.40,h*0.032,w*0.20,h*0.128)
- layout.player_hero=Rect2(w*0.374,h*0.623,w*0.252,h*0.145)
- layout.unit_size=Vector2(minf(w*0.11,h*0.095),minf(w*0.145,h*0.121))
+ layout.player_hero=Rect2(w*0.374,h*0.614,w*0.252,h*0.139)
+ var slot_width=w*0.95/game.rules.MAX_BOARD
+ var unit_width=minf(slot_width*0.95,h*0.134*0.74)
+ layout.unit_size=Vector2(unit_width,unit_width/0.74)
  layout.enemy_row=h*0.328
- layout.player_row=h*0.558
+ layout.player_row=h*0.545
  layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
@@ -117,23 +119,21 @@ func geometry() -> void:
  for side in range(2):
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
-  var gap=minf(w*0.134,w*0.90/maxi(5,list.size()))
   var row=float(layout.player_row if side==0 else layout.enemy_row)
   for i in range(list.size()):
-   var offset=i+floori((5-list.size())/2.0)-2 if list.size()<=5 else i-(list.size()-1)/2.0
-   var center=Vector2(w/2+offset*gap,row)
+   var offset=i-(list.size()-1)/2.0
+   var center=Vector2(w/2+offset*minf(slot_width,layout.unit_size.x*1.08),row)
    var uid=int(list[i].uid)
-   var width=minf(gap*0.84,h*0.103*0.74)
-   var size=Vector2(width,width/0.74)
+   var size: Vector2=layout.unit_size
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
  var frame_ratio=float(HAND_FRAME.get_width())/HAND_FRAME.get_height()
- var width=minf(w*0.9/maxi(5,hand.size()),h*0.166*frame_ratio)
+ var width=minf(w*0.95/maxi(1,hand.size()),h*0.190*frame_ratio)
  var size=Vector2(width,width/frame_ratio)
- var spacing=minf(size.x*1.025,(w*0.92-size.x)/maxi(1,hand.size()-1))
+ var spacing=minf(size.x*1.025,(w*0.98-size.x)/maxi(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
-  var center=Vector2(w/2+f*spacing,h*0.857)
+  var center=Vector2(w/2+f*spacing,h*0.851)
   var angle=0.0
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)

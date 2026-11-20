@@ -79,8 +79,8 @@ func _initialize() -> void:
  check(rules.players[0].board.size()==5,'Invocação múltipla respeita os espaços disponíveis')
  fresh();rules.players[0].deck=[];rules.draw(0,3)
  check(rules.players[0].health==24 and rules.players[0].fatigue==3,'Fadiga cresce quando acaba o baralho')
- fresh();rules.players[0].hand=Rules.DEFAULT_DECK.slice(0,10);var deck_count=rules.players[0].deck.size();rules.events=[];rules.draw(0)
- check(rules.players[0].hand.size()==10 and rules.players[0].deck.size()==deck_count-1 and rules.events.any(func(e):return e.kind=='burn'),'Mão cheia queima a compra excedente')
+ fresh();rules.players[0].hand=Rules.DEFAULT_DECK.slice(0,5);var deck_count=rules.players[0].deck.size();rules.events=[];rules.draw(0)
+ check(rules.players[0].hand.size()==5 and rules.players[0].deck.size()==deck_count-1 and rules.events.any(func(e):return e.kind=='burn'),'Mão cheia queima a compra excedente')
  fresh();rules.players[0].mana=2;rules.power(0,{'side':1,'hero':true})
  check(rules.players[1].health==29 and not rules.can_power(0,{'side':1,'hero':true}).ok,'Poder heroico custa mana e só pode ser usado uma vez')
  fresh();rules.players[0].health=0;rules.players[1].health=0;rules.check_end()
@@ -120,7 +120,7 @@ func _initialize() -> void:
      if not plan.is_empty():rules.attack(1,plan.uid,plan.target)
      elif rules.can_power(1).ok:rules.power(1)
      else:rules.end_turn()
-   check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=5 and p.hand.size()<=10),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
+   check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=5 and p.hand.size()<=5),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
   check(rules.done,'Duelo completo sem travamento %d' % match_index)
  fresh()
  rules.players[0].hand=['scout','fireball']

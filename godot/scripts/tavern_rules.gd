@@ -2,7 +2,7 @@ extends RefCounted
 const MAX_BOARD=5
 const REUSE_SECONDS=5.0
 var realtime=false
-const MAX_HAND=10
+const MAX_HAND=5
 const DECK_SIZE=30
 const DEFAULT_DECK=['scout','scout','stoneguard','stoneguard','wolf','wolf','apprentice','apprentice','drake','drake','shieldbearer','shieldbearer','dryad','dryad','panther','panther','beetle','beetle','orc','orc','fireball','fireball','frost','frost','healing','healing','wisdom','wisdom','treant','dragon']
 var cards: Dictionary
@@ -458,7 +458,7 @@ func ai_play() -> Dictionary:
    if target.is_empty(): continue
    value+=4
   elif c.effect=='draw':
-   if players[1].hand.size()>7: continue
+   if players[1].hand.size()>=MAX_HAND: continue
    value+=3
   elif c.effect=='armor':
    if players[1].health>23: value-=8
