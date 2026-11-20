@@ -250,7 +250,7 @@
     "keywords": [
       "windfury"
     ],
-    "text": "Fúria dos Ventos. Pode atacar duas vezes por turno."
+    "text": "Fúria dos Ventos. Pode atacar duas vezes por recarga."
   },
   "serpent": {
     "id": "serpent",
@@ -543,7 +543,7 @@
     "amount": 1,
     "target": "none",
     "element": "arcane",
-    "text": "Receba 1 de mana neste turno. Não aumenta seu máximo.",
+    "text": "Receba 1 de mana. Não aumenta seu máximo.",
     "keywords": []
   },
   "token_skeleton": {

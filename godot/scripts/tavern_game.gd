@@ -134,6 +134,8 @@ const ENERGY_SECONDS=3.0
 const RIVAL_SECONDS=12.0
 var energy_elapsed=0.0
 var rival_elapsed=0.0
+var support_elapsed=0.0
+var rival_energy=0.0
 
 func advance_battle(delta: float) -> void:
  if screen!='battle' or rules.done or not panel.is_empty() or not inspect_id.is_empty():return
@@ -144,11 +146,27 @@ func advance_battle(delta: float) -> void:
   player.mana=mini(player.max_mana,player.mana+earned)
   energy_elapsed=fmod(energy_elapsed,ENERGY_SECONDS)
  if player.mana>=player.max_mana:energy_elapsed=0.0
- if rules.active!=0:return
+ rules.advance_cooldowns(delta/speed)
+ var rival=rules.players[1]
+ rival_energy+=delta
+ rival.mana=mini(10,rival.mana+floori(rival_energy/ENERGY_SECONDS))
+ rival_energy=fmod(rival_energy,ENERGY_SECONDS)
+ support_elapsed+=delta
  rival_elapsed+=delta
- if rival_elapsed>=RIVAL_SECONDS and not busy and drag.is_empty() and press.is_empty():
-  rival_elapsed=0.0
-  run_rival_turn()
+ if busy:return
+ if support_elapsed>=RIVAL_SECONDS:
+  support_elapsed=0
+  var before=rules.players.duplicate(true)
+  rules.events=[]
+  for side in range(2):
+   rules.resolve_supports(side)
+   if rules.done:break
+   if rules.players[side].hand.size()<5:rules.draw(side)
+  rules.check_end()
+  view.ingest(rules.events,before);play_events(rules.events,'dark',before);check_result()
+ if rival_elapsed>=3.0 and not rules.done:
+  rival_elapsed=0
+  rival_action()
 
 func _process(delta: float) -> void:
  if not view:return
@@ -264,7 +282,7 @@ func pointer_down() -> void:
    if Rect2(item.rect.position+Vector2(0,item.rect.size.y+2),Vector2(item.rect.size.x,32)).has_point(pointer):press={'kind':'collection_remove','id':item.id,'time':clock};return
    if item.rect.has_point(pointer):press={'kind':'collection','id':item.id,'time':clock};return
   return
- if screen!='battle' or busy or rules.active!=0 or rules.done:return
+ if screen!='battle' or busy or rules.done:return
  var slot=support_at(pointer)
  if slot>=0:
   if selected_card>=0:place_support(slot,selected_card)
@@ -282,6 +300,7 @@ func pointer_down() -> void:
   return
  pending_support=-1
  if index>=0:
+  if rules.players[0].cooldowns.has(index):notify('Carta recarregando.');return
   press={'kind':'card','index':index,'id':rules.players[0].hand[index],'origin':pointer,'time':clock};return
  var target=target_at(pointer)
  if selected_card>=0:
@@ -301,7 +320,7 @@ func pointer_move() -> void:
  hover_card=hand_at(pointer) if screen=='battle' and press.is_empty() else -1
  if press.is_empty() or not drag.is_empty():return
  if press.kind in ['card','unit','power'] and pointer.distance_to(press.origin)>10:
-  if press.kind=='unit' and not press.get('can_attack',true):notify('Esta criatura aguarda o próximo turno ou já atacou.');press={};return
+  if press.kind=='unit' and not press.get('can_attack',true):notify('Esta criatura está recarregando.');press={};return
   drag=press.duplicate(true)
   if drag.kind=='card':audio_engine.play('card_soft',-15.0)
   selected_card=-1;selected_attacker=-1
@@ -374,9 +393,9 @@ func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';busy=false;rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
  pending_support=-1
- energy_elapsed=0.0; rival_elapsed=0.0
- rules.start(profile.deck)
- view.anim={};view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
+ energy_elapsed=0.0; rival_elapsed=0.0;support_elapsed=0.0;rival_energy=0.0
+ rules.start(profile.deck,[],-1,true)
+ view.rival_anim={};view.anim={};view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
  audio_engine.start_music();toast_time=0
 
 func at_time(value: float) -> void:
@@ -462,17 +481,17 @@ func request_power(target: Dictionary,side=0) -> void:
  if serial!=match_serial:return
  view.finish();busy=false;check_result()
 
-func play_events(events: Array,element: String,before: Array=[]) -> void:
+func play_events(events: Array,element: String,before: Array=[],action: Dictionary=view.anim) -> void:
  var played={}
  var causes={}
  for event in events:
   var kind=str(event.kind);var sound='';var gain=-11.0
-  var source=str(view.anim.get('id',''))
+  var source=str(action.get('id',''))
   var event_element=str(event.get('element',element))
   if kind=='damage':
    if event.target.has('uid'):causes[int(event.target.uid)]=event_element
-   if view.anim.get('kind','')=='attack' and event.target.side==view.anim.get('side',0) and not before.is_empty():
-    var defender=view.anim.get('target',{})
+   if action.get('kind','')=='attack' and event.target.side==action.get('side',0) and not before.is_empty():
+    var defender=action.get('target',{})
     for unit in before[int(defender.get('side',1))].board:
      if unit.uid==defender.get('uid',-1):source=unit.id;break
    sound=audio_engine.action_clip(source,event_element)
@@ -495,31 +514,38 @@ func play_events(events: Array,element: String,before: Array=[]) -> void:
   if not sound.is_empty() and not played.has(sound):
    audio_engine.play(sound,gain,1.0,{'card':source,'event':kind,'element':event_element});played[sound]=true
 
-func run_rival_turn() -> void:
- if busy or rules.done or rules.active!=0:return
- pending_support=-1;selected_card=-1;selected_attacker=-1;drag={};inspect_id=''
- var serial=match_serial
+func rival_action() -> void:
  var before=rules.players.duplicate(true)
- var result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
- if rules.done:return
- await get_tree().create_timer(0.45/speed).timeout
- if serial!=match_serial:return
+ var result={}
+ var plan=rules.ai_attack()
+ var origin=view.layout.enemy_hero.get_center()
+ var destination=Vector2(view.layout.w/2,view.layout.enemy_row)
+ var id='token_guard'
+ var kind='power'
+ if not plan.is_empty():
+  kind='attack'
+  id=rules.find_unit(1,plan.uid).id
+  origin=view.target_center({'side':1,'uid':plan.uid})
+  destination=view.target_center(plan.target)
+  result=rules.attack(1,plan.uid,plan.target)
+ else:
+  plan=rules.ai_play()
+  if not plan.is_empty():
+   kind='card'
+   id=rules.players[1].hand[plan.index]
+   if not plan.target.is_empty():destination=view.target_center(plan.target)
+   result=rules.play(1,plan.index,plan.target)
+  elif rules.can_power(1).ok:result=rules.power(1)
  rules.choose_rival_support()
- for i in range(12):
-  if rules.done or serial!=match_serial:return
-  var plan=rules.ai_play()
-  if plan.is_empty():break
-  await request_play(int(plan.index),plan.target,-1,Vector2.ZERO,1)
-  await get_tree().create_timer(0.12/speed).timeout
- for i in range(20):
-  if rules.done or serial!=match_serial:return
-  var plan=rules.ai_attack()
-  if plan.is_empty():break
-  await request_attack(int(plan.uid),plan.target,1)
- if not rules.done and rules.can_power(1).ok:await request_power({},1)
- if serial!=match_serial or rules.done:return
- before=rules.players.duplicate(true)
- result=rules.end_turn();view.ingest(result.events,before);play_events(result.events,'dark',before);check_result()
+ if not result.is_empty():
+  var action={'kind':kind,'side':1,'id':id,'origin':origin,'destination':destination,'element':cards[id].element,'card_kind':cards[id].kind,'uid':plan.get('uid',-1),'target':plan.get('target',{}),'impact_points':[]}
+  for event in result.events:
+   if event.kind=='damage':action.impact_points.append(view.target_center(event.target))
+  view.rival_anim=action
+  view.rival_time=0
+  view.ingest(result.events,before,action)
+  play_events(result.events,action.element,before,action)
+  check_result()
 
 func check_result() -> void:
  if not rules.done:return

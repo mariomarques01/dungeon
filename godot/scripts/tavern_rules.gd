@@ -1,5 +1,7 @@
 extends RefCounted
-const MAX_BOARD=7
+const MAX_BOARD=5
+const REUSE_SECONDS=5.0
+var realtime=false
 const MAX_HAND=10
 const DECK_SIZE=30
 const DEFAULT_DECK=['scout','scout','stoneguard','stoneguard','wolf','wolf','apprentice','apprentice','drake','drake','shieldbearer','shieldbearer','dryad','dryad','panther','panther','beetle','beetle','orc','orc','fireball','fireball','frost','frost','healing','healing','wisdom','wisdom','treant','dragon']
@@ -19,18 +21,38 @@ func _init(definitions: Dictionary) -> void:
 
 
 func equip_support(slot: int,index: int,side=0) -> Dictionary:
- if done or active!=side:return failure('Aguarde sua vez.')
+ if done or (not realtime and active!=side):return failure('Aguarde sua vez.')
  var supports: Array=players[side].supports
  if slot<0 or slot>=supports.size():return failure('Escolha uma casa dourada.')
  var player=players[side]
  if index<0 or index>=player.hand.size():return failure('Carta indisponível.')
+ if player.cooldowns.has(index):return failure('Carta recarregando.')
  var id=player.hand[index]
  var cost=int(cards[id].cost)
  if player.mana<cost:return failure('Energia insuficiente.')
  player.mana-=cost
- player.hand.remove_at(index)
+ consume_slot(player,index)
  supports[slot].id=id
  return {'ok':true}
+
+func consume_slot(player: Dictionary,index: int) -> void:
+ if realtime:player.cooldowns[index]=REUSE_SECONDS
+ else:player.hand.remove_at(index)
+
+func advance_cooldowns(delta: float) -> void:
+ for player in players:
+  for index in player.cooldowns.keys():
+   player.cooldowns[index]-=delta
+   if player.cooldowns[index]<=0:player.cooldowns.erase(index)
+  player.power_delay=maxf(0,player.power_delay-delta)
+  player.power_used=player.power_delay>0
+  for unit in player.board:
+   if unit.delay<=0:continue
+   unit.delay=maxf(0,unit.delay-delta)
+   if unit.delay==0:
+    unit.sleeping=false
+    unit.frozen=0
+    unit.attacks=2 if 'windfury' in unit.keywords else 1
 
 func support_strength(id: String) -> int:
  return clampi(ceili(float(cards[id].cost)/2),1,4)
@@ -45,7 +67,7 @@ func choose_rival_support() -> void:
   var best=-1
   for i in range(rival.hand.size()):
    var cost=int(cards[rival.hand[i]].cost)
-   if cost<=rival.mana and (best<0 or support_strength(rival.hand[i])>support_strength(rival.hand[best])):best=i
+   if not rival.cooldowns.has(i) and cost<=rival.mana and (best<0 or support_strength(rival.hand[i])>support_strength(rival.hand[best])):best=i
   if best>=0:equip_support(slot,best,1)
 
 func resolve_supports(side: int) -> void:
@@ -61,7 +83,8 @@ func resolve_supports(side: int) -> void:
   else:
    damage(target,amount,cards[support.id].element)
 
-func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
+func start(deck: Array, enemy_deck: Array=[], random_seed = -1, live=false) -> Array:
+ realtime=live
  if random_seed>=0: random.seed=random_seed
  players=[]; active=0; turn=1; done=false; outcome=''; next_uid=1; events=[]
  for side in range(2):
@@ -70,7 +93,7 @@ func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
   for i in range(pile.size()-1,0,-1):
    var j=random.randi_range(0,i)
    var swap=pile[i]; pile[i]=pile[j]; pile[j]=swap
-  players.append({'supports':[{'id':'','defense':false},{'id':'','defense':true}],'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false})
+  players.append({'supports':[{'id':'','defense':false},{'id':'','defense':true}],'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false,'power_delay':0.0,'cooldowns':{}})
   for i in range(3): draw(side)
   # An opening one-cost creature keeps the first match interactive for both sides.
   var opening: Array=players[side].hand
@@ -80,6 +103,10 @@ func start(deck: Array, enemy_deck: Array=[], random_seed = -1) -> Array:
     if cards[id].kind=='minion' and cards[id].cost==1:
      var old=opening[0]; opening[0]=id; players[side].deck[i]=old; break
  start_turn(0)
+ if realtime:
+  players[1].max_mana=10
+  players[1].mana=1
+  draw(1)
  return events.duplicate(true)
 
 func valid_deck(deck: Array) -> bool:
@@ -155,13 +182,14 @@ func spellpower(side: int) -> int:
  return total
 
 func can_play(side: int,index: int,target: Dictionary={}) -> Dictionary:
- if done or side!=active: return failure('Aguarde seu turno.')
+ if done or (not realtime and side!=active): return failure('Aguarde seu turno.')
  var p=players[side]
  if index<0 or index>=p.hand.size(): return failure('Carta indisponível.')
+ if p.cooldowns.has(index):return failure('Carta recarregando.')
  var c=cards[p.hand[index]]
  if int(c.cost)>int(p.mana): return failure('Energia insuficiente.')
  if c.kind=='minion':
-  if p.board.size()>=MAX_BOARD: return failure('Seu campo já tem 7 criaturas.')
+  if p.board.size()>=MAX_BOARD: return failure('Seu campo já tem 5 criaturas.')
   return {'ok':true}
  var rule=c.get('target','none')
  if rule!='none':
@@ -177,7 +205,7 @@ func spawn(side: int,id: String,position = -1) -> Dictionary:
  var c=cards[id]
  var keys=c.get('keywords',[]).duplicate()
  var rush='rush' in keys or 'charge' in keys
- var unit={'uid':next_uid,'id':id,'attack':int(c.attack),'health':int(c.health),'max_health':int(c.health),'keywords':keys,'shield':'shield' in keys,'sleeping':true,'attacks':(2 if 'windfury' in keys else 1) if rush else 0,'frozen':0}
+ var unit={'delay':REUSE_SECONDS,'uid':next_uid,'id':id,'attack':int(c.attack),'health':int(c.health),'max_health':int(c.health),'keywords':keys,'shield':'shield' in keys,'sleeping':true,'attacks':(2 if 'windfury' in keys else 1) if rush else 0,'frozen':0}
  next_uid+=1
  var board: Array=players[side].board
  if position<0 or position>=board.size(): board.append(unit)
@@ -192,7 +220,7 @@ func play(side: int,index: int,target: Dictionary={},position = -1) -> Dictionar
  var p=players[side]
  var id=p.hand[index]
  var c=cards[id]
- p.mana-=int(c.cost); p.hand.remove_at(index)
+ p.mana-=int(c.cost); consume_slot(p,index)
  events.append({'kind':'card','side':side,'id':id})
  if c.kind=='minion':
   spawn(side,id,position)
@@ -292,6 +320,7 @@ func heal(target: Dictionary,amount: int) -> int:
 func freeze_unit(side: int,uid: int) -> void:
  var unit=find_unit(side,uid)
  if unit:
+  unit.delay=REUSE_SECONDS
   unit.frozen=1; unit.attacks=0
   events.append({'kind':'freeze','target':{'side':side,'uid':uid}})
 
@@ -314,13 +343,14 @@ func resolve_deaths() -> void:
  check_end()
 
 func can_attack(side: int,uid: int,target: Dictionary) -> Dictionary:
- if done or side!=active: return failure('Aguarde seu turno.')
+ if done or (not realtime and side!=active): return failure('Aguarde seu turno.')
  var attacker=find_unit(side,uid)
  if not attacker: return failure('Criatura indisponível.')
+ if realtime and attacker.attacks<=0:return failure('Criatura recarregando.')
  if attacker.attacks<=0: return failure('Esta criatura precisa aguardar o próximo turno.' if attacker.sleeping else 'Esta criatura já atacou ou está congelada.')
  if attacker.attack<=0: return failure('Esta criatura não tem ataque.')
  if not target_exists(target) or int(target.side)==side: return failure('Arraste até um inimigo.')
- if target.get('hero',false) and attacker.sleeping and not 'charge' in attacker.keywords: return failure('Investida só permite atacar criaturas neste turno.')
+ if target.get('hero',false) and attacker.sleeping and not 'charge' in attacker.keywords: return failure('Investida só permite atacar criaturas agora.')
  var taunts=players[1-side].board.filter(func(u): return 'taunt' in u.keywords and u.health>0)
  if not taunts.is_empty():
   if target.get('hero',false) or not taunts.any(func(u): return int(u.uid)==int(target.get('uid',-1))): return failure('Ataque primeiro uma criatura com Provocar.')
@@ -332,6 +362,7 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  events=[]
  var attacker=find_unit(side,uid)
  attacker.attacks-=1
+ if realtime and attacker.attacks==0:attacker.delay=REUSE_SECONDS
  var attacker_target={'side':side,'uid':uid}
  var retaliation=0
  var defender=null
@@ -349,7 +380,7 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
 const SOLAR_COST=10
 
 func solar_ready() -> bool:
- return not done and active==0 and players[0].mana>=SOLAR_COST
+ return not done and (realtime or active==0) and players[0].mana>=SOLAR_COST
 
 func solar_flare() -> Dictionary:
  if not solar_ready():return failure('Aguarde sua vez e carregue 10 de energia.')
@@ -361,9 +392,9 @@ func solar_flare() -> Dictionary:
  return success()
 
 func can_power(side: int,target: Dictionary={}) -> Dictionary:
- if done or side!=active: return failure('Aguarde seu turno.')
+ if done or (not realtime and side!=active): return failure('Aguarde seu turno.')
  var p=players[side]
- if p.power_used: return failure('Poder já usado neste turno.')
+ if p.power_used: return failure('Poder recarregando.')
  if p.mana<2: return failure('O poder custa 2 de energia.')
  if side==0 and (not target_exists(target) or int(target.side)==side): return failure('Arraste o poder até um inimigo.')
  if side==1 and p.board.size()>=MAX_BOARD: return failure('Campo cheio.')
@@ -373,7 +404,7 @@ func power(side: int,target: Dictionary={}) -> Dictionary:
  var valid=can_power(side,target)
  if not valid.ok: return valid
  events=[]
- players[side].mana-=2; players[side].power_used=true
+ players[side].mana-=2; players[side].power_used=true;players[side].power_delay=REUSE_SECONDS
  if side==0: damage(target,1,'fire')
  else: spawn(side,'token_guard')
  events.append({'kind':'power','side':side})

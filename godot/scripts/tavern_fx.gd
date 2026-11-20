@@ -119,11 +119,10 @@ func trail() -> void:
   beam(a.position,b.position,color,2+alpha*3,alpha)
   if i%3==0:shard(b.position+Vector2(sin(i*3+v.clock)*14,0),-PI/2,8,color,alpha)
 
-func action() -> void:
+func action(a: Dictionary,time: float) -> void:
  c=v.canvas
- var a: Dictionary=v.anim
  if a.is_empty():return
- var time=v.anim_time;var element=str(a.get('element','arcane'));var id=str(a.get('id',''))
+ var element=str(a.get('element','arcane'));var id=str(a.get('id',''))
  var color=v.element_color(element);var origin: Vector2=a.origin;var dest: Vector2=a.destination
  var card=v.game.cards.get(id,{})
  if a.kind=='power':

@@ -1,6 +1,6 @@
 # Dungeon — Duelos da Taverna
 
-Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos por turnos contra a IA.
+Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos em tempo real contra a IA.
 
 [Jogar Duelos da Taverna](https://mariomarques01.github.io/dungeon/)
 
@@ -8,7 +8,7 @@ Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos por turnos cont
 
 Arraste uma criatura da mão para o seu lado do tabuleiro. Arraste uma criatura pronta até um inimigo para atacar. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
 
-Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até sete criaturas de cada lado. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. O contador abaixo da mão indica quando cada carta pode ser jogada. A IA age automaticamente a cada 12 segundos do seu tempo de jogo.
+Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até cinco criaturas de cada lado. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. Ao jogar uma carta ou equipá-la como apoio, ela permanece na mão e recarrega por 5 segundos. A borda azul mostra o progresso e a verde indica uma carta disponível. Cada cópia recarrega separadamente. A IA age durante o duelo e os apoios ativam a cada 12 segundos de jogo.
 
 Com 10/10 de energia, toque em **Lançar Erupção Solar** na barra abaixo da mão. A habilidade consome os 10 pontos, causa 6 de dano ao herói rival e concede 4 de armadura à sua heroína. Você também pode guardar a carga para jogar cartas.
 
