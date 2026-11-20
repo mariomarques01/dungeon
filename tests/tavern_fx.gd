@@ -40,6 +40,20 @@ func run() -> void:
   var remains=game.view.ghosts.filter(func(g):return g.uid==victim.uid)
   if remains.is_empty() or remains[0].element!=game.cards[spell].element:push_error('Wrong death element: '+spell);failures+=1
  print('Fire, ice, lightning and shadow death profiles checked')
+ # A multi-kill banner depends on actual enemy deaths in one resolution.
+ for count in [1,2,3]:
+  game.start_match();game.rules.players[0].mana=10;game.rules.players[0].hand=['meteor']
+  for i in range(count):game.rules.spawn(1,'wolf').health=1
+  game.view.prepare()
+  await game.request_play(0,{})
+  var banners=game.view.floats.filter(func(f):return f.text.begins_with('QUEDA'))
+  var expected='QUEDA DUPLA' if count==2 else 'QUEDA MÚLTIPLA'
+  if (count==1 and not banners.is_empty()) or (count>1 and (banners.size()!=1 or banners[0].text!=expected)):
+   push_error('Wrong defeat banner for '+str(count)+' deaths');failures+=1
+ game.start_match();game.rules.players[0].mana=10;game.view.prepare()
+ await game.request_solar()
+ if game.busy or game.view.effect_history[-1].id!='solar':
+  push_error('Solar timeline did not finish');failures+=1
  # A real lethal action opens the victory panel with live units still on the board.
  game.start_match();game.rules.spawn(0,'dragon');game.rules.spawn(1,'wolf')
  game.rules.players[0].mana=10;game.rules.players[0].hand=['fireball']
