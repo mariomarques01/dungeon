@@ -130,4 +130,11 @@ func _initialize() -> void:
  check(rules.equip_support(1,0).ok and rules.players[0].hand.is_empty(),'Dois apoios independentes aceitam criatura e feitiço')
  rules.end_turn()
  check(rules.players[1].health==29 and rules.players[0].armor==2,'Ataque e defesa dos apoios antes da ação rival')
+ rules.players[1].hand=['scout','fireball'];rules.players[1].mana=5
+ ready(1,'wolf')
+ rules.choose_rival_support()
+ check(rules.players[1].supports.all(func(s):return s.id!='') and rules.players[1].mana==0,'A IA equipa os dois apoios com cartas e energia próprias')
+ var armor_before=rules.players[0].armor
+ rules.end_turn()
+ check(rules.players[0].armor==armor_before-2 and rules.players[1].armor==1,'Os apoios rivais atacam e defendem o lado correto')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
