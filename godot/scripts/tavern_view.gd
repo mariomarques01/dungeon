@@ -93,17 +93,20 @@ func tick(delta: float) -> void:
 func geometry() -> void:
  var w=game.logical_size.x; var h=game.logical_size.y; var mobile=game.portrait
  layout={'w':w,'h':h,'mobile':mobile}
- var hero_size=Vector2.ONE*minf(h*0.13,w*0.17)
- layout.enemy_hero=Rect2(Vector2(w*0.5,h*0.13)-hero_size/2,hero_size)
- layout.player_hero=Rect2(Vector2(w*0.5,h*0.76)-hero_size/2,hero_size)
- layout.enemy_row=h*0.355
- layout.player_row=h*0.615
- layout.unit_size=Vector2(105,133)
- layout.player_drop=Rect2(w*0.12,h*0.51,w*0.76,h*0.19)
- layout.board_zone=Rect2(50,175,w-100,h-480) if mobile else Rect2(150,145,w-300,h-330)
- layout.end=Rect2(w-162,h*0.47,150,65) if mobile else Rect2(w-260,h*0.445,164,66)
- layout.power=Rect2(w/2+hero_size.x*0.65,h*0.755,69,69)
- layout.settings=Rect2(w-118,25,86,86) if mobile else Rect2(w-148,25,48,48)
+ var hero_width=minf(w*0.24,h*0.19)
+ layout.enemy_hero=Rect2(Vector2(w*0.5,h*0.099)-Vector2(hero_width*0.43,h*0.066),Vector2(hero_width*0.86,h*0.132))
+ layout.player_hero=Rect2(Vector2(w*0.5,h*0.694)-Vector2(hero_width/2,h*0.074),Vector2(hero_width,h*0.148))
+ layout.enemy_row=h*0.328
+ layout.player_row=h*0.558
+ layout.player_drop=Rect2(w*0.085,h*0.468,w*0.83,h*0.196)
+ layout.board_zone=Rect2(w*0.05,h*0.15,w*0.9,h*0.57)
+ var end_size=Vector2(minf(w*0.16,140),clampf(h*0.048,40,60))
+ layout.end=Rect2(Vector2(w*0.986-end_size.x,h*0.454-end_size.y/2),end_size)
+ var gold_width=minf(w*0.15,h*0.118)
+ layout.gold_size=Vector2(gold_width,h*0.114)
+ layout.power=Rect2(Vector2(w*0.253,h*0.67)-layout.gold_size/2,layout.gold_size)
+ var gear_size=clampf(w*0.066,44,62)
+ layout.settings=Rect2(w*0.986-gear_size,h*0.011,gear_size,gear_size)
  layout.mana=Vector2(w/2-150,h-52)
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
  if game.screen!='battle': return
@@ -111,7 +114,7 @@ func geometry() -> void:
  for side in range(2):
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
-  var gap=minf(w*0.137,w*0.76/maxi(5,list.size()))
+  var gap=minf(w*0.134,w*0.76/maxi(5,list.size()))
   var row=float(layout.player_row if side==0 else layout.enemy_row)
   for i in range(list.size()):
    var center=Vector2(w/2+(i-(list.size()-1)/2.0)*gap,row)
@@ -119,12 +122,12 @@ func geometry() -> void:
    var size=Vector2.ONE*minf(gap*0.83,h*0.12)*Vector2(1,1.28)
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
- var size=Vector2(1,1.5)*minf(158,h*0.125)
- var spacing=minf(95.0 if mobile else 82.0,((w-170) if mobile else w*0.60)-size.x if hand.size()<=1 else (((w-170) if mobile else w*0.60)-size.x)/maxf(1,hand.size()-1))
+ var size=Vector2(1,1.5)*minf(w*0.168,h*0.113)
+ var spacing=minf(size.x*0.99,(w*0.83-size.x)/maxi(1,hand.size()-1))
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
-  var center=Vector2(w/2-(0 if mobile else 50)+f*spacing,h*0.90+absf(f)*3)
-  var angle=f*0.045
+  var center=Vector2(w/2+f*spacing,h*0.864)
+  var angle=0.0
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
   var lift=move_toward(float(hand_lifts.get(i,0)),1.0 if lifted and game.drag.is_empty() else 0.0,frame_delta*9)
@@ -142,7 +145,6 @@ func prepare() -> void:
   var state=game.rules
   art('hero0',ROYAL_PLAYER,layout.player_hero)
   art('hero1',ROYAL_ENEMY,layout.enemy_hero)
-  art('power',slice(spells,0,4,4),layout.power.grow(-5),true)
   for uid in unit_views:
    var info=unit_views[uid]; var rect: Rect2=info.rect
    var opacity=1.0
@@ -351,16 +353,19 @@ func paint_base(c: CanvasItem) -> void:
  if game.screen=='battle':
   canvas.draw_rect(bounds,Color('19132b'))
   canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
-  var slot_width=minf(layout.w*0.112,layout.h*0.10)
-  var slot_size=Vector2(slot_width,slot_width*1.30)
-  var gold_size=layout.player_hero.size*0.74
+  var slot_width=minf(layout.w*0.110,layout.h*0.094)
+  var slot_size=Vector2(slot_width,layout.h*0.113)
+  var gold_size: Vector2=layout.gold_size
   for side in range(2):
    var row=layout.player_row if side==0 else layout.enemy_row
    for column in range(5):
-    var center=Vector2(layout.w*(0.5+(column-2)*0.137),row)
+    var center=Vector2(layout.w*(0.5+(column-2)*0.134),row)
+    var glow=Color("2986ff") if side==0 else Color("ff6023")
+    var slot=Rect2(center-slot_size/2,slot_size).grow(-2)
+    canvas.draw_rect(slot.grow(2),Color(glow,0.16),false,7,true)
     canvas.draw_texture_rect(ROYAL_BLUE if side==0 else ROYAL_RED,Rect2(center-slot_size/2,slot_size),false)
-   for x in [0.27,0.73]:
-    var center=Vector2(layout.w*x,layout.h*(0.755 if side==0 else 0.23))
+   for x in [0.253,0.747]:
+    var center=Vector2(layout.w*x,layout.h*(0.67 if side==0 else 0.202))
     canvas.draw_texture_rect(ROYAL_GOLD,Rect2(center-gold_size/2,gold_size),false)
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
@@ -432,7 +437,6 @@ func paint_battle() -> void:
   var center=hero.rect.get_center()
   badge(hero.rect.position+Vector2(hero.rect.size.x*0.84,hero.rect.size.y*0.86),str(p.health),Color('a51e2c'),22)
   if p.armor>0:badge(hero.rect.position+Vector2(10,hero.rect.size.y-8),str(p.armor),Color('667e9a'),18)
-  text('ELYRA' if hero.side==0 else 'MALGRUK',Rect2(hero.rect.position+Vector2(-26,hero.rect.size.y+17),Vector2(hero.rect.size.x+52,25)),17,PAPER,true,true)
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   oval(rect.grow(-2),Color.TRANSPARENT,Color('d6b56f'),2)
@@ -474,18 +478,13 @@ func paint_battle() -> void:
   fx.action()
  paint_particles()
  var p=state.players[0]
- var mana_start=Vector2(layout.w-230,layout.h-47) if not game.portrait else Vector2(layout.w/2-128,layout.h-46)
+ var mana_start=Vector2(layout.w/2-88,layout.h*0.969)
  for i in range(10):
-  var at=mana_start+Vector2(i*(23 if game.portrait else 18),0)
+  var at=mana_start+Vector2(i*18,0)
   var color=Color('48aaf4') if i<int(p.mana) else Color('274364') if i<int(p.max_mana) else Color('3b353c')
   canvas.draw_colored_polygon(PackedVector2Array([at+Vector2(0,-9),at+Vector2(8,0),at+Vector2(0,9),at+Vector2(-8,0)]),color)
  text('%d / %d' % [p.mana,p.max_mana],Rect2(mana_start+Vector2(-75,-17),Vector2(65,30)),20,Color('d7ebff'),true)
- text('TURNO %d' % ((state.turn+1)/2),Rect2(25,25,180,25),18,PAPER,false,true)
- text('Você' if state.active==0 else 'Rival jogando…',Rect2(25,54,220,25),16,PAPER)
- text('BARALHO\n%d' % p.deck.size(),Rect2(layout.w-150,layout.h*0.71,130,60),17,PAPER,true,true)
- text('RIVAL\n%d cartas' % state.players[1].hand.size(),Rect2(26,layout.h*0.15,150,50),15,PAPER)
- if state.turn<4 and state.players[0].board.is_empty() and not game.busy and game.drag.is_empty():
-  text('Solte suas criaturas aqui',Rect2(layout.w/2-250,layout.player_row-18,500,40),20,Color('7e5a36'),true)
+ text('Turno %d  ·  %d no baralho' % [int((state.turn+1)/2),p.deck.size()],Rect2(layout.w*0.70,layout.h*0.958,layout.w*0.28,25),13,PAPER,true,true)
 
 func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
@@ -553,15 +552,15 @@ func paint_button(info: Dictionary) -> void:
  var enabled=info.enabled
  var primary=info.primary
  if info.id=='power':
-  canvas.draw_arc(rect.get_center(),rect.size.x/2,0,TAU,48,Color('e5c271') if enabled else Color('706653'),5)
-  badge(rect.position+Vector2(10,rect.size.y-6),'2',Color('287cb2'),15)
+  badge(rect.position+rect.size*Vector2(0.81,0.83),'2',Color('287cb2') if enabled else Color('414054'),12)
   return
  var fill=Color('c9a362') if primary else Color('382a25')
  if not enabled:fill=fill.darkened(0.35)
  canvas.draw_style_box(style(fill,Color('e0c185') if enabled else Color('7f7162'),12,3),rect)
  canvas.draw_line(rect.position+Vector2(12,5),rect.position+Vector2(rect.size.x-12,5),Color(1,0.92,0.65,0.35),2)
  var font_size=25 if primary else 19
- if info.id=='settings': font_size=40 if game.portrait else 26
+ if info.id=='settings': font_size=28
+ if info.id=='end': font_size=14
  if info.id=='power': font_size=13
  var lines=info.label.split('\n').size()
  var y=rect.position.y+(rect.size.y-font_size*1.16*lines)/2
