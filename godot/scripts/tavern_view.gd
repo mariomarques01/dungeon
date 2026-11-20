@@ -33,6 +33,8 @@ var particles=[]
 var floats=[]
 var anim={}
 var anim_time=0.0
+var rival_anim={}
+var rival_time=0.0
 var canvas
 var clock=0.0
 
@@ -68,6 +70,8 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
+ rival_time+=delta*game.speed
+ if rival_time>=1.3:rival_anim={}
  result_time+=delta
  for effect in scenery:effect.age+=delta*game.speed
  scenery=scenery.filter(func(effect):return effect.age<2.4)
@@ -119,12 +123,12 @@ func geometry() -> void:
    var offset=i+floori((5-list.size())/2.0)-2 if list.size()<=5 else i-(list.size()-1)/2.0
    var center=Vector2(w/2+offset*gap,row)
    var uid=int(list[i].uid)
-   var width=minf(gap*0.94,h*0.112*0.74)
+   var width=minf(gap*0.84,h*0.103*0.74)
    var size=Vector2(width,width/0.74)
    unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
  var hand: Array=state.players[0].hand
  var frame_ratio=float(HAND_FRAME.get_width())/HAND_FRAME.get_height()
- var width=minf(w*0.22,h*0.18*frame_ratio)
+ var width=minf(w*0.9/maxi(5,hand.size()),h*0.166*frame_ratio)
  var size=Vector2(width,width/frame_ratio)
  var spacing=minf(size.x*1.025,(w*0.92-size.x)/maxi(1,hand.size()-1))
  for i in range(hand.size()):
@@ -183,7 +187,7 @@ func prepare() -> void:
   button('settings',layout.settings,'⚙')
   if state.solar_ready() and not game.busy:
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
-  button('power',layout.power,'1 DANO\n2 ENERGIA',state.active==0 and not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
+  button('power',layout.power,'1 DANO\n2 ENERGIA',not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
  elif game.screen=='home': prepare_home()
  elif game.screen=='collection': prepare_collection()
  if not game.inspect_id.is_empty():
@@ -290,27 +294,27 @@ func begin(action: Dictionary) -> void:
 func finish() -> void:
  anim={}
 
-func ingest(events: Array,before: Array) -> void:
+func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
  var elemental=events.filter(func(event):return event.kind in ['damage','freeze','armor','heal','destroy'])
  if not elemental.is_empty():
-  var element=str(anim.get('element',elemental[0].get('element','arcane')))
+  var element=str(action.get('element',elemental[0].get('element','arcane')))
   scenery.append({'element':element,'age':0.0,'position':target_center(elemental[0].get('target',{}))})
   if scenery.size()>4:scenery.pop_front()
- var defeated=events.filter(func(event):return event.kind=='death' and event.side!=anim.get('side',-1))
- if defeated.size()>=2 and anim.has('side'):
+ var defeated=events.filter(func(event):return event.kind=='death' and event.side!=action.get('side',-1))
+ if defeated.size()>=2 and action.has('side'):
   var banner_at=Vector2(layout.w*0.5,(layout.enemy_row+layout.player_row)*0.5)
   floats.append({'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
  var causes={}
  for event in events:
   var kind=event.kind
-  if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',anim.get('element','dark'))
+  if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',action.get('element','dark'))
   if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
    var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    if not event.get('target',{}).has('uid'):
-    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
-   particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',anim.get('element','arcane')),'id':anim.get('id','')})
+    floats.append({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+   particles.append({'kind':kind,'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
@@ -323,7 +327,7 @@ func ingest(events: Array,before: Array) -> void:
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
      var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.unit_size/2,layout.unit_size)
-     var cause=str(causes.get(int(event.uid),anim.get('element','dark')))
+     var cause=str(causes.get(int(event.uid),action.get('element','dark')))
      ghosts.append({'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
      particles.append({'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
 
@@ -374,7 +378,7 @@ func paint_base(c: CanvasItem) -> void:
   for uid in unit_views:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
    var unit=info.unit
-   var ready=int(info.side)==0 and game.rules.active==0 and int(unit.attacks)>0 and not game.busy
+   var ready=int(info.side)==0 and int(unit.attacks)>0 and not game.busy
    var rim=Color('64b7ff') if info.side==0 else Color('ff8b57')
    canvas.draw_rect(rect,Color('30261f'))
    canvas.draw_rect(rect,rim,false,3,true)
@@ -429,6 +433,16 @@ func paint_hand_card(hand: Dictionary,available: bool) -> void:
  text(card.name,label,font_size,INK,true,true)
  text(str(int(card.cost)),Rect2(r.position+r.size*Vector2(0.018,0.029),r.size*Vector2(0.207,0.15)),int(r.size.x*0.19),Color.WHITE,true,true)
 
+func recharge_border(rect: Rect2,remaining: float) -> void:
+ var corners=[rect.position,Vector2(rect.end.x,rect.position.y),rect.end,Vector2(rect.position.x,rect.end.y),rect.position]
+ var length=(rect.size.x+rect.size.y)*2*(1-clampf(remaining/game.rules.REUSE_SECONDS,0,1))
+ canvas.draw_rect(rect,Color('51435f'),false,4)
+ for i in range(4):
+  var edge: Vector2=corners[i+1]-corners[i]
+  if length<=0:break
+  canvas.draw_line(corners[i],corners[i]+edge.limit_length(length),Color('69dcff'),4,true)
+  length-=edge.length()
+
 func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
  var points=PackedVector2Array()
  for i in range(64):
@@ -472,6 +486,7 @@ func paint_battle() -> void:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
   fx.status(unit,rect)
+  if unit.attacks==0 and unit.delay>0:recharge_border(rect,unit.delay)
   if unit.shield:
    oval(rect.grow(7),Color(1,0.9,0.4,0.08),Color(1,0.9,0.4,0.8),3)
    oval(rect.grow(11),Color.TRANSPARENT,Color(1,0.9,0.4,0.25),5)
@@ -481,8 +496,20 @@ func paint_battle() -> void:
   if 'windfury' in unit.keywords: text('↟',Rect2(rect.position-Vector2(7,20),Vector2(30,30)),20,GOLD,true)
  for hand in hand_views:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
-  if not anim.is_empty() and anim.get('kind','')=='card' and anim.get('side',0)==0 and anim.index==hand.index and not anim.get('resolved',false): continue
-  paint_hand_card(hand,game.cards[hand.id].cost<=state.players[0].mana)
+  var remaining=float(state.players[0].cooldowns.get(hand.index,0))
+  var card=game.cards[hand.id]
+  var full=state.players[0].board.size()>=state.MAX_BOARD and (card.kind=='minion' or card.get('effect','')=='summon_wolves')
+  var target_rule=card.get('target','none')
+  var missing_target=(target_rule=='enemy_minion' and state.players[1].board.is_empty()) or (target_rule=='friendly_minion' and state.players[0].board.is_empty())
+  var ready=not missing_target and remaining==0 and card.cost<=state.players[0].mana and not full
+  paint_hand_card(hand,ready)
+  if remaining>0:
+   recharge_border(hand.rect,remaining)
+   text('%d s' % ceili(remaining),Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),18,PAPER,true,true)
+  elif ready:canvas.draw_rect(hand.rect,Color('8be6ae'),false,2,true)
+  else:
+   var reason='Campo cheio' if full else 'Sem energia' if card.cost>state.players[0].mana else 'Sem alvo'
+   text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
   if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
  fx.trail()
  if not game.drag.is_empty():
@@ -500,7 +527,8 @@ func paint_battle() -> void:
    var size=Vector2(170,255)
    var at=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
-  fx.action()
+  fx.action(anim,anim_time)
+ if not rival_anim.is_empty():fx.action(rival_anim,rival_time)
  paint_particles()
  var p=state.players[0]
  var bar=energy_bar()

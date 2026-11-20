@@ -70,13 +70,13 @@ func _initialize() -> void:
  fresh();a=ready(0,'phoenix');rules.players[0].health=21;a.health=0;rules.resolve_deaths()
  check(rules.players[0].health==26,'Último Suspiro da Fênix restaura vida')
  fresh();rules.players[0].mana=10;rules.players[0].hand=['scout']
- for i in range(7):ready(0,'scout')
+ for i in range(5):ready(0,'scout')
  result=rules.play(0,0)
- check(not result.ok and rules.players[0].board.size()==7 and rules.players[0].mana==10,'Limite de sete criaturas não consome a carta rejeitada')
+ check(not result.ok and rules.players[0].board.size()==5 and rules.players[0].mana==10,'Limite de cinco criaturas não consome a carta rejeitada')
  fresh();rules.players[0].mana=10;rules.players[0].hand=['pack']
- for i in range(6):ready(0,'scout')
+ for i in range(4):ready(0,'scout')
  rules.play(0,0)
- check(rules.players[0].board.size()==7,'Invocação múltipla respeita os espaços disponíveis')
+ check(rules.players[0].board.size()==5,'Invocação múltipla respeita os espaços disponíveis')
  fresh();rules.players[0].deck=[];rules.draw(0,3)
  check(rules.players[0].health==24 and rules.players[0].fatigue==3,'Fadiga cresce quando acaba o baralho')
  fresh();rules.players[0].hand=Rules.DEFAULT_DECK.slice(0,10);var deck_count=rules.players[0].deck.size();rules.events=[];rules.draw(0)
@@ -120,7 +120,7 @@ func _initialize() -> void:
      if not plan.is_empty():rules.attack(1,plan.uid,plan.target)
      elif rules.can_power(1).ok:rules.power(1)
      else:rules.end_turn()
-   check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=7 and p.hand.size()<=10),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
+   check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=5 and p.hand.size()<=10),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
   check(rules.done,'Duelo completo sem travamento %d' % match_index)
  fresh()
  rules.players[0].hand=['scout','fireball']
@@ -143,4 +143,15 @@ func _initialize() -> void:
  rules.players[0].mana=10
  check(rules.solar_flare().ok and rules.players[1].health==24 and rules.players[0].armor==4,'Erupção Solar causa dano e concede armadura')
  check(rules.players[0].mana==0 and not rules.solar_flare().ok,'Especial consome a carga uma única vez')
+ rules.start(Rules.DEFAULT_DECK,[],37,true)
+ for side in range(2):
+  rules.players[side].mana=10
+  rules.players[side].hand=['scout','scout']
+ check(rules.play(1,0).ok and rules.play(0,0).ok,'Ambos jogam sem alternar turnos')
+ check(rules.players[0].hand.size()==2 and rules.can_play(0,1).ok,'A mão permanece e cópias recarregam separadamente')
+ check(not rules.equip_support(0,0).ok and rules.equip_support(0,1).ok,'Apoio respeita e inicia recarga')
+ rules.advance_cooldowns(4.9)
+ check(not rules.can_play(0,0).ok,'Carta indisponível antes de cinco segundos')
+ rules.advance_cooldowns(0.11)
+ check(rules.can_play(0,0).ok and rules.players[1].board[0].attacks==1,'Carta e criatura prontas após cinco segundos')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
