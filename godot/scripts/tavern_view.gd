@@ -449,7 +449,8 @@ func draw_card_picture(picture: AtlasTexture,window: Rect2,tint=Color.WHITE) -> 
 func paint_hand_card(hand: Dictionary,available: bool) -> void:
  var r: Rect2=hand.rect
  var card=game.cards[hand.id]
- var tint=Color.WHITE if available else Color('c6bccb')
+ var affordable=card.cost<=game.rules.players[0].mana
+ var tint=Color('676271') if not affordable else Color.WHITE if available else Color('bbb4bf')
  var picture=slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4)
  var window=Rect2(r.position+r.size*Vector2(0.055,0.055),r.size*Vector2(0.90,0.62))
  draw_card_picture(picture,window,tint)
@@ -458,8 +459,9 @@ func paint_hand_card(hand: Dictionary,available: bool) -> void:
  var font_size=maxi(9,int(r.size.x*0.10))
  while font_size>8 and game.title_font.get_string_size(card.name,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x>label.size.x:
   font_size-=1
- text(card.name,label,font_size,INK,true,true)
- text(str(int(card.cost)),Rect2(r.position+r.size*Vector2(0.018,0.029),r.size*Vector2(0.207,0.15)),int(r.size.x*0.19),Color.WHITE,true,true)
+ canvas.draw_rect(label.grow(1),Color('362720'))
+ text(card.name,label,font_size,PAPER,true,true)
+ text(str(int(card.cost)),Rect2(r.position+r.size*Vector2(0.018,0.029),r.size*Vector2(0.207,0.15)),int(r.size.x*0.19),Color.WHITE if affordable else Color(1,0.34,0.32),true,true)
 
 func recharge_border(rect: Rect2,remaining: float) -> void:
  var corners=[rect.position,Vector2(rect.end.x,rect.position.y),rect.end,Vector2(rect.position.x,rect.end.y),rect.position]
@@ -535,11 +537,15 @@ func paint_battle() -> void:
   var ready=not missing_target and remaining==0 and card.cost<=state.players[0].mana and not full
   paint_hand_card(hand,ready)
   if remaining>0:
-   recharge_border(hand.rect,remaining)
-   text('%d s' % ceili(remaining),Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),18,PAPER,true,true)
+   var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
+   var radius=hand.rect.size.x*0.16
+   var end_angle=-PI/2+TAU*(1-clampf(remaining/state.REUSE_SECONDS,0,1))
+   canvas.draw_circle(center,radius+3,Color('262036'))
+   canvas.draw_arc(center,radius,-PI/2,end_angle,32,Color('80e6ff'),4,true)
+   canvas.draw_line(center,center+Vector2.from_angle(end_angle)*radius,Color.WHITE,2,true)
   elif ready:canvas.draw_rect(hand.rect,Color('8be6ae'),false,2,true)
-  else:
-   var reason='Campo cheio' if full else 'Sem energia' if card.cost>state.players[0].mana else 'Sem alvo'
+  elif card.cost<=state.players[0].mana:
+   var reason='Campo cheio' if full else 'Sem alvo'
    text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
   if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
  if game.drag.is_empty():
