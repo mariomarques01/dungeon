@@ -162,6 +162,11 @@ func geometry() -> void:
 func button(id: String,rect: Rect2,label: String,enabled=true,primary=false) -> void:
  buttons.append({'id':id,'rect':rect,'label':label,'enabled':enabled,'primary':primary})
 
+func held_card_rect() -> Rect2:
+ var size=Vector2(178,267) if game.portrait else Vector2(175,262)
+ var offset=Vector2(48 if game.pointer.x<layout.w*0.5 else -size.x-48,-size.y*0.85)
+ return Rect2(game.pointer+offset,size)
+
 func prepare() -> void:
  used={}; geometry()
  if game.screen=='battle':
@@ -199,8 +204,7 @@ func prepare() -> void:
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
    art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
   if not game.drag.is_empty() and game.drag.kind=='card':
-   var size=Vector2(178,267) if game.portrait else Vector2(175,262)
-   var rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
+   var rect=held_card_rect()
    prepare_card('drag',game.drag.id,rect,0,50)
   if not anim.is_empty() and anim.kind=='card' and anim_time<0.62:
    var size=Vector2(170,255)
@@ -405,8 +409,6 @@ func paint_base(c: CanvasItem) -> void:
  if not game.inspect_id.is_empty(): canvas.draw_style_box(style(Color(0.02,0.025,0.04,0.95),Color('9e815a'),18),inspect_rect().grow(20))
  if game.screen=='collection': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.025,0.02,0.05,0.69))
  if game.screen=='battle':
-  var tint=Color(0.3,0.8,0.48,0.08+sin(clock*4)*0.025)
-  if game.drag.get('kind','')=='card' and game.cards[game.drag.id].kind=='minion': canvas.draw_style_box(style(tint,Color(0.45,1,0.65,0.6),25),layout.player_drop)
   for uid in unit_views:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
    var unit=info.unit
@@ -585,13 +587,12 @@ func paint_battle() -> void:
  fx.trail()
  if not game.drag.is_empty():
   paint_targets(game.drag)
+  if game.drag.kind=='card':paint_drop_preview()
   if game.drag.kind=='card':
-   var size=Vector2(178,267) if game.portrait else Vector2(175,262)
-   var held_rect=Rect2(game.pointer-size*Vector2(0.5,0.68),size)
+   var held_rect=held_card_rect()
    paint_card(game.drag.id,held_rect)
    fx.aura(game.drag.id,held_rect,1.0)
-   if game.cards[game.drag.id].kind=='minion' and layout.player_drop.has_point(game.pointer):
-    fx.ring(Vector2(game.pointer.x,layout.player_row),108+sin(clock*4)*5,element_color(game.cards[game.drag.id].element),0.8,clock*2)
+
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
  if not anim.is_empty():
   if anim.kind=='card' and anim_time<0.62:
@@ -627,6 +628,39 @@ func line_glow(a: Vector2,b: Vector2,color: Color,width=3.0) -> void:
  canvas.draw_line(a,b,Color(color,0.14),width*5)
  canvas.draw_line(a,b,Color(color,0.5),width*2)
  canvas.draw_line(a,b,color.lightened(0.5),width)
+
+func paint_drop_preview() -> void:
+ var player=game.rules.players[0]
+ var index=int(game.drag.index)
+ var card=game.cards[game.drag.id]
+ if player.cooldowns.has(index) or card.cost>player.mana:return
+ var rim=Color(0.55,1,0.76,0.8)
+ var landing=Rect2()
+ var support=game.support_at(game.pointer)
+ for slot in layout.supports:canvas.draw_rect(slot,rim,false,3,true)
+ if support>=0:
+  landing=layout.supports[support]
+ elif card.kind=='minion' and game.rules.can_play(0,index).ok:
+  var count=player.board.size()
+  var first=floori((game.rules.MAX_BOARD-count-1)/2.0)
+  for offset in range(count+1):
+   canvas.draw_rect(layout.slots[0][first+offset],rim,false,3,true)
+  if layout.player_drop.has_point(game.pointer):
+   landing=layout.slots[0][first+game.drop_position(game.pointer)]
+ elif card.kind=='spell':
+  var target=game.target_at(game.pointer)
+  if game.rules.can_play(0,index,target).ok:
+   if card.get('target','none')=='none':
+    canvas.draw_rect(layout.board_zone,rim,false,3,true)
+   if not target.is_empty() or layout.board_zone.has_point(game.pointer):
+    var center=target_center(target) if not target.is_empty() else game.pointer
+    landing=Rect2(center-layout.slot_sizes[0]/2,layout.slot_sizes[0])
+ if landing.has_area():
+  canvas.draw_rect(landing,Color(0.04,0.09,0.11,0.68))
+  canvas.draw_rect(landing,rim,false,4,true)
+  var creature=card.kind=='minion'
+  var picture=slice(creatures if creature else spells,int(card.art),5 if creature else 4,5 if creature else 4)
+  draw_card_picture(picture,landing.grow(-4),Color(1,1,1,0.40))
 
 func paint_targets(selection: Dictionary) -> void:
  var candidates=[]

@@ -365,7 +365,7 @@ func pointer_up() -> void:
 func drop_position(point: Vector2) -> int:
  var board: Array=rules.players[0].board
  for i in range(board.size()):
-  if pointer.x<view.unit_views[int(board[i].uid)].rect.get_center().x:return i
+  if point.x<view.unit_views[int(board[i].uid)].rect.get_center().x:return i
  return board.size()
 
 func activate_button(id: String) -> void:
