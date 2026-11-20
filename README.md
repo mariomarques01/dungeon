@@ -8,7 +8,7 @@ Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos em tempo real c
 
 Arraste uma criatura da mão para o seu lado do tabuleiro. Arraste uma criatura pronta até um inimigo para atacar. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
 
-Cada herói começa com 30 de vida. O baralho tem 30 cartas e o campo aceita até cinco criaturas de cada lado. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. Ao jogar uma carta ou equipá-la como apoio, ela permanece na mão e recarrega por 5 segundos. A borda azul mostra o progresso e a verde indica uma carta disponível. Cada cópia recarrega separadamente. A IA age durante o duelo e os apoios ativam a cada 12 segundos de jogo.
+Cada herói começa com 30 de vida. Cada jogador tem um baralho de 30 cartas, até cinco cartas na mão e espaço para cinco criaturas no campo. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. Ao jogar uma carta ou equipá-la como apoio, ela permanece na mão e recarrega por 5 segundos. A borda azul mostra o progresso e a verde indica uma carta disponível. Cada cópia recarrega separadamente. A IA age durante o duelo e os apoios ativam a cada 12 segundos de jogo.
 
 Com 10/10 de energia, toque em **Lançar Erupção Solar** na barra abaixo da mão. A habilidade consome os 10 pontos, causa 6 de dano ao herói rival e concede 4 de armadura à sua heroína. Você também pode guardar a carga para jogar cartas.
 
