@@ -13,6 +13,8 @@ var scenery=[]
 var fragment_cache={}
 var board: Texture2D
 var portrait_board: Texture2D
+const SLOT_ZOOM=1.18
+const SLOT_COLUMNS=[89,141,192,243,295]
 const ROYAL_ARENA = preload("res://tavern_assets/royal/arena.webp")
 const HAND_FRAME = preload("res://tavern_assets/royal/hand-frame.webp")
 var creatures: Texture2D
@@ -97,9 +99,21 @@ func geometry() -> void:
  layout.player_hero=Rect2(w*0.374,h*0.614,w*0.252,h*0.139)
  # Coordinates measured on a 384 x 512 reference of the painted arena.
  var arena_scale=Vector2(w/384.0,h/512.0)
- layout.slot_sizes=[Vector2(40,54)*arena_scale,Vector2(40,57)*arena_scale]
- layout.player_row=285*arena_scale.y
- layout.enemy_row=167.5*arena_scale.y
+ layout.slot_sizes=[]
+ layout.slots=[[],[]]
+ layout.slot_sources=[[],[]]
+ var texture_scale=ROYAL_ARENA.get_size()/Vector2(384,512)
+ layout.player_row=282*arena_scale.y
+ layout.enemy_row=170.5*arena_scale.y
+ for side in range(2):
+  var original_size=Vector2(40,54 if side==0 else 57)
+  var size=original_size*arena_scale*SLOT_ZOOM
+  layout.slot_sizes.append(size)
+  for x in SLOT_COLUMNS:
+   var center=Vector2(x*arena_scale.x,layout.player_row if side==0 else layout.enemy_row)
+   var painted_center=Vector2(x,285 if side==0 else 167.5)
+   layout.slots[side].append(Rect2(center-size/2,size))
+   layout.slot_sources[side].append(Rect2((painted_center-original_size/2)*texture_scale,original_size*texture_scale))
  layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
@@ -119,14 +133,11 @@ func geometry() -> void:
  for side in range(2):
   hero_views.append({'side':side,'hero':true,'rect':layout.player_hero if side==0 else layout.enemy_hero})
   var list: Array=state.players[side].board
-  var row=float(layout.player_row if side==0 else layout.enemy_row)
   var first_slot=floori((state.MAX_BOARD-list.size())/2.0)
   for i in range(list.size()):
    var column=first_slot+i
-   var center=Vector2([89,141,192,243,295][column]*arena_scale.x,row)
    var uid=int(list[i].uid)
-   var size: Vector2=layout.slot_sizes[side]
-   unit_views[uid]={'side':side,'uid':uid,'rect':Rect2(center-size/2,size),'unit':list[i]}
+   unit_views[uid]={'side':side,'uid':uid,'rect':layout.slots[side][column],'unit':list[i]}
  var hand: Array=state.players[0].hand
  var frame_ratio=float(HAND_FRAME.get_width())/HAND_FRAME.get_height()
  var width=minf(w*0.95/maxi(1,hand.size()),h*0.190*frame_ratio)
@@ -364,6 +375,9 @@ func paint_base(c: CanvasItem) -> void:
  if game.screen=='battle':
   canvas.draw_rect(bounds,Color('19132b'))
   canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
+  for side in range(2):
+   for column in range(SLOT_COLUMNS.size()):
+    canvas.draw_texture_rect_region(ROYAL_ARENA,layout.slots[side][column],layout.slot_sources[side][column])
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
   fx.environment()
