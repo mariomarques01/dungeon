@@ -431,7 +431,7 @@ func start_match() -> void:
  pending_support=-1
  energy_elapsed=0.0; rival_elapsed=0.0;support_elapsed=0.0;rival_energy=0.0
  rules.start(profile.deck,[],qa_seed,true)
- view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
+ view.reset_effects();view.scenery=[]
  audio_engine.start_music();toast_time=0
 
 func card_locked(side: int,index: int) -> bool:
