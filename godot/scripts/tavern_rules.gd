@@ -1,5 +1,7 @@
 extends RefCounted
 const MAX_BOARD=5
+const ELEMENT_ADVANTAGE={'fire':'ice','ice':'storm','storm':'steel'}
+const FAMILY_ATTACK_BONUS=1
 const REUSE_SECONDS=5.0
 var realtime=false
 const MAX_HAND=5
@@ -20,20 +22,48 @@ func _init(definitions: Dictionary) -> void:
  random.randomize()
 
 
-func equip_support(slot: int,index: int,side=0) -> Dictionary:
+func can_equip_support(slot: int,index: int,side=0) -> Dictionary:
  if done or (not realtime and active!=side):return failure('Aguarde sua vez.')
  var supports: Array=players[side].supports
  if slot<0 or slot>=supports.size():return failure('Escolha uma casa dourada.')
  var player=players[side]
  if index<0 or index>=player.hand.size():return failure('Carta indisponível.')
  if player.cooldowns.has(index):return failure('Carta recarregando.')
- var id=player.hand[index]
- var cost=int(cards[id].cost)
- if player.mana<cost:return failure('Energia insuficiente.')
- player.mana-=cost
- consume_slot(player,index)
- supports[slot].id=id
+ var card=cards[player.hand[index]]
+ if player.mana<int(card.cost):return failure('Energia insuficiente.')
+ if card.kind=='trap' and supports[slot].get('trap','')!='':return failure('Já há uma armadilha armada neste apoio.')
  return {'ok':true}
+
+func equip_support(slot: int,index: int,side=0) -> Dictionary:
+ var valid=can_equip_support(slot,index,side)
+ if not valid.ok:return valid
+ var player=players[side]
+ var id=player.hand[index]
+ var card=cards[id]
+ player.mana-=int(card.cost)
+ consume_slot(player,index)
+ if card.kind=='trap':player.supports[slot].trap=id
+ else:player.supports[slot].id=id
+ return {'ok':true,'trap':card.kind=='trap'}
+
+func trigger_traps(side: int,trigger: String,context: Dictionary={}) -> void:
+ var hero={'side':side,'hero':true}
+ for slot in range(players[side].supports.size()):
+  var support=players[side].supports[slot]
+  var id=support.get('trap','')
+  if id=='':continue
+  var card=cards[id]
+  if card.trigger!=trigger:continue
+  if trigger=='low_health' and not (context.before>=int(card.threshold) and context.after<int(card.threshold)):continue
+  support.trap=''
+  events.append({'kind':'trap_reveal','side':side,'slot':slot,'id':id,'element':card.element})
+  var amount=int(card.amount)
+  match card.effect:
+   'armor':
+    players[side].armor+=amount
+    events.append({'kind':'armor','side':side,'target':hero,'amount':amount})
+   'heal':heal(hero,amount)
+   'damage_attacker':damage(context.attacker,amount,card.element)
 
 func exchange_card(side: int,index: int) -> Dictionary:
  var player=players[side]
@@ -69,17 +99,22 @@ func advance_cooldowns(delta: float) -> void:
 func support_strength(id: String) -> int:
  return clampi(ceili(float(cards[id].cost)/2),1,4)
 
-func choose_rival_support() -> void:
+func choose_rival_support(locked=Callable()) -> void:
  var rival=players[1]
  if rival.board.is_empty() and turn<=2:return
  for slot in range(2):
   var support=rival.supports[slot]
   support.defense=rival.health<14 or (slot==1 and players[0].health>10)
-  if support.id!='':continue
   var best=-1
   for i in range(rival.hand.size()):
-   var cost=int(cards[rival.hand[i]].cost)
-   if not rival.cooldowns.has(i) and cost<=rival.mana and (best<0 or support_strength(rival.hand[i])>support_strength(rival.hand[best])):best=i
+   if locked.is_valid() and locked.call(1,i):continue
+   var id=rival.hand[i]
+   if cards[id].kind=='trap':
+    if can_equip_support(slot,i,1).ok:
+     best=i
+     break
+   elif support.id=='' and can_equip_support(slot,i,1).ok:
+    if best<0 or support_strength(id)>support_strength(rival.hand[best]):best=i
   if best>=0:equip_support(slot,best,1)
 
 func resolve_supports(side: int) -> void:
@@ -105,7 +140,7 @@ func start(deck: Array, enemy_deck: Array=[], random_seed = -1, live=false) -> A
   for i in range(pile.size()-1,0,-1):
    var j=random.randi_range(0,i)
    var swap=pile[i]; pile[i]=pile[j]; pile[j]=swap
-  players.append({'supports':[{'id':'','defense':false},{'id':'','defense':true}],'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false,'power_delay':0.0,'cooldowns':{}})
+  players.append({'supports':[{'id':'','trap':'','defense':false},{'id':'','trap':'','defense':true}],'health':30,'armor':0,'mana':0,'max_mana':0,'deck':pile,'hand':[],'board':[],'fatigue':0,'power_used':false,'power_delay':0.0,'cooldowns':{}})
   for i in range(3): draw(side)
   # An opening one-cost creature keeps the first match interactive for both sides.
   var opening: Array=players[side].hand
@@ -200,6 +235,7 @@ func can_play(side: int,index: int,target: Dictionary={}) -> Dictionary:
  if p.cooldowns.has(index):return failure('Carta recarregando.')
  var c=cards[p.hand[index]]
  if int(c.cost)>int(p.mana): return failure('Energia insuficiente.')
+ if c.kind=='trap':return failure('Arme a armadilha em uma casa dourada.')
  if c.kind=='minion':
   if p.board.size()>=MAX_BOARD: return failure('Seu campo já tem 5 criaturas.')
   return {'ok':true}
@@ -237,7 +273,9 @@ func play(side: int,index: int,target: Dictionary={},position = -1) -> Dictionar
  if c.kind=='minion':
   spawn(side,id,position)
   battlecry(side,c.get('battlecry',''))
- else: cast(side,c,target)
+ else:
+  trigger_traps(1-side,'enemy_spell')
+  cast(side,c,target)
  resolve_deaths()
  return success()
 
@@ -295,17 +333,45 @@ func cast(side: int,c: Dictionary,target: Dictionary) -> void:
    players[side].mana=mini(10,int(players[side].mana)+amount)
    events.append({'kind':'mana','side':side,'amount':amount})
 
-# Project the immediate health change without spending energy, rolling RNG or emitting events.
+func family_bonus(side: int,unit: Dictionary) -> int:
+ var family=cards[unit.id].get('family','')
+ if family=='' or unit.health<=0:return 0
+ for ally in players[side].board:
+  if ally.uid!=unit.uid and ally.health>0 and cards[ally.id].get('family','')==family:return FAMILY_ATTACK_BONUS
+ return 0
+
+func effective_attack(side: int,unit: Dictionary) -> int:
+ return int(unit.attack)+family_bonus(side,unit)
+
+func elemental_modifier(target: Dictionary,element: String) -> int:
+ if target.get('hero',false):return 0
+ var unit=find_unit(int(target.side),int(target.uid))
+ if not unit:return 0
+ var defense=cards[unit.id].element
+ var source='storm' if element=='lightning' else element
+ if defense=='lightning':defense='storm'
+ if ELEMENT_ADVANTAGE.get(source,'')==defense:return 1
+ if ELEMENT_ADVANTAGE.get(defense,'')==source:return -1
+ return 0
+
+func elemental_marker(modifier: int) -> String:
+ if modifier>0:return ' ▲'
+ if modifier<0:return ' ▼'
+ return ''
+
+# Project the immediate health change without spending energy, rolling RNG or revealing traps.
 func health_preview(side: int,selection: Dictionary,target: Dictionary) -> String:
  if not target_exists(target):return ''
  var amount=0
  var healing=false
  var poison=false
+ var element='fire'
  match selection.kind:
   'card':
    var index=int(selection.index)
    if not can_play(side,index,target).ok:return ''
    var card=cards[players[side].hand[index]]
+   element=card.element
    match card.get('effect',''):
     'heal':
      healing=true
@@ -320,7 +386,8 @@ func health_preview(side: int,selection: Dictionary,target: Dictionary) -> Strin
   'unit':
    if not can_attack(side,selection.uid,target).ok:return ''
    var unit=find_unit(side,selection.uid)
-   amount=unit.attack
+   amount=effective_attack(side,unit)
+   element=cards[unit.id].element
    poison='poison' in unit.keywords
   'power':
    if side!=0 or not can_power(side,target).ok:return ''
@@ -329,20 +396,26 @@ func health_preview(side: int,selection: Dictionary,target: Dictionary) -> Strin
  var hero=target.get('hero',false)
  var victim=players[target.side] if hero else find_unit(target.side,target.uid)
  if healing:return '+'+str(mini(amount,(30 if hero else int(victim.max_health))-int(victim.health)))
- if not hero and victim.shield:return 'ESCUDO'
+ var modifier=elemental_modifier(target,element) if amount>0 else 0
+ amount=maxi(0,amount+modifier)
+ if not hero and victim.shield and amount>0:return 'ESCUDO'
  if hero and victim.armor>0:
   var blocked=mini(amount,victim.armor)
   var lost=mini(amount-blocked,victim.health)
   return '−%d ARM'%blocked if lost==0 else '−%d ARM · −%d PV'%[blocked,lost]
- return '−'+str(victim.health if poison and not hero else mini(amount,victim.health))
+ return '−'+str(victim.health if poison and not hero and amount>0 else mini(amount,victim.health))+elemental_marker(modifier)
 
 func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
  if not target_exists(target): return 0
  amount=maxi(0,amount)
+ var modifier=elemental_modifier(target,element) if amount>0 else 0
+ amount=maxi(0,amount+modifier)
  var side=int(target.side)
  var actual=0
+ var previous_health=0
  if target.get('hero',false):
   var p=players[side]
+  previous_health=int(p.health)
   var block=mini(int(p.armor),amount)
   p.armor-=block; amount-=block
   actual=mini(int(p.health),amount); p.health=maxi(0,int(p.health)-amount)
@@ -354,7 +427,12 @@ func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
   actual=mini(maxi(0,int(unit.health)),amount)
   unit.health-=amount
   if poison and actual>0: unit.health=0
- if actual>0: events.append({'kind':'damage','target':target.duplicate(),'amount':actual,'element':element})
+ if actual>0:
+  events.append({'kind':'damage','target':target.duplicate(),'amount':actual,'element':element,'modifier':modifier})
+ elif modifier<0 and amount==0:
+  events.append({'kind':'element_resist','target':target.duplicate(),'amount':0,'element':element,'modifier':modifier})
+ if target.get('hero',false) and actual>0 and players[side].health>0:
+  trigger_traps(side,'low_health',{'before':previous_health,'after':players[side].health})
  return actual
 
 func heal(target: Dictionary,amount: int) -> int:
@@ -401,7 +479,7 @@ func can_attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  if not attacker: return failure('Criatura indisponível.')
  if realtime and attacker.attacks<=0:return failure('Criatura recarregando.')
  if attacker.attacks<=0: return failure('Esta criatura precisa aguardar o próximo turno.' if attacker.sleeping else 'Esta criatura já atacou ou está congelada.')
- if attacker.attack<=0: return failure('Esta criatura não tem ataque.')
+ if effective_attack(side,attacker)<=0: return failure('Esta criatura não tem ataque.')
  if not target_exists(target) or int(target.side)==side: return failure('Arraste até um inimigo.')
  if target.get('hero',false) and attacker.sleeping and not 'charge' in attacker.keywords: return failure('Investida só permite atacar criaturas agora.')
  var taunts=players[1-side].board.filter(func(u): return 'taunt' in u.keywords and u.health>0)
@@ -417,11 +495,15 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  attacker.attacks-=1
  if realtime and attacker.attacks==0:attacker.delay=REUSE_SECONDS
  var attacker_target={'side':side,'uid':uid}
+ trigger_traps(int(target.side),'attacked',{'attacker':attacker_target})
+ if attacker.health<=0:
+  resolve_deaths()
+  return success()
  var retaliation=0
  var defender=null
  if not target.get('hero',false):
-  defender=find_unit(int(target.side),int(target.uid)); retaliation=int(defender.attack)
- var dealt=damage(target,int(attacker.attack),cards[attacker.id].element,'poison' in attacker.keywords)
+  defender=find_unit(int(target.side),int(target.uid)); retaliation=effective_attack(int(target.side),defender)
+ var dealt=damage(target,effective_attack(side,attacker),cards[attacker.id].element,'poison' in attacker.keywords)
  if 'lifesteal' in attacker.keywords: heal({'side':side,'hero':true},dealt)
  if defender:
   var returned=damage(attacker_target,retaliation,cards[defender.id].element,'poison' in defender.keywords)
@@ -529,12 +611,16 @@ func ai_attack(locked=Callable()) -> Dictionary:
   for target in enemy_targets(1):
    if locked.is_valid() and locked.call(target):continue
    if not can_attack(1,int(unit.uid),target).ok: continue
-   var score=float(unit.attack)*0.5
-   if target.get('hero',false): score+=10000 if unit.attack>=players[0].health+players[0].armor else 3
+   var attack_value=effective_attack(1,unit)
+   var score=float(attack_value)*0.5
+   if target.get('hero',false): score+=10000 if attack_value>=players[0].health+players[0].armor else 3
    else:
     var enemy=find_unit(0,int(target.uid))
-    if not enemy.shield and (unit.attack>=enemy.health or 'poison' in unit.keywords): score+=int(cards[enemy.id].cost)*3+4
-    if not unit.shield and (enemy.attack>=unit.health or (enemy.attack>0 and 'poison' in enemy.keywords)): score-=int(cards[unit.id].cost)*2
+    var outgoing=maxi(0,attack_value+elemental_modifier(target,cards[unit.id].element))
+    var incoming=effective_attack(0,enemy)
+    if incoming>0:incoming=maxi(0,incoming+elemental_modifier({'side':1,'uid':unit.uid},cards[enemy.id].element))
+    if not enemy.shield and outgoing>0 and (outgoing>=enemy.health or 'poison' in unit.keywords): score+=int(cards[enemy.id].cost)*3+4
+    if not unit.shield and incoming>0 and (incoming>=unit.health or 'poison' in enemy.keywords): score-=int(cards[unit.id].cost)*2
     if 'taunt' in enemy.keywords: score+=5
    if score>best_score: best_score=score; best={'kind':'attack','uid':unit.uid,'target':target}
  return best

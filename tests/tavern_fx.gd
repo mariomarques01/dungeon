@@ -15,6 +15,9 @@ func run() -> void:
   game.rules.spawn(0,'stoneguard');game.rules.spawn(1,'stoneguard')
   game.view.prepare()
   var card=game.cards[id];var target={}
+  if card.kind=='trap':
+   await check_trap_reveal(game,card)
+   continue
   match card.get('target','none'):
    'enemy':target={'side':1,'hero':true}
    'enemy_minion':target={'side':1,'uid':game.rules.players[1].board[0].uid}
@@ -81,6 +84,11 @@ func run() -> void:
  game.view.ingest([hit,hit],snapshot)
  if game.view.floats.size()!=1 or game.view.floats[0].text!='−6' or game.view.banners!=['PRIMEIRO SANGUE','HERÓI RIVAL EM PERIGO']:
   push_error('Incorrect damage accumulation or event order');failures+=1
+ var advantaged=hit.duplicate()
+ advantaged.modifier=1
+ game.view.ingest([advantaged],snapshot)
+ if game.view.floats.size()!=2 or game.view.floats[1].text!='−3 ▲':
+  push_error('Elemental and neutral numbers must retain distinct markers');failures+=1
  if game.view.battle_delta(0.005)!=0 or game.view.battle_delta(0.2)<=0:
   push_error('Hit-stop must hold briefly and release');failures+=1
  var sprite=game.view.floats[0].sprite
@@ -104,3 +112,35 @@ func finish_animation(game) -> void:
   await process_frame
  push_error('Animation timed out')
  failures+=1
+
+func check_trap_reveal(game,card: Dictionary) -> void:
+ var player=game.rules.players[0]
+ var rival=game.rules.players[1]
+ game.place_support(0,0)
+ if player.supports[0].trap!=card.id or not game.view.trap_reveals.is_empty():
+  push_error('Trap must remain hidden when placed: '+card.id);failures+=1
+ var hero={'side':0,'hero':true}
+ match card.trigger:
+  'attacked':
+   var attacker=game.rules.spawn(1,'wolf')
+   attacker.attacks=1;attacker.sleeping=false
+   game.view.prepare()
+   # The fixture has a guard with Taunt, so the rival must attack it first.
+   game.request_attack(attacker.uid,{'side':0,'uid':player.board[0].uid},1)
+  'enemy_spell','low_health':
+   rival.mana=10;rival.hand=['fireball']
+   if card.has('threshold'):player.health=int(card.threshold)
+   game.request_play(0,hero,-1,Vector2.ZERO,1)
+ game.advance_actions(0.55)
+ if game.view.trap_reveals.size()!=1 or game.view.trap_reveals[0].id!=card.id or player.supports[0].trap!='':
+  push_error('Trap reveal did not reach the view: '+card.id);failures+=1
+ game.view.tick(0.15)
+ game.overlay.queue_redraw()
+ await process_frame
+ game.reduced_motion=true
+ game.overlay.queue_redraw()
+ await process_frame
+ game.reduced_motion=false
+ game.view.tick(2)
+ if not game.view.trap_reveals.is_empty():
+  push_error('Trap reveal must expire: '+card.id);failures+=1
