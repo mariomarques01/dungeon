@@ -52,7 +52,7 @@ var fragment_cache={}
 var styles={}
 var board: Texture2D
 var portrait_board: Texture2D
-const SLOT_ZOOM=1.18
+const SLOT_ZOOM=1.22
 const SLOT_COLUMNS=[89,141,192,243,295]
 const ROYAL_ARENA = preload("res://tavern_assets/royal/arena.webp")
 const HAND_FRAME = preload("res://tavern_assets/royal/hand-frame.webp")
@@ -62,6 +62,7 @@ var frames: Texture2D
 var atlas_cache={}
 var nodes={}
 var used={}
+var hand_shader=Shader.new()
 var shader: Shader
 var layout={}
 var hand_views=[]
@@ -105,6 +106,7 @@ class HandFace extends Node2D:
   card_size=hand.rect.size
   available=ready
   affordable=can_pay
+  material.set_shader_parameter('muted',not affordable)
   queue_redraw()
 
  func _draw() -> void:
@@ -115,12 +117,67 @@ class HandFace extends Node2D:
   view.paint_hand_card({'id':card_id,'rect':Rect2(Vector2.ZERO,card_size)},available)
   view.canvas=previous
 
+const HAND_EFFECTS={
+ "scout": "Goblin",
+ "stoneguard": "Provocar",
+ "wolf": "Alcateia",
+ "apprentice": "Feitiços +1",
+ "drake": "Entrada · 1 dano",
+ "shieldbearer": "Provocar",
+ "dryad": "Cura 3 PV",
+ "panther": "Investida",
+ "beetle": "Escudo Divino",
+ "orc": "Orc",
+ "firelord": "Área · 2 dano",
+ "frostling": "Congela 1",
+ "treant": "Provocar",
+ "knight": "Guarda e escudo",
+ "necro": "Invoca esqueletos",
+ "skeleton": "Mortos-vivos",
+ "gryphon": "Investida",
+ "golem": "Provocar",
+ "familiar": "Dois ataques",
+ "serpent": "Veneno",
+ "dragon": "Área · 2 dano",
+ "archmage": "Feitiços +2",
+ "demon": "Área · 3 dano",
+ "phoenix": "Roubo de vida",
+ "wyrm": "Congela todos",
+ "fireball": "6 de dano",
+ "bolt": "2 de dano",
+ "healing": "Cura 5 PV",
+ "frost": "2 dano + gelo",
+ "meteor": "Área · 4 dano",
+ "barrier": "6 de armadura",
+ "missiles": "3 mísseis",
+ "wisdom": "Compra 2",
+ "roots": "−2 ATQ · compra 1",
+ "blessing": "+2 ATQ / +2 PV",
+ "vortex": "Destrói 1",
+ "pack": "Invoca 2 lobos",
+ "thunderstorm": "Área · 3 dano",
+ "blizzard": "Área · 2 + gelo",
+ "rune_blade": "+3 ATQ",
+ "crystal": "+1 energia",
+ "token_skeleton": "Mortos-vivos",
+ "token_wolf": "Provocar",
+ "token_guard": "Recruta",
+ "trap_bulwark": "Ataque · +3 ARM",
+ "trap_spikes": "Ataque · 2 dano",
+ "trap_runes": "Feitiço · +3 ARM",
+ "trap_spring": "Feitiço · cura 2",
+ "trap_embers": "PV < 10 · cura 4",
+ "trap_last_stand": "PV < 7 · +5 ARM"
+}
+
 var hand_faces: Array[HandFace]=[]
 
 func prepare_hand_faces() -> void:
  for hand in hand_views:
   if hand.index>=hand_faces.size():
    var face=HandFace.new()
+   face.material=ShaderMaterial.new()
+   face.material.shader=hand_shader
    face.owner_view=weakref(self)
    face.z_index=3
    game.art_layer.add_child(face)
@@ -186,6 +243,7 @@ var canvas
 var clock=0.0
 
 func _init(owner) -> void:
+ hand_shader.code="shader_type canvas_item; uniform bool muted=false; void fragment(){ if(muted){COLOR.rgb=mix(COLOR.rgb,vec3(dot(COLOR.rgb,vec3(0.299,0.587,0.114))),0.85);} }"
  game=owner
  fx=preload("res://scripts/tavern_fx.gd").new(self)
  board=load('res://tavern_assets/board.png')
@@ -379,6 +437,7 @@ func prepare() -> void:
    var p=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    prepare_card('cast%d_%d'%[anim.side,anim.index],anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   button('settings',layout.settings,'⚙')
+  button('help',Rect2(layout.settings.position+Vector2(0,layout.settings.size.y+24),layout.settings.size),'?')
   if state.solar_ready() and not game.target_locked({'side':1,'hero':true}):
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
   if game.selected_card>=0 and not game.card_locked(0,game.selected_card) and not state.done:
@@ -638,16 +697,17 @@ func paint_overlay(c: CanvasItem) -> void:
    canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
    text(hint,strip,15,PAPER,true)
   text('Toque fora para fechar',Rect2(card_rect.position+Vector2(-15,card_rect.size.y+15),Vector2(card_rect.size.x+30,25)),15,PAPER,true)
- if game.screen=='battle' and game.panel.is_empty() and not banners.is_empty():
+ if game.screen=='battle' and game.panel.is_empty() and not game.tutorial_visible and game.toast_time<=0 and not banners.is_empty():
   var strip=Rect2(layout.w/2-190,layout.h*0.443,380,42)
   canvas.draw_style_box(style(Color('33262b'),GOLD,8,2),strip)
   text(banners[0],strip,23,GOLD,true,true)
  if not game.panel.is_empty(): paint_panel()
- if game.toast_time>0:
+ if game.toast_time>0 and not (game.screen=='battle' and game.tutorial_visible and game.selected_card<0):
+  var toast_y=layout.h*0.409 if game.screen=='battle' else layout.h*0.19
   var width=minf(layout.w-70,650)
-  canvas.draw_style_box(style(Color(0.025,0.03,0.055,0.94),Color('d8ba7a'),12),Rect2(layout.w/2-width/2,layout.h*0.19,width,56))
+  canvas.draw_style_box(style(Color(0.025,0.03,0.055,0.94),Color('d8ba7a'),12),Rect2(layout.w/2-width/2,toast_y,width,48))
   var inset=5 if '\n' in game.toast_text else 15
-  text(game.toast_text,Rect2(layout.w/2-width/2+14,layout.h*0.19+inset,width-28,50),18,PAPER,true)
+  text(game.toast_text,Rect2(layout.w/2-width/2+14,toast_y+inset,width-28,50),18,PAPER,true)
 
  if game.qa_enabled and not game.qa_frame_label.is_empty():
   var meter=Rect2(8,layout.h-30,174,28)
@@ -734,6 +794,18 @@ func paint_hand_card(hand: Dictionary,available: bool) -> void:
  text(card.name,label,font_size,PAPER,true,true)
  text(str(int(card.cost)),Rect2(r.position+r.size*Vector2(0.018,0.029),r.size*Vector2(0.207,0.15)),int(r.size.x*0.19),Color.WHITE if affordable else Color(1,0.34,0.32),true,true)
 
+ var inset=r.position+r.size*Vector2(0.12,0.70)
+ if not affordable:
+  canvas.draw_rect(Rect2(inset-Vector2(1,1),r.size*Vector2(0.77,0.24)),Color('bba584'))
+ var width=r.size.x*0.76
+ var fs=maxi(10,int(r.size.x*0.12))
+ if card.kind=='minion':
+  text('%d ATQ · %d PV'%[card.attack,card.health],Rect2(inset,Vector2(width,fs*1.4)),fs,INK,true,true)
+  inset.y+=fs*1.35
+ var summary=HAND_EFFECTS.get(card.id,'')
+ var fit=mini(fs,int(width*fs/maxf(1,game.body_font.get_string_size(summary,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x)))
+ text(summary,Rect2(inset,Vector2(width,fs*2)),fit,INK,true)
+
 func radial_cooldown(center: Vector2,radius: float,remaining: float) -> void:
  var end_angle=-PI/2+TAU*(1-clampf(remaining/game.rules.REUSE_SECONDS,0,1))
  canvas.draw_circle(center,radius+3,Color('262036'))
@@ -755,19 +827,27 @@ func drag_preview() -> Dictionary:
  return {} if label.is_empty() else {'text':label,'target':target}
 
 func paint_next_card(player: Dictionary) -> void:
- var box=Rect2(layout.w*0.665,layout.h*0.006,layout.w*0.225,layout.h*0.13)
- canvas.draw_style_box(style(Color('28232b'),GOLD,8,1),box)
- var line=box.size.y/4
- var fs=int(minf(box.size.x/10,line*0.66))
- text('PRÓXIMA · %d'%player.deck.size(),Rect2(box.position,Vector2(box.size.x,line)),fs,GOLD,true)
- var name='Baralho vazio' if player.deck.is_empty() else str(game.cards[player.deck.back()].name)
- var width=game.title_font.get_string_size(name,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x
- var fitted=maxi(9,int(fs*minf(1,(box.size.x-6)/maxf(width,1))))
- text(name,Rect2(box.position+Vector2(0,line),Vector2(box.size.x,line)),fitted,PAPER,true,true)
- var cycle='Troca: 1 energia' if player.hand.size()==game.rules.MAX_HAND else 'Compra em %d s'%ceili(game.RIVAL_SECONDS-game.support_elapsed)
- if player.deck.is_empty():cycle='Sem cartas'
- text(cycle,Rect2(box.position+Vector2(0,line*2),Vector2(box.size.x,line)),fs,PAPER,true)
- text('Mão %d/%d · reuso %d s'%[player.hand.size(),game.rules.MAX_HAND,game.rules.REUSE_SECONDS],Rect2(box.position+Vector2(0,line*3),Vector2(box.size.x,line)),fs,PAPER,true)
+ var width=minf(layout.w*0.085,layout.h*0.068)
+ var rect=Rect2(Vector2(layout.w*0.68,layout.h*0.012),Vector2(width,width*1.38))
+ canvas.draw_style_box(style(INK,GOLD,4,2),rect)
+ if not player.deck.is_empty():
+  var card=game.cards[player.deck.back()]
+  var creature=card.kind=='minion'
+  draw_card_picture(slice(creatures if creature else spells,int(card.art),5 if creature else 4,5 if creature else 4),rect.grow(-3))
+  badge(rect.position+Vector2(5,7),str(int(card.cost)),INK,9)
+ var at=rect.end+Vector2(20,-rect.size.y*0.65)
+ canvas.draw_circle(at,15,INK)
+ canvas.draw_arc(at,15,0,TAU,32,Color('705d42'),3,true)
+ var progress=game.support_elapsed/game.RIVAL_SECONDS
+ if player.hand.size()<game.rules.MAX_HAND and not player.deck.is_empty():
+  canvas.draw_arc(at,15,-PI/2,-PI/2+TAU*progress,32,GOLD,3,true)
+  text(str(ceili(game.RIVAL_SECONDS-game.support_elapsed)),Rect2(at-Vector2(13,9),Vector2(26,18)),14,PAPER,true)
+ else:text('Ⅱ',Rect2(at-Vector2(12,9),Vector2(24,18)),14,GOLD,true)
+ var pile=Rect2(at+Vector2(-16,24),Vector2(13,17))
+ canvas.draw_rect(pile,GOLD,false,2)
+ canvas.draw_rect(Rect2(pile.position+Vector2(3,-3),pile.size),INK)
+ canvas.draw_rect(Rect2(pile.position+Vector2(3,-3),pile.size),GOLD,false,2)
+ text(str(player.deck.size()),Rect2(pile.position+Vector2(20,-4),Vector2(38,25)),17,PAPER)
 
 func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
  var points=PackedVector2Array()
@@ -799,6 +879,15 @@ func paint_battle() -> void:
  var plate=Rect2(layout.w*0.012,layout.h*0.01,layout.w*0.202,layout.h*0.078)
  var name_size=int(minf(plate.size.x*0.155,plate.size.y*0.34))
  paint_next_card(state.players[0])
+ var gem_label=Rect2(1,layout.h*0.485,layout.w*0.08,19)
+ canvas.draw_style_box(style(INK,GOLD,3,1),gem_label)
+ text('Gemas',gem_label,14,PAPER,true,true)
+ text('Poder',Rect2(layout.power.position+Vector2(-6,layout.power.size.y+1),layout.power.size+Vector2(12,0)),15,GOLD,true,true)
+ text('Ajustes',Rect2(layout.settings.position+Vector2(-7,layout.settings.size.y),layout.settings.size+Vector2(14,0)),15,GOLD,true,true)
+ if game.tutorial_visible and game.selected_card<0 and game.drag.is_empty() and game.panel.is_empty():
+  var guide=Rect2(layout.w*0.09,layout.h*0.414,layout.w*0.82,minf(42,layout.h*0.052))
+  canvas.draw_style_box(style(INK,GOLD,6,1),guide)
+  text('Arraste cartas ao campo e criaturas até um inimigo.',guide,int(minf(guide.size.x/27,guide.size.y*0.63)),PAPER,true)
  text('Jogador 2',plate,name_size,Color.WHITE,true,true)
  text('Clã das Sombras',Rect2(plate.position+Vector2(0,name_size*1.35),plate.size),int(name_size*0.65),PAPER,true,true)
  for side in range(2):
@@ -873,15 +962,21 @@ func paint_battle() -> void:
    ready_mask|=bit
   else:ready_mask &= ~bit
   if ready and pulse_ends[hand.index]>clock:
-   canvas.draw_rect(hand.rect.grow(3),Color(0.65,1,0.82,(pulse_ends[hand.index]-clock)/0.6),false,5,true)
+   canvas.draw_rect(hand.rect.grow(3),Color(GOLD,(pulse_ends[hand.index]-clock)/0.6),false,5,true)
   if remaining>0:
    var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
    var radius=hand.rect.size.x*0.16
    radial_cooldown(center,radius,remaining)
-  elif ready:canvas.draw_rect(hand.rect,Color('8be6ae'),false,2,true)
+  elif ready:
+   canvas.draw_rect(hand.rect.grow(2),Color(GOLD,0.30),false,5,true)
+   canvas.draw_rect(hand.rect,GOLD,false,2,true)
   elif card.cost<=state.players[0].mana:
    var reason='Campo cheio' if hand.full else 'Sem alvo'
-   text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.72),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
+   text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.38),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
+  if card.cost>state.players[0].mana:
+   var tag=Rect2(hand.rect.position+hand.rect.size*Vector2(0.12,0.39),hand.rect.size*Vector2(0.76,0.14))
+   canvas.draw_rect(tag,INK)
+   text('Falta %d'%int(card.cost-state.players[0].mana),tag,int(tag.size.y*0.76),PAPER,true,true)
   if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
  if game.drag.is_empty():
   if game.selected_card>=0:

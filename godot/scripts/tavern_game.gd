@@ -132,15 +132,26 @@ func save_profile() -> void:
   var file=FileAccess.open('user://tavern-profile.json',FileAccess.WRITE)
   if file:file.store_string(raw)
 
+var safe_origin=Vector2.ZERO
+var safe_margin=Vector2.ZERO
+
 func layout_board() -> void:
  if previous_viewport!=size:
   drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;previous_viewport=size
- portrait=size.y>size.x*1.05
- var height=760.0*size.y/maxf(1,size.x) if portrait else 800.0
- var width=760.0 if portrait else height*size.x/maxf(1,size.y)
+  if OS.has_feature('web'):
+   var raw=JavaScriptBridge.eval("JSON.stringify(['top','right','bottom','left'].map(s=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-'+s))||0))")
+   var inset=JSON.parse_string(str(raw))
+   if inset is Array:
+    var ratio=size.x/maxf(1,float(JavaScriptBridge.eval("document.getElementById('canvas').getBoundingClientRect().width")))
+    safe_origin=Vector2(inset[3],inset[0])*ratio
+    safe_margin=Vector2(inset[1],inset[2])*ratio
+ var usable=size-safe_origin-safe_margin
+ portrait=usable.y>usable.x*1.05
+ var height=760.0*usable.y/maxf(1,usable.x) if portrait else 800.0
+ var width=760.0 if portrait else height*usable.x/maxf(1,usable.y)
  logical_size=Vector2(width,height)
- var factor=minf(size.x/width,size.y/height)
- board_transform=Transform2D(0,Vector2(factor,factor),0,(size-logical_size*factor)/2)
+ var factor=minf(usable.x/width,usable.y/height)
+ board_transform=Transform2D(0,Vector2(factor,factor),0,safe_origin+(usable-logical_size*factor)/2)
  if screen=='battle' and panel.is_empty():board_transform.origin+=view.camera_offset()*factor
  art_layer.position=board_transform.origin;art_layer.scale=Vector2(factor,factor)
  overlay.position=board_transform.origin;overlay.scale=Vector2(factor,factor)
@@ -213,7 +224,7 @@ func _process(delta: float) -> void:
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
   var latest={} if active_actions.is_empty() else active_actions.back()
-  var snap={'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -222,6 +233,7 @@ func rect_json(rect: Rect2) -> Dictionary:
 func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
  if view:
+  if screen=='battle' and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):draw_texture_rect(view.ROYAL_ARENA,Rect2(Vector2.ZERO,size),false)
   draw_set_transform_matrix(board_transform);view.paint_base(self);draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func notify(message: String) -> void:
@@ -294,6 +306,7 @@ func place_support(slot: int,index: int) -> void:
  var result=rules.equip_support(slot,index)
  if not result.ok:notify(result.reason);return
  audio_engine.play('card_soft',-15.0)
+ tutorial_visible=false
  if result.get('trap',false):
   notify('Armadilha armada. Ela será revelada ao disparar.')
   return
@@ -326,6 +339,7 @@ func pointer_down() -> void:
   if selected_card>=0:place_support(slot,selected_card)
   elif rules.players[0].supports[slot].id!='':
    pending_support=-1
+   tutorial_visible=false
    rules.players[0].supports[slot].defense=not rules.players[0].supports[slot].defense
    notify('Apoio em defesa.' if rules.players[0].supports[slot].defense else 'Apoio em ataque.')
   else:
@@ -406,11 +420,13 @@ func drop_position(point: Vector2) -> int:
 
 func activate_button(id: String) -> void:
  match id:
+  'help':tutorial_visible=not tutorial_visible
   'exchange':
    if screen!='battle' or not panel.is_empty():return
    if card_locked(0,selected_card):notify('Carta em ação.');return
    var result=rules.exchange_card(0,selected_card)
    if not result.ok:notify(result.reason);return
+   tutorial_visible=false
    selected_card=-1;hover_card=-1
    audio_engine.play('card_soft',-15.0)
    notify('Nova carta: '+str(cards[result.id].name))
@@ -443,6 +459,8 @@ func cycle_card(id: String) -> void:
  profile.deck.append(id)
  save_profile()
 
+var tutorial_visible=false
+
 func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';active_actions.clear();rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
@@ -451,9 +469,8 @@ func start_match() -> void:
  rules.start(profile.deck,[],qa_seed,true)
  view.reset_effects();view.scenery=[]
  audio_engine.start_music();toast_time=0
- if not profile.intro_seen:
-  notify('Arraste cartas ao campo e criaturas prontas até um inimigo.\nPara equipar um apoio, solte uma carta na casa dourada.')
-  toast_time=7
+ tutorial_visible=not profile.intro_seen
+ if tutorial_visible:
   profile.intro_seen=true
   save_profile()
 
@@ -471,6 +488,7 @@ func power_locked(side: int,id: String) -> bool:
  return active_actions.any(func(a):return a.side==side and a.id==id and a.kind=='power')
 
 func schedule(action: Dictionary,impact: float,duration: float) -> void:
+ if action.side==0:tutorial_visible=false
  action.sequence=next_action_id
  next_action_id+=1
  action.age=0.0
