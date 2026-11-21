@@ -11,6 +11,7 @@ var ready_mask=0
 var observed_match=-1
 var pulse_ends=PackedFloat64Array([0,0,0,0,0])
 var energy_pulse_end=0.0
+var previous_mana=0
 var frame_delta=0.016
 var result_time=0.0
 var freeze_left=0.0
@@ -619,7 +620,8 @@ func paint_overlay(c: CanvasItem) -> void:
  if game.toast_time>0:
   var width=minf(layout.w-70,650)
   canvas.draw_style_box(style(Color(0.025,0.03,0.055,0.94),Color('d8ba7a'),12),Rect2(layout.w/2-width/2,layout.h*0.19,width,56))
-  text(game.toast_text,Rect2(layout.w/2-width/2+14,layout.h*0.19+15,width-28,30),18,PAPER,true)
+  var inset=5 if '\n' in game.toast_text else 15
+  text(game.toast_text,Rect2(layout.w/2-width/2+14,layout.h*0.19+inset,width-28,50),18,PAPER,true)
 
  if game.qa_enabled and not game.qa_frame_label.is_empty():
   var meter=Rect2(8,layout.h-30,174,28)
@@ -661,15 +663,40 @@ func paint_hand_card(hand: Dictionary,available: bool) -> void:
  text(card.name,label,font_size,PAPER,true,true)
  text(str(int(card.cost)),Rect2(r.position+r.size*Vector2(0.018,0.029),r.size*Vector2(0.207,0.15)),int(r.size.x*0.19),Color.WHITE if affordable else Color(1,0.34,0.32),true,true)
 
-func recharge_border(rect: Rect2,remaining: float) -> void:
- var corners=[rect.position,Vector2(rect.end.x,rect.position.y),rect.end,Vector2(rect.position.x,rect.end.y),rect.position]
- var length=(rect.size.x+rect.size.y)*2*(1-clampf(remaining/game.rules.REUSE_SECONDS,0,1))
- canvas.draw_rect(rect,Color('51435f'),false,4)
- for i in range(4):
-  var edge: Vector2=corners[i+1]-corners[i]
-  if length<=0:break
-  canvas.draw_line(corners[i],corners[i]+edge.limit_length(length),Color('69dcff'),4,true)
-  length-=edge.length()
+func radial_cooldown(center: Vector2,radius: float,remaining: float) -> void:
+ var end_angle=-PI/2+TAU*(1-clampf(remaining/game.rules.REUSE_SECONDS,0,1))
+ canvas.draw_circle(center,radius+3,Color('262036'))
+ canvas.draw_arc(center,radius,-PI/2,3*PI/2,32,Color('5c5067'),2,true)
+ if end_angle>-PI/2:canvas.draw_arc(center,radius,-PI/2,end_angle,32,Color('80e6ff'),4,true)
+ canvas.draw_line(center,center+Vector2.from_angle(end_angle)*radius,Color.WHITE,2,true)
+
+func drag_preview() -> Dictionary:
+ var drag=game.drag
+ if drag.is_empty() or game.screen!='battle' or game.done:return {}
+ var target=game.target_at(game.pointer)
+ if target.is_empty() or game.support_at(game.pointer)>=0:return {}
+ if drag.kind=='power' and game.power_locked(0,'power'):return {}
+ if drag.kind=='unit' and game.target_locked({'side':0,'uid':drag.uid}):return {}
+ if drag.kind=='card' and game.card_locked(0,drag.index):return {}
+ var area=drag.kind=='card' and game.cards[drag.id].get('effect','') in ['aoe','blizzard']
+ if not area and game.target_locked(target):return {}
+ var label=game.rules.health_preview(0,drag,target)
+ return {} if label.is_empty() else {'text':label,'target':target}
+
+func paint_next_card(player: Dictionary) -> void:
+ var box=Rect2(layout.w*0.665,layout.h*0.006,layout.w*0.225,layout.h*0.13)
+ canvas.draw_style_box(style(Color('28232b'),GOLD,8,1),box)
+ var line=box.size.y/4
+ var fs=int(minf(box.size.x/10,line*0.66))
+ text('PRÓXIMA · %d'%player.deck.size(),Rect2(box.position,Vector2(box.size.x,line)),fs,GOLD,true)
+ var name='Baralho vazio' if player.deck.is_empty() else str(game.cards[player.deck.back()].name)
+ var width=game.title_font.get_string_size(name,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x
+ var fitted=maxi(9,int(fs*minf(1,(box.size.x-6)/maxf(width,1))))
+ text(name,Rect2(box.position+Vector2(0,line),Vector2(box.size.x,line)),fitted,PAPER,true,true)
+ var cycle='Troca: 1 energia' if player.hand.size()==game.rules.MAX_HAND else 'Compra em %d s'%ceili(game.RIVAL_SECONDS-game.support_elapsed)
+ if player.deck.is_empty():cycle='Sem cartas'
+ text(cycle,Rect2(box.position+Vector2(0,line*2),Vector2(box.size.x,line)),fs,PAPER,true)
+ text('Mão %d/%d · reuso %d s'%[player.hand.size(),game.rules.MAX_HAND,game.rules.REUSE_SECONDS],Rect2(box.position+Vector2(0,line*3),Vector2(box.size.x,line)),fs,PAPER,true)
 
 func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
  var points=PackedVector2Array()
@@ -700,6 +727,7 @@ func paint_battle() -> void:
  var state=game.rules
  var plate=Rect2(layout.w*0.012,layout.h*0.01,layout.w*0.202,layout.h*0.078)
  var name_size=int(minf(plate.size.x*0.155,plate.size.y*0.34))
+ paint_next_card(state.players[0])
  text('Jogador 2',plate,name_size,Color.WHITE,true,true)
  text('Clã das Sombras',Rect2(plate.position+Vector2(0,name_size*1.35),plate.size),int(name_size*0.65),PAPER,true,true)
  for side in range(2):
@@ -714,6 +742,17 @@ func paint_battle() -> void:
     draw_card_picture(picture,inset)
    if side==0 and slot==game.pending_support:
     canvas.draw_rect(rect,Color('ffdb65'),false,3,true)
+   var icon=rect.position+rect.size*Vector2(0.18,0.19)
+   canvas.draw_circle(icon,12,Color('292332'))
+   if support.defense:
+    canvas.draw_colored_polygon(PackedVector2Array([icon+Vector2(-7,-6),icon+Vector2(7,-6),icon+Vector2(6,3),icon+Vector2(0,9),icon+Vector2(-6,3)]),Color('91d9ff'))
+   else:
+    canvas.draw_line(icon+Vector2(-6,7),icon+Vector2(6,-7),Color('ffd398'),3,true)
+    canvas.draw_line(icon+Vector2(-6,0),icon+Vector2(1,6),Color('ffd398'),3,true)
+   if support.id!='':
+    var timer=Rect2(rect.position+Vector2(rect.size.x*0.46,2),Vector2(rect.size.x*0.51,22))
+    canvas.draw_rect(timer,Color('292332'))
+    text('%d s'%ceili(game.RIVAL_SECONDS-game.support_elapsed),timer,15,PAPER,true)
    var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
    canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
    text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
@@ -725,7 +764,12 @@ func paint_battle() -> void:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
   fx.status(unit,rect)
-  if unit.attacks==0 and unit.delay>0:recharge_border(rect,unit.delay)
+  if unit.attacks==0 and unit.delay>0:
+   radial_cooldown(rect.position+rect.size*Vector2(0.78,0.2),rect.size.x*0.11,unit.delay)
+  elif info.side==0 and unit.attacks>0 and unit.attack>0 and not game.target_locked({'side':0,'uid':uid}):
+   var tag=Rect2(rect.position+Vector2(0,-2),Vector2(rect.size.x,19))
+   canvas.draw_rect(tag,Color('234d3a'))
+   text('ATACAR',tag,14,Color('b7ffce'),true,true)
   if unit.shield:
    oval(rect.grow(7),Color(1,0.9,0.4,0.08),Color(1,0.9,0.4,0.8),3)
    oval(rect.grow(11),Color.TRANSPARENT,Color(1,0.9,0.4,0.25),5)
@@ -751,7 +795,6 @@ func paint_battle() -> void:
   if ready:
    if not opening and (ready_mask & bit)==0:
     pulse_ends[hand.index]=clock+0.6
-    energy_pulse_end=clock+0.6
    ready_mask|=bit
   else:ready_mask &= ~bit
   if ready and pulse_ends[hand.index]>clock:
@@ -759,10 +802,7 @@ func paint_battle() -> void:
   if remaining>0:
    var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
    var radius=hand.rect.size.x*0.16
-   var end_angle=-PI/2+TAU*(1-clampf(remaining/state.REUSE_SECONDS,0,1))
-   canvas.draw_circle(center,radius+3,Color('262036'))
-   canvas.draw_arc(center,radius,-PI/2,end_angle,32,Color('80e6ff'),4,true)
-   canvas.draw_line(center,center+Vector2.from_angle(end_angle)*radius,Color.WHITE,2,true)
+   radial_cooldown(center,radius,remaining)
   elif ready:canvas.draw_rect(hand.rect,Color('8be6ae'),false,2,true)
   elif card.cost<=state.players[0].mana:
    var reason='Campo cheio' if hand.full else 'Sem alvo'
@@ -782,6 +822,12 @@ func paint_battle() -> void:
    fx.aura(game.drag.id,held_rect,1.0)
 
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
+  var preview=drag_preview()
+  if not preview.is_empty():
+   var at=target_center(preview.target)
+   var label_rect=Rect2(at-Vector2(83,40),Vector2(166,35))
+   canvas.draw_style_box(style(Color('292332'),GOLD,8,2),label_rect)
+   text(preview.text,label_rect,23,Color('a7f4bf') if preview.text.begins_with('+') else Color('ffb69c'),true,true)
  for anim in game.active_actions:
   var anim_time=anim.age
   if not game.reduced_motion and anim.kind=='card' and anim_time<0.62:
@@ -794,6 +840,8 @@ func paint_battle() -> void:
   var strength=0.10+0.05*sin(clock*3.0)
   for band in range(10):
    canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size).grow(-band*3.0),Color(0.9,0.02,0.04,strength*(1-band/10.0)*3),false,3.1)
+ if not opening and p.mana>previous_mana:energy_pulse_end=clock+0.6
+ previous_mana=p.mana
  var bar=energy_bar()
  var bar_width=bar.size.x
  canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
@@ -907,6 +955,10 @@ func paint_button(info: Dictionary) -> void:
  if info.id=='solar':
   var bar=energy_bar()
   canvas.draw_style_box(style(Color('703515'),Color('ffce60').lerp(Color.WHITE,0.25+0.2*sin(clock*4)),8,2),bar)
+  var spacing=(bar.size.x-12)/game.rules.players[0].max_mana
+  for i in range(game.rules.players[0].max_mana):
+   canvas.draw_rect(Rect2(bar.position.x+6+i*spacing,bar.end.y-6,spacing-2,3),GOLD)
+  if energy_pulse_end>clock:canvas.draw_rect(bar.grow(2),Color(1,0.85,0.5,(energy_pulse_end-clock)/0.6),false,4,true)
   text('10/10   ·   '+info.label,Rect2(bar.position+Vector2(0,1),bar.size),int(bar.size.y*0.58),Color('fff0ba'),true,true)
   return
  if info.id=='power':

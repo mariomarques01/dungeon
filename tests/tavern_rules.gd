@@ -160,4 +160,19 @@ func _initialize() -> void:
  check(not rules.exchange_card(0,1).ok and player.mana==1,'Recarga bloqueia troca sem cobrar energia')
  check(rules.exchange_card(0,0).ok and player.hand==['dragon','scout'] and player.deck==['wolf','orc'] and player.cooldowns[1]==3.0,'Troca preserva as posições e coloca a carta no fundo')
  check(not rules.exchange_card(0,0).ok and player.deck==['wolf','orc'] and player.mana==0,'Troca sem energia preserva o baralho')
+ fresh()
+ var cast_preview={'kind':'card','index':0}
+ var enemy_hero={'side':1,'hero':true}
+ rules.players[0].mana=10
+ rules.players[0].hand=['fireball']
+ rules.players[1].armor=2
+ var expected=mini(30,int(cards.fireball.amount)-2)
+ check(rules.health_preview(0,cast_preview,enemy_hero)=='−2 ARM · −%d PV'%expected,'Preview separa armadura e dano real')
+ check(rules.players[0].mana==10 and rules.players[1].health==30 and rules.events.is_empty(),'Preview não resolve a ação')
+ var guard=ready(1,'beetle')
+ check(rules.health_preview(0,cast_preview,{'side':1,'uid':guard.uid})=='ESCUDO' and guard.shield,'Preview preserva escudo')
+ rules.players[0].hand=['healing']
+ rules.players[0].health=29
+ check(rules.health_preview(0,cast_preview,{'side':0,'hero':true})=='+1','Preview limita a cura à vida faltante')
+ check(rules.health_preview(0,cast_preview,enemy_hero)=='','Alvo inválido não mostra cura')
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
