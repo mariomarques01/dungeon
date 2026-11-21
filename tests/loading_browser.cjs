@@ -47,6 +47,7 @@ const assert = require('node:assert/strict');
   await tap('home');
   await tap('start');
   await page.waitForFunction(()=>window.__dungeonState.screen==='battle');
+  await page.waitForFunction(()=>window.__dungeonState.handViews.every(v=>Math.abs(v.rect.y-window.__dungeonState.logical.y*0.851+v.rect.h/2)<2));
   const gesture = await page.evaluate(()=>{
     const s=window.__dungeonState,c=document.getElementById('canvas'),r=c.getBoundingClientRect(),t=s.transform;
     const point=p=>({x:r.left+(t.x+p.x*t.scale)*r.width/c.width,y:r.top+(t.y+p.y*t.scale)*r.height/c.height});

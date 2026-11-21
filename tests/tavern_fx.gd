@@ -71,6 +71,30 @@ func run() -> void:
   if node.z_index>=game.overlay.z_index:push_error('Card art overlaps result');failures+=1
  if game.audio_engine.action_clip('wolf','bite')!='bite_hit' or game.audio_engine.action_clip('golem','earth')!='stone_hit' or game.audio_engine.action_clip('orc','steel')!='steel_heavy':push_error('Wrong creature sound family');failures+=1
  print('Victory layers and creature audio profiles checked')
+ # Rapid hits merge by target. Health warnings must survive a simultaneous first hit.
+ game.start_match()
+ game.reduced_motion=false
+ game.view.prepare()
+ var snapshot=game.rules.players.duplicate(true)
+ game.rules.players[1].health=9
+ var hit={'kind':'damage','amount':3,'element':'fire','target':{'side':1,'hero':true}}
+ game.view.ingest([hit,hit],snapshot)
+ if game.view.floats.size()!=1 or game.view.floats[0].text!='−6' or game.view.banners!=['PRIMEIRO SANGUE','HERÓI RIVAL EM PERIGO']:
+  push_error('Incorrect damage accumulation or event order');failures+=1
+ if game.view.battle_delta(0.005)!=0 or game.view.battle_delta(0.2)<=0:
+  push_error('Hit-stop must hold briefly and release');failures+=1
+ var sprite=game.view.floats[0].sprite
+ game.view.tick(2)
+ game.view.ingest([hit],game.rules.players.duplicate(true))
+ if game.view.floats[0].sprite!=sprite:push_error('Floating number was not reused');failures+=1
+ game.activate_button('motion')
+ game.view.ingest([hit],game.rules.players.duplicate(true))
+ if game.view.battle_delta(0.02)!=0.02 or game.view.camera_offset()!=Vector2.ZERO:
+  push_error('Reduced motion still triggers hit-stop or shake');failures+=1
+ game.activate_button('motion')
+ game.start_match()
+ if not game.view.banners.is_empty() or game.view.first_blood:
+  push_error('Rematch inherited event banners');failures+=1
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 

@@ -36,3 +36,17 @@ The browser integration passed a complete match driven only through real pointer
 Small decorative differences from the inspiration are expected: this is an original game rather than a pixel-identical recreation. Mobile Safari on physical hardware was not available; native touch behavior was verified in Chromium's touch-capable mobile mode.
 
 Resultado, combate e rotação: painel numa camada acima de toda a arte; vitória por ação letal testada com criaturas sobreviventes. Resultado revisado em `docs/qa/tavern/result-fixed.png`. Morte por fogo, gelo, raio e sombra preserva o elemento causador nos fragmentos. Perfis de som por criatura/material e contra-ataque exercitados nas 44 sequências. Partida completa com oito criaturas, cinco ataques, feitiços e toque terminou sem erros no navegador. Rotação em tela móvel com densidade 3 preservou saúde/mão, preencheu o canvas, manteve as cartas visíveis e permitiu abrir/fechar configurações por toque; evidência em `docs/qa/tavern/landscape-fill.png`.
+
+### Impacto no combate e desempenho do export Web
+
+Godot 4.4.1, preset Web de release. O teste `tests/tavern_performance.cjs` abre o duelo de QA com semente 69, joga uma criatura e mede intervalos de `requestAnimationFrame` durante 12 segundos com a IA ativa. Para repetir, sirva o export por HTTP e execute `DUNGEON_URL=http://localhost:8766/godot/ node tests/tavern_performance.cjs` com Chromium e Playwright Core.
+
+| Medida | Antes | Após os efeitos e o pool |
+| --- | ---: | ---: |
+| FPS médio | 8,31 | 8,51 |
+| Menor FPS em janela de aproximadamente 1 segundo | 5,37 | 5,45 |
+| Tempo de quadro no percentil 95 | 200,1 ms | 200,0 ms |
+
+Medição em Chromium headless com SwiftShader, viewport de 390 × 844, DPR 1 e limitação de CPU de 4×. Uma amostra por versão, com a instrumentação de QA ligada nas duas. A pequena diferença está dentro da variação esperada. O ambiente ficou abaixo do piso de 45 FPS. A meta de 60 FPS e o mínimo de 45 FPS em celular médio físico continuam sem validação.
+
+Os números, partículas e fragmentos reutilizam nós de efeitos. As faces das cartas da mão guardam os comandos de desenho enquanto aparência e tamanho permanecem iguais. Distribuição e levantamento movem esses nós sem reconstruir a face.
