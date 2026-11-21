@@ -6,8 +6,8 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:960,height:600}});const errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
- const url=new URL(process.env.DUNGEON_URL||'http://127.0.0.1:8766/godot/');url.searchParams.set('qa','1');
- const initial={deck:['scout','scout','blizzard','blizzard','skeleton','skeleton','roots','roots','meteor','meteor','vortex','vortex','pack','pack','bolt','bolt','fireball','fireball','frost','frost','blessing','blessing','missiles','missiles','rune_blade','rune_blade','thunderstorm','thunderstorm','wisdom','wisdom'],coins:50,xp:35,wins:1,losses:0};
+ const url=new URL(process.env.DUNGEON_URL||'http://127.0.0.1:8766/godot/');url.searchParams.set('qa','1');url.searchParams.set('seed','69');
+ const initial={deck:['scout','scout','stoneguard','stoneguard','skeleton','skeleton','panther','panther','meteor','meteor','vortex','vortex','pack','pack','bolt','bolt','fireball','fireball','frost','frost','blessing','blessing','missiles','missiles','gryphon','gryphon','thunderstorm','thunderstorm','wolf','wolf'],coins:50,xp:35,wins:1,losses:0};
  await page.addInitScript(profile=>{if(!localStorage.getItem('tavern_test_seed')){localStorage.setItem('dungeon_tavern_v3',JSON.stringify(profile));localStorage.setItem('dungeon_battle_speed','2');localStorage.setItem('dungeon_sound','on');localStorage.setItem('tavern_test_seed','1')}},initial);
  await page.clock.install();
  await page.goto(url.href,{waitUntil:'networkidle',timeout:120000});await page.waitForFunction(()=>window.__dungeonState,null,{timeout:60000});
@@ -85,12 +85,15 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
   for(let actions=0;actions<16;actions++){
    s=await state();if(s.done)break;
    let choice=-1,target;
-   const needSpell=!spellPlayed&&s.handViews.some(h=>cards[h.id].kind==='spell'&&spellTarget(s,cards[h.id])!==undefined);
+   const playable=s.handViews.filter(h=>!s.players[0].cooldowns[h.index]&&cards[h.id].cost<=s.players[0].mana);
+   const needCreature=creaturesPlayed<3&&s.players[0].board.length<5&&playable.some(h=>cards[h.id].kind==='minion');
+   const needSpell=!needCreature&&!spellPlayed&&playable.some(h=>cards[h.id].kind==='spell'&&spellTarget(s,cards[h.id])!==undefined);
    const preferDamage=creaturesPlayed>1&&s.handViews.some(h=>cards[h.id].effect==='damage'&&!s.players[0].cooldowns[h.index]);
    for(let i=0;i<s.players[0].hand.length;i++){
     const c=cards[s.players[0].hand[i]];if(c.cost>s.players[0].mana||s.players[0].cooldowns[i]>0)continue;
+    if(needCreature&&c.kind!=='minion')continue;
     if(needSpell&&c.kind!=='spell')continue;
-    if(spellPlayed&&preferDamage&&c.effect!=='damage')continue;
+    if(!needCreature&&spellPlayed&&preferDamage&&c.effect!=='damage')continue;
     if(c.kind==='minion'){if(s.players[0].board.length<5){choice=i;target=null;break}continue}
     const t=spellTarget(s,c);if(t===undefined)continue;if(c.effect==='armor'&&s.players[0].armor>10)continue;
     choice=i;target=t;break;
@@ -99,7 +102,7 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
    const c=cards[s.players[0].hand[choice]],mana=s.players[0].mana,count=s.players[0].hand.length;
    const destination=c.kind==='minion'?center(s.drop):target?targetPoint(s,target):{x:s.logical.x/2,y:s.logical.y*0.45};
    await drag(cardPoint(s,choice),destination,c.kind==='spell'&&!spellPlayed?'spell-target':undefined);
-   const after=await state();assert(after.busy===false);assert(after.players[0].mana<=10);assert(after.players[0].cooldowns[choice]>0,'A released legal card should resolve: '+JSON.stringify({card:c.id||c.name,choice,mana,count,hand:after.players[0].hand,afterMana:after.players[0].mana,toast:after.toast,turn:after.turn,active:after.active}));
+   const after=await state();if(after.done&&!after.players[0].cooldowns[choice])break;assert(after.busy===false);assert(after.players[0].mana<=10);assert(after.players[0].cooldowns[choice]>0,'A released legal card should resolve: '+JSON.stringify({card:c.id||c.name,choice,mana,count,hand:after.players[0].hand,afterMana:after.players[0].mana,toast:after.toast,turn:after.turn,active:after.active}));
    if(c.kind==='spell'){spellPlayed=true;if(!fs.existsSync(path.join(out,'spell-impact.png')))await shot('spell-impact')}else creaturesPlayed++;
    if(!fs.existsSync(path.join(out,'populated-board.png'))&&after.players[0].board.length>=3)await shot('populated-board');
   }
@@ -114,7 +117,7 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
   }
   s=await state();if(!s.done)await advance(1000);
  }
- await mine();s=await state();assert(s.done,'Complete match should end');assert(spellPlayed,'A spell should have been dragged and resolved');assert(creaturesPlayed>1&&attacks>1);assert(s.profile.coins>50&&s.profile.xp>35);await shot('result');
+ await mine();s=await state();assert(s.done,'Complete match should end');assert(spellPlayed,'A spell should have been dragged and resolved');assert(creaturesPlayed>1&&attacks>1,JSON.stringify({creaturesPlayed,attacks}));assert(s.profile.coins>50&&s.profile.xp>35);await shot('result');
  const saved=s.profile;await click('home');await page.clock.resume();await page.reload({waitUntil:'networkidle'});await page.waitForFunction(()=>window.__dungeonState);assert.deepEqual((await state()).profile,saved);
  // Touch-only mobile drag: one finger, no synthetic mouse fallback.
  const mobile=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});mobile.on('pageerror',e=>errors.push(e.message));mobile.on('console',m=>{if(m.type()==='error')errors.push(m.text())});

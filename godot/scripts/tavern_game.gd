@@ -36,6 +36,7 @@ var clock=0.0
 var match_serial=0
 var rewarded=false
 var qa_enabled=false
+var qa_seed=-1
 var qa_sample_start=0
 var qa_frames=0
 var qa_frame_label=''
@@ -64,6 +65,9 @@ func _ready() -> void:
  audio_engine=Audio.new(self);audio_engine.set_enabled(sound_on)
  if OS.has_feature('web'): install_web_touch()
  if OS.has_feature('web'): qa_enabled=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))=='1'
+ if qa_enabled:
+  var seed_text=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('seed') || ''"))
+  if seed_text.is_valid_int():qa_seed=seed_text.to_int()
  layout_board();view.prepare();queue_redraw();overlay.queue_redraw()
 
 func install_web_touch() -> void:
@@ -426,7 +430,7 @@ func start_match() -> void:
  match_serial+=1;screen='battle';panel='';active_actions.clear();rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
  pending_support=-1
  energy_elapsed=0.0; rival_elapsed=0.0;support_elapsed=0.0;rival_energy=0.0
- rules.start(profile.deck,[],-1,true)
+ rules.start(profile.deck,[],qa_seed,true)
  view.particles=[];view.ghosts=[];view.floats=[];view.scenery=[]
  audio_engine.start_music();toast_time=0
 
