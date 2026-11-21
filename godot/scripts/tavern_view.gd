@@ -37,10 +37,7 @@ var collection_views=[]
 var ghosts=[]
 var particles=[]
 var floats=[]
-var anim={}
-var anim_time=0.0
-var rival_anim={}
-var rival_time=0.0
+
 var canvas
 var clock=0.0
 
@@ -76,13 +73,11 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
- rival_time+=delta*game.speed
- if rival_time>=1.3:rival_anim={}
  result_time+=delta
  for effect in scenery:effect.age+=delta*game.speed
  scenery=scenery.filter(func(effect):return effect.age<2.4)
  frame_delta=delta
- clock+=delta; anim_time+=delta*game.speed
+ clock+=delta
  for point in pointer_trail:point.age+=delta
  pointer_trail=pointer_trail.filter(func(point):return point.age<0.4)
  if game.drag.get('kind','')=='card':
@@ -174,10 +169,11 @@ func prepare() -> void:
   for uid in unit_views:
    var info=unit_views[uid]; var rect: Rect2=info.rect
    var opacity=1.0
-   var action: Dictionary=rival_anim if info.side==1 else anim
-   var attack_time=rival_time if info.side==1 else anim_time
-   var attacking=action.get('kind','')=='attack' and action.get('uid',-1)==uid
-   if attacking:
+   var attacking=false
+   for action in game.active_actions:
+    if action.kind!='attack' or action.get('uid',-1)!=uid:continue
+    attacking=true
+    var attack_time=action.age
     var direction: Vector2=(action.destination-action.origin).normalized()
     var windup=sin(PI*clampf(attack_time/0.12,0,1))
     var advance=smoothstep(0.12,0.38,attack_time)*(1.0-smoothstep(0.38,0.80,attack_time))
@@ -206,19 +202,21 @@ func prepare() -> void:
   if not game.drag.is_empty() and game.drag.kind=='card':
    var rect=held_card_rect()
    prepare_card('drag',game.drag.id,rect,0,50)
-  if not anim.is_empty() and anim.kind=='card' and anim_time<0.62:
+  for anim in game.active_actions:
+   var anim_time=anim.age
+   if anim.kind!='card' or anim_time>=0.62:continue
    var size=Vector2(170,255)
    var p=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
-   prepare_card('cast',anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
+   prepare_card('cast%d_%d'%[anim.side,anim.index],anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   for g in ghosts:
    prepare_remains(g)
   button('settings',layout.settings,'⚙')
-  if state.solar_ready() and not game.busy:
+  if state.solar_ready() and not game.target_locked({'side':1,'hero':true}):
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
-  if game.selected_card>=0 and not game.busy and not state.done:
+  if game.selected_card>=0 and not game.card_locked(0,game.selected_card) and not state.done:
    var exchange_rect=Rect2(layout.w*0.5-108,layout.h*0.448-22,216,44)
    button('exchange',exchange_rect,'Trocar · 1 energia',state.players[0].mana>=1 and not state.players[0].deck.is_empty())
-  button('power',layout.power,'1 DANO\n2 ENERGIA',not game.busy and not state.players[0].power_used and state.players[0].mana>=2)
+  button('power',layout.power,'1 DANO\n2 ENERGIA',not game.power_locked(0,'power') and not state.players[0].power_used and state.players[0].mana>=2)
  elif game.screen=='home': prepare_home()
  elif game.screen=='collection': prepare_collection()
  if not game.inspect_id.is_empty():
@@ -315,17 +313,13 @@ func inspect_rect() -> Rect2:
 func target_center(target: Dictionary) -> Vector2:
  if target.get('hero',false): return (layout.player_hero if int(target.side)==0 else layout.enemy_hero).get_center()
  if unit_views.has(int(target.get('uid',-1))): return unit_views[int(target.uid)].rect.get_center()
- if anim.has('target_position'): return anim.target_position
  return Vector2(layout.w/2,layout.player_row)
 
 func begin(action: Dictionary) -> void:
- anim=action.duplicate(true); anim_time=0
  effect_history.append({'phase':'cast','id':action.get('id','power'),'kind':action.kind,'element':action.get('element','arcane')})
  if effect_history.size()>60:effect_history.pop_front()
-func finish() -> void:
- anim={}
 
-func ingest(events: Array,before: Array,action: Dictionary=anim) -> void:
+func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
  var elemental=events.filter(func(event):return event.kind in ['damage','freeze','armor','heal','destroy'])
  if not elemental.is_empty():
   var element=str(action.get('element',elemental[0].get('element','arcane')))
@@ -412,7 +406,7 @@ func paint_base(c: CanvasItem) -> void:
   for uid in unit_views:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
    var unit=info.unit
-   var ready=int(info.side)==0 and int(unit.attacks)>0 and not game.busy
+   var ready=int(info.side)==0 and int(unit.attacks)>0 and not game.target_locked({'side':0,'uid':uid})
    var rim=Color('64b7ff') if info.side==0 else Color('ff8b57')
    canvas.draw_rect(rect,Color('30261f'))
    canvas.draw_rect(rect,rim,false,3,true)
@@ -599,13 +593,13 @@ func paint_battle() -> void:
    fx.aura(game.drag.id,held_rect,1.0)
 
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
- if not anim.is_empty():
+ for anim in game.active_actions:
+  var anim_time=anim.age
   if anim.kind=='card' and anim_time<0.62:
    var size=Vector2(170,255)
    var at=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   fx.action(anim,anim_time)
- if not rival_anim.is_empty():fx.action(rival_anim,rival_time)
  paint_particles()
  var p=state.players[0]
  if p.health<=10:
@@ -654,7 +648,7 @@ func paint_drop_preview() -> void:
    landing=layout.slots[0][first+game.drop_position(game.pointer)]
  elif card.kind=='spell':
   var target=game.target_at(game.pointer)
-  if game.rules.can_play(0,index,target).ok:
+  if game.rules.can_play(0,index,target).ok and (card.get('target','none')=='none' or not game.target_locked(target)):
    if card.get('target','none')=='none':
     canvas.draw_rect(layout.board_zone,rim,false,3,true)
    if not target.is_empty() or layout.board_zone.has_point(game.pointer):
@@ -672,6 +666,7 @@ func paint_targets(selection: Dictionary) -> void:
  for uid in unit_views:candidates.append({'side':unit_views[uid].side,'uid':uid})
  for side in range(2):candidates.append({'side':side,'hero':true})
  for target in candidates:
+  if game.target_locked(target):continue
   var valid=false
   if selection.kind=='card' and game.cards[selection.id].get('target','none')!='none':valid=game.rules.can_play(0,int(selection.index),target).ok
   elif selection.kind=='unit':valid=game.rules.can_attack(0,int(selection.uid),target).ok

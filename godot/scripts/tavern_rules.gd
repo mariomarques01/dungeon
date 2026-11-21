@@ -455,11 +455,12 @@ func ai_target(c: Dictionary) -> Dictionary:
  if not enemies.is_empty(): return {'side':0,'uid':enemies[0].uid}
  return {}
 
-func ai_play() -> Dictionary:
+func ai_play(locked=Callable()) -> Dictionary:
  var best={}; var score=-1000.0
  for i in range(players[1].hand.size()):
   var c=cards[players[1].hand[i]]
   var target=ai_target(c)
+  if locked.is_valid() and locked.call(target):continue
   if not can_play(1,i,target).ok: continue
   var value=float(c.cost)*2
   if c.kind=='minion': value+=float(c.attack)+float(c.health)*0.8
@@ -480,10 +481,12 @@ func ai_play() -> Dictionary:
   if value>score: score=value; best={'kind':'play','index':i,'target':target}
  return best
 
-func ai_attack() -> Dictionary:
+func ai_attack(locked=Callable()) -> Dictionary:
  var best={}; var best_score=-1000.0
  for unit in players[1].board:
+  if locked.is_valid() and locked.call({'side':1,'uid':unit.uid}):continue
   for target in enemy_targets(1):
+   if locked.is_valid() and locked.call(target):continue
    if not can_attack(1,int(unit.uid),target).ok: continue
    var score=float(unit.attack)*0.5
    if target.get('hero',false): score+=10000 if unit.attack>=players[0].health+players[0].armor else 3
