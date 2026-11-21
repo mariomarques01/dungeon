@@ -35,7 +35,8 @@
     "art": 2,
     "element": "bite",
     "keywords": [],
-    "text": "Um caçador das matas do norte."
+    "text": "Um caçador das matas do norte. Família: Lobos.",
+    "family": "wolves"
   },
   "apprentice": {
     "id": "apprentice",
@@ -60,8 +61,9 @@
     "art": 4,
     "element": "fire",
     "keywords": [],
-    "text": "Ao entrar: causa 1 de dano a um inimigo aleatório.",
-    "battlecry": "ping"
+    "text": "Ao entrar: causa 1 de dano a um inimigo aleatório. Família: Dragões.",
+    "battlecry": "ping",
+    "family": "dragons"
   },
   "shieldbearer": {
     "id": "shieldbearer",
@@ -195,8 +197,9 @@
     "art": 14,
     "element": "dark",
     "keywords": [],
-    "text": "Ao morrer: invoca dois Esqueletos 1/1.",
-    "deathrattle": "skeletons"
+    "text": "Ao morrer: invoca dois Esqueletos 1/1. Família: Mortos-vivos.",
+    "deathrattle": "skeletons",
+    "family": "undead"
   },
   "skeleton": {
     "id": "skeleton",
@@ -208,7 +211,8 @@
     "art": 15,
     "element": "dark",
     "keywords": [],
-    "text": "Os mortos também têm contas a acertar."
+    "text": "Os mortos também têm contas a acertar. Família: Mortos-vivos.",
+    "family": "undead"
   },
   "gryphon": {
     "id": "gryphon",
@@ -276,9 +280,10 @@
     "art": 20,
     "element": "fire",
     "keywords": [],
-    "text": "Ao entrar: causa 2 de dano às criaturas inimigas.",
+    "text": "Ao entrar: causa 2 de dano às criaturas inimigas. Família: Dragões.",
     "battlecry": "blast",
-    "legendary": true
+    "legendary": true,
+    "family": "dragons"
   },
   "archmage": {
     "id": "archmage",
@@ -334,9 +339,10 @@
     "art": 24,
     "element": "ice",
     "keywords": [],
-    "text": "Ao entrar: congela todas as criaturas inimigas.",
+    "text": "Ao entrar: congela todas as criaturas inimigas. Família: Dragões.",
     "battlecry": "frost_all",
-    "legendary": true
+    "legendary": true,
+    "family": "dragons"
   },
   "fireball": {
     "id": "fireball",
@@ -556,8 +562,9 @@
     "art": 15,
     "element": "dark",
     "keywords": [],
-    "text": "Invocado por uma habilidade.",
-    "token": true
+    "text": "Invocado por uma habilidade. Família: Mortos-vivos.",
+    "token": true,
+    "family": "undead"
   },
   "token_wolf": {
     "id": "token_wolf",
@@ -571,8 +578,9 @@
     "keywords": [
       "taunt"
     ],
-    "text": "Provocar.",
-    "token": true
+    "text": "Provocar. Família: Lobos.",
+    "token": true,
+    "family": "wolves"
   },
   "token_guard": {
     "id": "token_guard",
@@ -586,5 +594,79 @@
     "keywords": [],
     "text": "Invocado pelo poder do rival.",
     "token": true
+  },
+  "trap_bulwark": {
+    "id": "trap_bulwark",
+    "name": "Baluarte Oculto",
+    "kind": "trap",
+    "cost": 2,
+    "art": 5,
+    "element": "shield",
+    "trigger": "attacked",
+    "effect": "armor",
+    "amount": 3,
+    "text": "Armadilha. Ao sofrer um ataque inimigo, ganha 3 de armadura."
+  },
+  "trap_spikes": {
+    "id": "trap_spikes",
+    "name": "Espinhos Ocultos",
+    "kind": "trap",
+    "cost": 2,
+    "art": 8,
+    "element": "dark",
+    "trigger": "attacked",
+    "effect": "damage_attacker",
+    "amount": 2,
+    "text": "Armadilha. Ao sofrer um ataque inimigo, causa 2 de dano ao atacante."
+  },
+  "trap_runes": {
+    "id": "trap_runes",
+    "name": "Runas de Guarda",
+    "kind": "trap",
+    "cost": 2,
+    "art": 6,
+    "element": "arcane",
+    "trigger": "enemy_spell",
+    "effect": "armor",
+    "amount": 3,
+    "text": "Armadilha. Quando o rival joga um feitiço, ganha 3 de armadura."
+  },
+  "trap_spring": {
+    "id": "trap_spring",
+    "name": "Fonte Selada",
+    "kind": "trap",
+    "cost": 1,
+    "art": 2,
+    "element": "heal",
+    "trigger": "enemy_spell",
+    "effect": "heal",
+    "amount": 2,
+    "text": "Armadilha. Quando o rival joga um feitiço, cura 2 PV do seu herói."
+  },
+  "trap_embers": {
+    "id": "trap_embers",
+    "name": "Brasas de Retorno",
+    "kind": "trap",
+    "cost": 2,
+    "art": 0,
+    "element": "fire",
+    "trigger": "low_health",
+    "effect": "heal",
+    "amount": 4,
+    "text": "Armadilha. Ao cair abaixo de 10 PV, cura 4 PV do seu herói.",
+    "threshold": 10
+  },
+  "trap_last_stand": {
+    "id": "trap_last_stand",
+    "name": "Último Bastião",
+    "kind": "trap",
+    "cost": 2,
+    "art": 9,
+    "element": "steel",
+    "trigger": "low_health",
+    "effect": "armor",
+    "amount": 5,
+    "text": "Armadilha. Ao cair abaixo de 7 PV, ganha 5 de armadura.",
+    "threshold": 7
   }
 }

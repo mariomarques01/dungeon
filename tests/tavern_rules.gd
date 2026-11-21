@@ -14,7 +14,7 @@ func ready(side: int,id: String):
 func _initialize() -> void:
  cards=JSON.parse_string(FileAccess.get_file_as_string('res://tavern_assets/cards.json'))
  fresh()
- check(cards.values().filter(func(c):return not c.get('token',false)).size()==41,'41 cartas colecionáveis')
+ check(cards.values().filter(func(c):return not c.get('token',false)).size()==47,'47 cartas colecionáveis')
  check(rules.valid_deck(Rules.DEFAULT_DECK),'Baralho inicial de 30 cartas válido')
  check(rules.players[0].mana==1 and rules.players[0].hand.size()==4,'Primeiro turno tem 1 mana e quatro cartas')
  rules.players[0].hand=['scout'];var result=rules.play(0,0)
@@ -175,4 +175,129 @@ func _initialize() -> void:
  rules.players[0].health=29
  check(rules.health_preview(0,cast_preview,{'side':0,'hero':true})=='+1','Preview limita a cura à vida faltante')
  check(rules.health_preview(0,cast_preview,enemy_hero)=='','Alvo inválido não mostra cura')
+ test_elements()
+ test_traps()
+ test_families()
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
+
+func test_elements() -> void:
+ fresh()
+ var ice=ready(1,'frostling')
+ var storm=ready(1,'gryphon')
+ var steel=ready(1,'orc')
+ var targets=[{'side':1,'uid':ice.uid},{'side':1,'uid':storm.uid},{'side':1,'uid':steel.uid}]
+ check(rules.elemental_modifier(targets[0],'fire')==1 and rules.elemental_modifier(targets[1],'ice')==1 and rules.elemental_modifier(targets[2],'lightning')==1,'Fogo vence gelo, gelo vence tempestade e raio vence aço')
+ check(rules.elemental_modifier(targets[1],'steel')==-1 and rules.elemental_modifier(targets[0],'storm')==-1 and rules.elemental_modifier(targets[2],'fire')==0,'O inverso perde 1 e pares sem relação são neutros')
+ rules.players[0].mana=10
+ rules.players[0].hand=['frost']
+ var fire=ready(1,'drake')
+ var fire_target={'side':1,'uid':fire.uid}
+ var preview=rules.health_preview(0,{'kind':'card','index':0},fire_target)
+ var cast=rules.play(0,0,fire_target)
+ check(preview=='−1 ▼' and fire.health==2 and cast.events.any(func(e):return e.kind=='damage' and e.modifier==-1),'Prévia, evento e dano de feitiço registram a fraqueza')
+ rules.events=[]
+ storm.shield=true
+ check(rules.damage(targets[1],1,'steel',true)==0 and storm.shield and storm.health==4 and rules.events[-1].kind=='element_resist','Resistência total preserva escudo e impede veneno')
+ check(rules.damage(targets[1],0,'ice')==0 and storm.shield,'Vantagem mantém um golpe de base zero em zero')
+ check(rules.damage(targets[1],1,'ice')==0 and not storm.shield,'Escudo absorve dano com vantagem')
+ check(rules.damage({'side':1,'hero':true},2,'lightning')==2,'Heróis são neutros')
+ fresh()
+ var attacker=ready(0,'drake')
+ ice=ready(1,'frostling')
+ var fight=rules.attack(0,attacker.uid,{'side':1,'uid':ice.uid})
+ var hits=fight.events.filter(func(e):return e.kind=='damage')
+ check(ice.health==1 and attacker.health==1 and hits.map(func(e):return e.modifier)==[1,-1],'Ataque e contra-ataque aplicam o elemento separadamente')
+
+func test_traps() -> void:
+ fresh()
+ var deck=Rules.DEFAULT_DECK.duplicate()
+ deck[0]='trap_bulwark'
+ check(rules.valid_deck(deck) and cards.values().filter(func(c):return c.kind=='trap').size()==6,'As seis armadilhas são colecionáveis e aceitas em baralhos')
+ var player=rules.players[0]
+ player.hand=['scout','trap_bulwark','trap_spikes'];player.mana=10
+ check(not rules.play(0,1).ok and player.mana==10,'Armadilha exige uma casa de apoio')
+ check(rules.equip_support(0,0).ok and rules.equip_support(0,0).ok and player.supports[0].id=='scout' and player.supports[0].trap=='trap_bulwark','Apoio regular e armadilha ocupam a mesma casa')
+ check(not rules.equip_support(0,0).ok and player.mana==7 and player.hand==['trap_spikes'],'Armadilha ocupada bloqueia a segunda sem custo')
+ rules.end_turn()
+ check(player.supports[0].trap=='trap_bulwark' and rules.players[1].health==29,'Pulso do apoio não dispara nem remove sua armadilha')
+ var attacker=ready(1,'wolf')
+ var hero={'side':0,'hero':true}
+ var result=rules.attack(1,attacker.uid,hero)
+ check(result.events[0].kind=='trap_reveal' and player.health==30 and player.armor==0 and player.supports[0].trap=='','Baluarte revela antes do ataque, protege e é descartado')
+ attacker=ready(1,'scout')
+ result=rules.attack(1,attacker.uid,hero)
+ check(player.health==29 and not result.events.any(func(e):return e.kind=='trap_reveal'),'Armadilha disparada não se repete')
+
+ rules.start(Rules.DEFAULT_DECK,[],42,true)
+ player=rules.players[0]
+ player.mana=10;player.hand=['trap_spikes','trap_runes','trap_spring','trap_embers','trap_last_stand']
+ var rival=rules.players[1]
+ rival.mana=10;rival.hand=['scout','fireball','crystal']
+ check(rules.equip_support(0,0).ok and player.hand.size()==5 and player.cooldowns.has(0),'Armar em tempo real inicia a recarga')
+ var ally=ready(0,'wolf')
+ attacker=ready(1,'scout')
+ result=rules.attack(1,attacker.uid,{'side':0,'uid':ally.uid})
+ check(result.events[0].id=='trap_spikes' and ally.health==2 and rules.find_unit(1,attacker.uid)==null,'Espinhos também protegem criaturas e cancelam o ataque letal ao agressor')
+ rules.equip_support(0,1)
+ rules.equip_support(1,2)
+ player.health=20
+ check(not rules.play(1,1,{'side':1,'hero':true}).ok and player.supports[0].trap=='trap_runes','Feitiço inválido não revela armadilha')
+ rules.play(1,0)
+ check(player.supports[1].trap=='trap_spring','Invocar criatura não dispara armadilha de feitiço')
+ result=rules.play(1,1,hero)
+ var reveals=result.events.filter(func(e):return e.kind=='trap_reveal')
+ check(reveals.map(func(e):return e.id)==['trap_runes','trap_spring'] and player.health==19 and player.armor==0,'Armadilhas de feitiço resolvem em ordem antes dos efeitos do feitiço')
+ rules.equip_support(0,3)
+ rules.equip_support(1,4)
+ player.health=11
+ rules.damage(hero,1)
+ check(player.supports[0].trap=='trap_embers','Atingir exatamente o limite não dispara armadilha de vida')
+ rules.damage(hero,5)
+ check(player.health==9 and player.armor==5 and player.supports.all(func(s):return s.trap==''),'Cruzar ambos os limites no mesmo golpe resolve cura e armadura')
+ rules.advance_cooldowns(5)
+ player.mana=10
+ rules.equip_support(0,3)
+ player.health=5
+ rules.damage(hero,6)
+ check(player.health==4 and player.supports[0].trap=='trap_embers','Armar abaixo do limite aguarda um novo cruzamento')
+ player.health=10
+ rules.damage(hero,10)
+ check(player.health==0 and player.supports[0].trap=='trap_embers','Dano letal não é revertido pela armadilha de vida')
+ fresh()
+ rules.end_turn()
+ rules.players[1].hand=['trap_bulwark','trap_spring']
+ rules.players[1].mana=5
+ ready(1,'wolf')
+ rules.choose_rival_support(func(side,index):return side==1 and index==0)
+ check(rules.players[1].supports[0].trap=='trap_spring' and rules.players[1].hand==['trap_bulwark'],'Rival arma cartas disponíveis e respeita ações pendentes')
+
+func test_families() -> void:
+ fresh()
+ var wolf=ready(0,'wolf')
+ var opposing_wolf=ready(1,'wolf')
+ check(rules.effective_attack(0,wolf)==3 and rules.effective_attack(1,opposing_wolf)==3,'Um membro em cada lado não forma família')
+ var token=ready(0,'token_wolf')
+ ready(0,'wolf')
+ check(rules.effective_attack(0,wolf)==4 and rules.family_bonus(0,token)==1 and wolf.attack==3,'Fichas contam e três aliados não acumulam o bônus')
+ var target={'side':1,'hero':true}
+ check(rules.health_preview(0,{'kind':'unit','uid':wolf.uid},target)=='−4','Prévia usa o ataque de família')
+ rules.attack(0,wolf.uid,target)
+ check(rules.players[1].health==26,'Ataque usa o bônus de família')
+ for ally in rules.players[0].board:
+  if ally.uid!=wolf.uid:ally.health=0
+ check(rules.family_bonus(0,wolf)==0,'Aliados sem vida deixam de contar imediatamente')
+ rules.resolve_deaths()
+ check(rules.effective_attack(0,wolf)==3,'Remoção dos aliados restaura o ataque base')
+ fresh()
+ var scout=ready(0,'stoneguard')
+ var skeleton=ready(1,'skeleton')
+ var necro=ready(1,'necro')
+ rules.attack(0,scout.uid,{'side':1,'uid':skeleton.uid})
+ check(scout.health==3-int(cards.skeleton.attack)-1,'Contra-ataque usa a sinergia de mortos-vivos')
+ necro.health=0
+ rules.resolve_deaths()
+ check(rules.players[1].board.filter(func(u):return u.id=='token_skeleton' and rules.family_bonus(1,u)==1).size()==2,'Esqueletos de Último Suspiro ativam a família')
+ fresh()
+ var drake=ready(0,'drake')
+ var wyrm=ready(0,'wyrm')
+ check(rules.family_bonus(0,drake)==1 and rules.family_bonus(0,wyrm)==1,'Criaturas diferentes da família Dragões compartilham o bônus')

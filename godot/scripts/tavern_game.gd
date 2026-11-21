@@ -228,7 +228,7 @@ func notify(message: String) -> void:
  toast_text=message;toast_time=2.1
 
 func collectible_ids() -> Array:
- var ids=cards.keys().filter(func(id):return not cards[id].get('token',false) and (collection_filter==0 or cards[id].kind==('minion' if collection_filter==1 else 'spell')))
+ var ids=cards.keys().filter(func(id):return not cards[id].get('token',false) and (collection_filter==0 or cards[id].kind==['','minion','spell','trap'][collection_filter]))
  ids.sort_custom(func(a,b):return int(cards[a].cost)<int(cards[b].cost) if cards[a].cost!=cards[b].cost else cards[a].name<cards[b].name)
  return ids
 
@@ -294,6 +294,9 @@ func place_support(slot: int,index: int) -> void:
  var result=rules.equip_support(slot,index)
  if not result.ok:notify(result.reason);return
  audio_engine.play('card_soft',-15.0)
+ if result.get('trap',false):
+  notify('Armadilha armada. Ela será revelada ao disparar.')
+  return
  if not profile.support_hint_seen:
   notify('A cada 12 s: ataque fere, defesa dá armadura. Toque para alternar.')
   toast_time=5.0
@@ -371,7 +374,9 @@ func pointer_up() -> void:
    if slot>=0:
     place_support(slot,released.index)
     return
-   if cards[released.id].kind=='minion':
+   if cards[released.id].kind=='trap':
+    notify('Arme a armadilha em uma casa dourada.')
+   elif cards[released.id].kind=='minion':
     if view.layout.player_drop.has_point(pointer):request_play(int(released.index),{},drop_position(pointer),released.origin)
     else:notify('Solte a criatura no seu lado do tabuleiro.')
    else:
@@ -428,7 +433,7 @@ func activate_button(id: String) -> void:
    if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('dungeon_battle_speed','"+str(speed)+"')")
   'previous':collection_page=maxi(0,collection_page-1)
   'next':collection_page+=1
-  'filter':collection_filter=(collection_filter+1)%3;collection_page=0
+  'filter':collection_filter=(collection_filter+1)%4;collection_page=0
   'reset_deck':profile.deck=Rules.DEFAULT_DECK.duplicate();save_profile();notify('Baralho inicial restaurado.')
 
 func cycle_card(id: String) -> void:
@@ -513,7 +518,7 @@ func resolve_action(action: Dictionary) -> void:
   if event.kind=='damage':action.impact_points.append(view.target_center(event.target))
  view.ingest(result.events,before,action)
  play_events(result.events,action.element,before,action)
- if action.side==1 and not rules.done:rules.choose_rival_support()
+ if action.side==1 and not rules.done:rules.choose_rival_support(card_locked)
 
 func request_play(index: int,target: Dictionary={},position = -1,origin=Vector2.ZERO,side=0) -> void:
  if rules.done:return
@@ -568,6 +573,7 @@ func play_events(events: Array,element: String,before: Array=[],action: Dictiona
     for unit in before[int(defender.get('side',1))].board:
      if unit.uid==defender.get('uid',-1):source=unit.id;break
    sound=audio_engine.action_clip(source,event_element)
+  elif kind=='trap_reveal':sound='card_soft';gain=-10
   elif kind=='shield_break':sound='ward_break';gain=-10
   elif kind in ['armor','blocked']:sound='armor';gain=-12
   elif kind=='heal':sound='heal';gain=-13
@@ -596,7 +602,7 @@ func rival_action() -> void:
  if not plan.is_empty():
   request_play(plan.index,plan.target,-1,Vector2.ZERO,1)
  elif rules.can_power(1).ok:request_power({},1)
- else:rules.choose_rival_support()
+ else:rules.choose_rival_support(card_locked)
 
 func check_result() -> void:
  if not rules.done:return

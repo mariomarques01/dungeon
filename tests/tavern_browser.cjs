@@ -124,6 +124,29 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  }
  await mine();s=await state();assert(s.done,'Complete match should end');assert(spellPlayed,'A spell should have been dragged and resolved');assert(creaturesPlayed>1&&attacks>1,JSON.stringify({creaturesPlayed,attacks}));assert(s.profile.coins>50&&s.profile.xp>35);await shot('result');
  const saved=s.profile;await click('home');await page.clock.resume();await page.reload({waitUntil:'networkidle'});await page.waitForFunction(()=>window.__dungeonState);assert.deepEqual((await state()).profile,saved);
+ // Arm a collectible trap through a real drop, then wait for the rival's attack.
+ const trapProfile={...initial,deck:[...initial.deck]};
+ trapProfile.deck[trapProfile.deck.indexOf('thunderstorm')]='trap_bulwark';
+ await page.evaluate(profile=>localStorage.setItem('dungeon_tavern_v3',JSON.stringify(profile)),trapProfile);
+ await page.reload({waitUntil:'networkidle'});
+ await page.waitForFunction(()=>window.__dungeonState?.screen==='home');
+ await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));
+ await click('start');
+ await advance(500);
+ await advanceUntil(s=>s.players[0].mana>=cards.trap_bulwark.cost);
+ let trapState=await state();
+ const trap=trapState.handViews.find(h=>h.id==='trap_bulwark');
+ assert(trap,'Opening hand should contain the trap');
+ const trapSlot={x:trapState.logical.x*0.253,y:trapState.logical.y*0.675};
+ await drag(cardPoint(trapState,trap.index),trapSlot);
+ trapState=await state();
+ assert.equal(trapState.players[0].supports[0].trap,'trap_bulwark');
+ assert(!trapState.effectHistory.some(e=>e.phase==='reveal'&&e.id==='trap_bulwark'));
+ await shot('trap-armed');
+ await advanceUntil(s=>s.effectHistory.some(e=>e.phase==='reveal'&&e.id==='trap_bulwark'));
+ assert.equal((await state()).players[0].supports[0].trap,'');
+ await advance(240);
+ await shot('trap-revealed');
  // Touch-only mobile drag: one finger, no synthetic mouse fallback.
  const mobile=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});mobile.on('pageerror',e=>errors.push(e.message));mobile.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
  await mobile.addInitScript(p=>{localStorage.setItem('dungeon_tavern_v3',JSON.stringify(p));localStorage.setItem('dungeon_sound','off')},initial);

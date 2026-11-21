@@ -2,6 +2,7 @@ extends RefCounted
 const GOLD=Color('eac67e')
 const PAPER=Color('f1dfb6')
 const INK=Color('30251e')
+const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
 var game
 var fx
 var effect_history=[]
@@ -130,6 +131,8 @@ func prepare_hand_faces() -> void:
   var target=card.get('target','none')
   var missing=(target=='enemy_minion' and game.rules.players[1].board.is_empty()) or (target=='friendly_minion' and player.board.is_empty())
   hand.ready=not missing and not hand.full and not player.cooldowns.has(hand.index) and card.cost<=player.mana
+  if card.kind=='trap':
+   hand.ready=game.rules.can_equip_support(0,hand.index).ok or game.rules.can_equip_support(1,hand.index).ok
   hand_faces[hand.index].update(hand,hand.ready,card.cost<=player.mana)
  for i in range(hand_faces.size()):
   hand_faces[i].visible=i<hand_views.size() and not (game.drag.get('kind','')=='card' and game.drag.index==i)
@@ -167,6 +170,7 @@ func advance_effects(active: Array,elapsed: float,lifetime: float) -> void:
 func reset_effects() -> void:
  stop_motion()
  first_blood=false
+ trap_reveals.clear()
  banners.clear()
  known_hand_size=0
  advance_effects(particles,INF,1.15)
@@ -175,6 +179,7 @@ func reset_effects() -> void:
 
 var ghosts=[]
 var particles=[]
+var trap_reveals=[]
 var floats=[]
 
 var canvas
@@ -234,6 +239,9 @@ func tick(delta: float) -> void:
   if pointer_trail.is_empty() or pointer_trail[-1].position.distance_to(game.pointer)>8:
    pointer_trail.append({'position':game.pointer,'id':game.drag.id,'age':0.0})
    if pointer_trail.size()>18:pointer_trail.pop_front()
+ if not trap_reveals.is_empty():
+  for reveal in trap_reveals:reveal.age+=delta*game.speed
+  trap_reveals=trap_reveals.filter(func(reveal):return reveal.age<1.15)
  advance_effects(particles,delta*game.speed,1.15)
  advance_effects(floats,delta*game.speed,1.25)
  advance_effects(ghosts,delta*game.speed,1.4)
@@ -461,7 +469,7 @@ func prepare_collection() -> void:
   collection_views.append({'id':ids[index],'rect':rect})
   prepare_card('collection'+str(slot),ids[index],rect)
  button('home',Rect2(35,30,170,50),'VOLTAR')
- button('filter',Rect2(layout.w-260,30,225,50),['TODAS','CRIATURAS','FEITIÇOS'][game.collection_filter])
+ button('filter',Rect2(layout.w-260,30,225,50),['TODAS','CRIATURAS','FEITIÇOS','ARMADILHAS'][game.collection_filter])
  button('previous',Rect2(50,layout.h-98,155,55),'ANTERIOR',game.collection_page>0)
  button('next',Rect2(layout.w-205,layout.h-98,155,55),'PRÓXIMA',(game.collection_page+1)*page_size<ids.size())
  button('reset_deck',Rect2(layout.w/2-150,layout.h-98,300,55),'BARALHO INICIAL')
@@ -520,6 +528,12 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
+  elif kind=='element_resist':
+   accumulate(event,target_center(event.target),Color('96dfff'))
+  elif kind=='trap_reveal':
+   trap_reveals.append({'age':0.0,'side':event.side,'slot':event.slot,'id':event.id})
+   effect_history.append({'phase':'reveal','kind':kind,'id':event.id,'side':event.side,'slot':event.slot})
+   if effect_history.size()>60:effect_history.pop_front()
   elif kind=='support':
    var slot_rect: Rect2=layout.supports[event.slot] if event.side==0 else layout.enemy_supports[event.slot]
    acquire_effect(particles,&"particle",{'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'defense':event.defense,'id':event.id})
@@ -534,13 +548,19 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
      acquire_effect(particles,&"particle",{'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
 
 func accumulate(event: Dictionary,at: Vector2,color: Color) -> void:
+ var modifier=int(event.get('modifier',0))
+ var marker: String=game.rules.elemental_marker(modifier)
+ var prefix='+' if event.kind=='heal' else '−'
+ var stack_depth=0
  for number in floats:
-  if number.get('target',{})==event.target and number.get('kind','')==event.kind and number.age<0.35:
+  if number.get('target',{})!=event.target or number.age>=0.35:continue
+  if number.get('kind','')==event.kind and number.get('modifier',0)==modifier:
    number.amount+=event.amount
-   number.text=('−' if event.kind=='damage' else '+')+str(number.amount)
+   number.text=prefix+str(number.amount)+marker
    number.age=0
    return
- acquire_effect(floats,&"number",{'position':at,'kind':event.kind,'target':event.target,'amount':event.amount,'text':('−' if event.kind=='damage' else '+')+str(event.amount),'color':color,'age':0.0})
+  if event.kind in ['damage','element_resist'] and number.kind in ['damage','element_resist']:stack_depth+=1
+ acquire_effect(floats,&"number",{'position':at+Vector2(0,stack_depth*35),'kind':event.kind,'target':event.target,'amount':event.amount,'modifier':modifier,'text':prefix+str(event.amount)+marker,'color':color,'age':0.0})
 
 func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
  var key=[fill.to_rgba32(),border.to_rgba32(),radius,width]
@@ -610,8 +630,14 @@ func paint_overlay(c: CanvasItem) -> void:
  else: paint_battle()
  for button_info in buttons: paint_button(button_info)
  if not game.inspect_id.is_empty():
-  paint_card(game.inspect_id,inspect_rect())
-  text('Toque fora para fechar',Rect2(inspect_rect().position+Vector2(-15,inspect_rect().size.y+15),Vector2(inspect_rect().size.x+30,25)),15,PAPER,true)
+  var card_rect=inspect_rect()
+  paint_card(game.inspect_id,card_rect)
+  var hint=element_hint(game.cards[game.inspect_id].element)
+  if hint!='':
+   var strip=Rect2(card_rect.position+Vector2(0,card_rect.size.y-26),Vector2(card_rect.size.x,24))
+   canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
+   text(hint,strip,15,PAPER,true)
+  text('Toque fora para fechar',Rect2(card_rect.position+Vector2(-15,card_rect.size.y+15),Vector2(card_rect.size.x+30,25)),15,PAPER,true)
  if game.screen=='battle' and game.panel.is_empty() and not banners.is_empty():
   var strip=Rect2(layout.w/2-190,layout.h*0.443,380,42)
   canvas.draw_style_box(style(Color('33262b'),GOLD,8,2),strip)
@@ -639,6 +665,51 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
  text(card.name,Rect2(local.position+local.size*Vector2(0.11,0.525),local.size*Vector2(0.79,0.10)),int((11 if card.name.length()>20 else 12)*factor),Color('3b281b'),true,true)
  wrapped(card.text,Rect2(local.position+local.size*Vector2(0.16,0.65),local.size*Vector2(0.69,0.20)),int(10*factor),Color('3b2d24'),true)
  canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+func element_hint(element: String) -> String:
+ var source='storm' if element=='lightning' else element
+ if not ELEMENT_NAMES.has(source):return ''
+ var advantage: Dictionary=game.rules.ELEMENT_ADVANTAGE
+ var hint='Raio' if element=='lightning' else ELEMENT_NAMES[source]
+ if advantage.has(source):hint+='  ▲ '+ELEMENT_NAMES[advantage[source]]
+ var weakness=advantage.find_key(source)
+ if weakness!=null:hint+='  ▼ '+ELEMENT_NAMES[weakness]
+ return hint
+
+func armed_trap_rect(slot: Rect2) -> Rect2:
+ var size=slot.size*Vector2(0.42,0.56)
+ var center=slot.position+slot.size*Vector2(0.69,0.44)
+ return Rect2(center-size/2,size)
+
+func paint_trap_back(rect: Rect2) -> void:
+ canvas.draw_style_box(style(Color('39274c'),Color('e9bbff'),4,2),rect)
+ var center=rect.get_center()
+ var radius=minf(rect.size.x,rect.size.y)*0.28
+ var corners=PackedVector2Array([center-Vector2(0,radius),center+Vector2(radius,0),center+Vector2(0,radius),center-Vector2(radius,0),center-Vector2(0,radius)])
+ canvas.draw_polyline(corners,Color('e9bbff'),2,true)
+
+func paint_trap_reveal(reveal: Dictionary) -> void:
+ var slot: Rect2=layout.supports[reveal.slot] if reveal.side==0 else layout.enemy_supports[reveal.slot]
+ var progress=clampf(reveal.age/0.42,0,1)
+ var center=slot.get_center()
+ var size=slot.size*Vector2(0.66,0.86)
+ if not game.reduced_motion:
+  var back=armed_trap_rect(slot)
+  center.y+=(-1 if reveal.side==0 else 1)*slot.size.y*0.38
+  center=back.get_center().lerp(center,progress)
+  size=back.size.lerp(size,progress)
+  size.x*=maxf(0.05,absf(cos(progress*PI)))
+ var rect=Rect2(center-size/2,size)
+ if progress<0.5 and not game.reduced_motion:
+  paint_trap_back(rect)
+  return
+ var card=game.cards[reveal.id]
+ canvas.draw_style_box(style(Color('39274c'),Color('e9bbff'),4,2),rect)
+ draw_card_picture(slice(spells,int(card.art),4,4),rect.grow(-minf(3,rect.size.x*0.15)))
+ if game.reduced_motion or progress>=0.88:
+  var label=Rect2(center+Vector2(-slot.size.x*0.85,size.y*0.48),Vector2(slot.size.x*1.7,24))
+  canvas.draw_style_box(style(Color('39274c'),Color('e9bbff'),4,1),label)
+  text(card.name,label,clampi(int(slot.size.x*0.14),12,17),PAPER,true,true)
 
 func draw_card_picture(picture: AtlasTexture,window: Rect2,tint=Color.WHITE) -> void:
  var region=picture.region
@@ -753,6 +824,9 @@ func paint_battle() -> void:
     var timer=Rect2(rect.position+Vector2(rect.size.x*0.46,2),Vector2(rect.size.x*0.51,22))
     canvas.draw_rect(timer,Color('292332'))
     text('%d s'%ceili(game.RIVAL_SECONDS-game.support_elapsed),timer,15,PAPER,true)
+   if support.get('trap','')!='':
+    paint_trap_back(armed_trap_rect(rect))
+    if support.id=='':label='Armadilha'
    var strip=Rect2(rect.position+rect.size*Vector2(0.06,0.72),rect.size*Vector2(0.88,0.23))
    canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
    text(label,strip,int(minf(strip.size.y*0.70,strip.size.x*0.16)),PAPER,true,true)
@@ -766,7 +840,7 @@ func paint_battle() -> void:
   fx.status(unit,rect)
   if unit.attacks==0 and unit.delay>0:
    radial_cooldown(rect.position+rect.size*Vector2(0.78,0.2),rect.size.x*0.11,unit.delay)
-  elif info.side==0 and unit.attacks>0 and unit.attack>0 and not game.target_locked({'side':0,'uid':uid}):
+  elif info.side==0 and unit.attacks>0 and state.effective_attack(info.side,unit)>0 and not game.target_locked({'side':0,'uid':uid}):
    var tag=Rect2(rect.position+Vector2(0,-2),Vector2(rect.size.x,19))
    canvas.draw_rect(tag,Color('234d3a'))
    text('ATACAR',tag,14,Color('b7ffce'),true,true)
@@ -778,7 +852,9 @@ func paint_battle() -> void:
   if unit.sleeping and unit.attacks==0: text('Z',Rect2(rect.end-Vector2(14,rect.size.y-2),Vector2(30,30)),22,Color('c3dcec'),true,true)
   if 'windfury' in unit.keywords: text('↟',Rect2(rect.position-Vector2(7,20),Vector2(30,30)),20,GOLD,true)
   var radius=minf(rect.size.x*0.18,rect.size.y*0.15)
-  badge(Vector2(rect.position.x+radius+2,rect.end.y-radius-2),str(unit.attack),Color('845018'),radius)
+  var attack_value=state.effective_attack(info.side,unit)
+  var attack_color=Color('287254') if attack_value>unit.attack else Color('845018')
+  badge(Vector2(rect.position.x+radius+2,rect.end.y-radius-2),str(attack_value),attack_color,radius)
   badge(rect.end-Vector2.ONE*(radius+2),str(unit.health),Color('922a38'),radius)
  var opening=observed_match!=game.match_serial
  if opening:
@@ -835,6 +911,7 @@ func paint_battle() -> void:
    var at=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   if not game.reduced_motion:fx.action(anim,anim_time)
+ for reveal in trap_reveals:paint_trap_reveal(reveal)
  var p=state.players[0]
  if p.health<=10:
   var strength=0.10+0.05*sin(clock*3.0)
@@ -872,8 +949,10 @@ func paint_drop_preview() -> void:
  var rim=Color(0.55,1,0.76,0.8)
  var landing=Rect2()
  var support=game.support_at(game.pointer)
- for slot in layout.supports:canvas.draw_rect(slot,rim,false,3,true)
+ for slot in range(layout.supports.size()):
+  if game.rules.can_equip_support(slot,index).ok:canvas.draw_rect(layout.supports[slot],rim,false,3,true)
  if support>=0:
+  if not game.rules.can_equip_support(support,index).ok:return
   landing=layout.supports[support]
  elif card.kind=='minion' and game.rules.can_play(0,index).ok:
   var count=player.board.size()
