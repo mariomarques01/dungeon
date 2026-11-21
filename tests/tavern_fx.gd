@@ -22,13 +22,16 @@ func run() -> void:
    'friendly_minion':target={'side':0,'uid':game.rules.players[0].board[0].uid}
   var valid=game.rules.can_play(0,0,target)
   if not valid.ok:push_error('Fixture invalid: '+id);failures+=1;continue
-  await game.request_play(0,target)
-  if game.busy or game.view.effect_history[-1].id!=id:push_error('Animation did not complete: '+id);failures+=1
+  game.request_play(0,target)
+  await finish_animation(game)
+  if not game.active_actions.is_empty() or game.view.effect_history[-1].id!=id:push_error('Animation did not complete: '+id);failures+=1
   if card.kind=='minion' and not game.rules.players[0].board.is_empty():
    var unit=game.rules.players[0].board[-1]
    unit.sleeping=false;unit.attacks=1;unit.frozen=0
    var victim={'side':1,'hero':true} if game.rules.players[1].board.is_empty() else {'side':1,'uid':game.rules.players[1].board[0].uid}
-   if game.rules.can_attack(0,unit.uid,victim).ok:await game.request_attack(unit.uid,victim)
+   if game.rules.can_attack(0,unit.uid,victim).ok:
+    game.request_attack(unit.uid,victim)
+    await finish_animation(game)
   for voice in game.audio_engine.voices:
    if is_instance_valid(voice):voice.stop()
  # Lethal spell effects keep the element that actually killed the target.
@@ -36,7 +39,8 @@ func run() -> void:
   game.start_match();game.rules.players[0].mana=10;game.rules.players[0].hand=[spell]
   var victim=game.rules.spawn(1,'stoneguard');victim.health=1
   game.view.prepare()
-  await game.request_play(0,{'side':1,'uid':victim.uid})
+  game.request_play(0,{'side':1,'uid':victim.uid})
+  await finish_animation(game)
   var remains=game.view.ghosts.filter(func(g):return g.uid==victim.uid)
   if remains.is_empty() or remains[0].element!=game.cards[spell].element:push_error('Wrong death element: '+spell);failures+=1
  print('Fire, ice, lightning and shadow death profiles checked')
@@ -45,20 +49,23 @@ func run() -> void:
   game.start_match();game.rules.players[0].mana=10;game.rules.players[0].hand=['meteor']
   for i in range(count):game.rules.spawn(1,'wolf').health=1
   game.view.prepare()
-  await game.request_play(0,{})
+  game.request_play(0,{})
+  await finish_animation(game)
   var banners=game.view.floats.filter(func(f):return f.text.begins_with('QUEDA'))
   var expected='QUEDA DUPLA' if count==2 else 'QUEDA MÚLTIPLA'
   if (count==1 and not banners.is_empty()) or (count>1 and (banners.size()!=1 or banners[0].text!=expected)):
    push_error('Wrong defeat banner for '+str(count)+' deaths');failures+=1
  game.start_match();game.rules.players[0].mana=10;game.view.prepare()
- await game.request_solar()
- if game.busy or game.view.effect_history[-1].id!='solar':
+ game.request_solar()
+ await finish_animation(game)
+ if not game.active_actions.is_empty() or game.view.effect_history[-1].id!='solar':
   push_error('Solar timeline did not finish');failures+=1
  # A real lethal action opens the victory panel with live units still on the board.
  game.start_match();game.rules.spawn(0,'dragon');game.rules.spawn(1,'wolf')
  game.rules.players[0].mana=10;game.rules.players[0].hand=['fireball']
  game.rules.players[1].health=1;game.view.prepare()
- await game.request_play(0,{'side':1,'hero':true})
+ game.request_play(0,{'side':1,'hero':true})
+ await finish_animation(game)
  if game.panel!='result' or game.rules.outcome!='win':push_error('Victory panel did not open');failures+=1
  for node in game.view.nodes.values():
   if node.z_index>=game.overlay.z_index:push_error('Card art overlaps result');failures+=1
@@ -66,3 +73,10 @@ func run() -> void:
  print('Victory layers and creature audio profiles checked')
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
+
+func finish_animation(game) -> void:
+ for frame in range(600):
+  if game.active_actions.is_empty():return
+  await process_frame
+ push_error('Animation timed out')
+ failures+=1
