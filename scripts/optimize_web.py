@@ -80,5 +80,12 @@ html = html.replace('statusProgress.max = total;', '''statusProgress.max = total
           const detail = document.getElementById('loading-detail');
           if (detail) detail.textContent = percent >= 100
             ? 'Preparando o tabuleiro…' : 'Carregando o jogo… ' + percent + '%';''')
+manifest = {"name": "Duelos da Taverna", "short_name": "Dungeon", "start_url": "./", "scope": "./", "display": "fullscreen", "background_color": "#17121b", "theme_color": "#17121b", "icons": [{"src": old + ".apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}]}
+(root / "manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False))
+html = html.replace("</head>", """<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>:root{--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}</style>
+</head>""")
 html_path.write_text(html)
 print(json.dumps({"runtime": runtime, "pack": pack, "packBytes": config["fileSizes"][pack]}))
