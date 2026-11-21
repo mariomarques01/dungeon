@@ -13,7 +13,7 @@ var art_layer: Control
 var overlay: Control
 var screen='home'
 var panel=''
-var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'support_hint_seen':false,'reduced_motion':false}
+var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'intro_seen':false,'support_hint_seen':false,'reduced_motion':false}
 var reduced_motion=false
 var sound_on=true
 var speed=1.0
@@ -115,6 +115,7 @@ func load_profile() -> void:
  if data is Dictionary:
   reduced_motion=data.get('reduced_motion',false)==true
   profile.reduced_motion=reduced_motion
+  profile.intro_seen=data.get('intro_seen',data.get('support_hint_seen',false))==true
   profile.support_hint_seen=data.get('support_hint_seen',false)==true
   if data.get('deck',null) is Array and data.deck.all(func(id): return cards.has(id) and not cards[id].get('token',false)):profile.deck=data.deck
   for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(data.get(key,0)))
@@ -212,7 +213,7 @@ func _process(delta: float) -> void:
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
   var latest={} if active_actions.is_empty() else active_actions.back()
-  var snap={'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -294,7 +295,7 @@ func place_support(slot: int,index: int) -> void:
  if not result.ok:notify(result.reason);return
  audio_engine.play('card_soft',-15.0)
  if not profile.support_hint_seen:
-  notify('A cada 12 s: Ataque causa dano ao herói rival. Defesa dá armadura.')
+  notify('A cada 12 s: ataque fere, defesa dá armadura. Toque para alternar.')
   toast_time=5.0
   profile.support_hint_seen=true
   save_profile()
@@ -445,6 +446,11 @@ func start_match() -> void:
  rules.start(profile.deck,[],qa_seed,true)
  view.reset_effects();view.scenery=[]
  audio_engine.start_music();toast_time=0
+ if not profile.intro_seen:
+  notify('Arraste cartas ao campo e criaturas prontas até um inimigo.\nPara equipar um apoio, solte uma carta na casa dourada.')
+  toast_time=7
+  profile.intro_seen=true
+  save_profile()
 
 func card_locked(side: int,index: int) -> bool:
  return active_actions.any(func(a):return a.side==side and a.get('index',-1)==index and index>=0)

@@ -295,6 +295,47 @@ func cast(side: int,c: Dictionary,target: Dictionary) -> void:
    players[side].mana=mini(10,int(players[side].mana)+amount)
    events.append({'kind':'mana','side':side,'amount':amount})
 
+# Project the immediate health change without spending energy, rolling RNG or emitting events.
+func health_preview(side: int,selection: Dictionary,target: Dictionary) -> String:
+ if not target_exists(target):return ''
+ var amount=0
+ var healing=false
+ var poison=false
+ match selection.kind:
+  'card':
+   var index=int(selection.index)
+   if not can_play(side,index,target).ok:return ''
+   var card=cards[players[side].hand[index]]
+   match card.get('effect',''):
+    'heal':
+     healing=true
+     amount=int(card.amount)
+    'damage','frost':amount=int(card.amount)+spellpower(side)
+    'aoe','blizzard':
+     if target.side==side or target.get('hero',false):return ''
+     amount=int(card.amount)+spellpower(side)
+    'destroy':
+     return '−'+str(find_unit(target.side,target.uid).health)
+    _:return ''
+  'unit':
+   if not can_attack(side,selection.uid,target).ok:return ''
+   var unit=find_unit(side,selection.uid)
+   amount=unit.attack
+   poison='poison' in unit.keywords
+  'power':
+   if side!=0 or not can_power(side,target).ok:return ''
+   amount=1
+  _:return ''
+ var hero=target.get('hero',false)
+ var victim=players[target.side] if hero else find_unit(target.side,target.uid)
+ if healing:return '+'+str(mini(amount,(30 if hero else int(victim.max_health))-int(victim.health)))
+ if not hero and victim.shield:return 'ESCUDO'
+ if hero and victim.armor>0:
+  var blocked=mini(amount,victim.armor)
+  var lost=mini(amount-blocked,victim.health)
+  return '−%d ARM'%blocked if lost==0 else '−%d ARM · −%d PV'%[blocked,lost]
+ return '−'+str(victim.health if poison and not hero else mini(amount,victim.health))
+
 func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
  if not target_exists(target): return 0
  amount=maxi(0,amount)

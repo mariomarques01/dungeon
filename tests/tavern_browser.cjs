@@ -35,7 +35,7 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  const shot=name=>page.screenshot({path:path.join(out,name+'.png')});
  const targetPoint=(s,t)=>center(t.hero?s.heroes[t.side]:s.unitViews.find(u=>u.uid===t.uid).rect);
  const cardPoint=(s,index)=>center(s.handViews[index].rect);
- const drag=async(from,to,screenshot)=>{let s=await state();let a=point(s,from),b=point(s,to);await page.mouse.move(a.x,a.y);await page.mouse.down();await advance(45);await page.mouse.move(b.x,b.y,{steps:3});await advance(70);if(screenshot)await shot(screenshot);await page.mouse.up();await advance(90);if(screenshot){const a=(await state()).animation;if(a&&a.kind){await shot(screenshot+'-cast');await advance(160);await shot(screenshot+'-impact')}}await idle()};
+ const drag=async(from,to,screenshot,checkPreview)=>{let s=await state();let a=point(s,from),b=point(s,to);await page.mouse.move(a.x,a.y);await page.mouse.down();await advance(45);await page.mouse.move(b.x,b.y,{steps:3});await advance(70);if(checkPreview)checkPreview(await state());if(screenshot)await shot(screenshot);await page.mouse.up();await advance(90);if(screenshot){const a=(await state()).animation;if(a&&a.kind){await shot(screenshot+'-cast');await advance(160);await shot(screenshot+'-impact')}}await idle()};
  assert(!(await state()).buttons.some(button=>button.id==='arena'),'Taverna must be the only game mode');
  await click('settings');await click('motion');assert((await state()).profile.reduced_motion);await click('motion');await click('close');
  await shot('home');await click('collection');await shot('collection');let library=await state();let entry=library.collection.find(c=>library.profile.deck.includes(c.id));let q=point(library,{x:entry.rect.x+entry.rect.w/2,y:entry.rect.y+entry.rect.h+14});await page.mouse.click(q.x,q.y);await advance(100);assert.equal((await state()).profile.deck.length,29);q=point(await state(),{x:entry.rect.x+entry.rect.w/2,y:entry.rect.y+70});await page.mouse.click(q.x,q.y);await advance(100);assert.equal((await state()).profile.deck.length,30);await click('home');await click('start');await mine();await advance(500);await shot('opening');
@@ -48,7 +48,11 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  await drag(center(view.rect),center(s.heroes[1]));s=await state();assert.equal(s.players[1].health,30,'Summoning sickness must prevent an immediate attack');assert.equal(s.turn,before.turn);
  assert(!s.buttons.some(b=>b.id==='end'));await advanceUntil(s=>s.players[0].board.some(u=>u.uid===own.uid&&u.attacks>0)&&s.players[1].board.length>0);s=await state();assert.equal(s.players[0].max_mana,10);assert(s.players[0].mana>0);assert(s.players[1].board.length>0);own=s.players[0].board.find(u=>u.uid===own.uid);assert.equal(own.attacks,1);
  const enemy=s.players[1].board.find(u=>u.keywords.includes('taunt'))||s.players[1].board[0];view=s.unitViews.find(u=>u.uid===own.uid);before=JSON.parse(JSON.stringify(s));
- await drag(center(view.rect),targetPoint(s,{side:1,uid:enemy.uid}),'attack-arrow');s=await state();
+ await drag(center(view.rect),targetPoint(s,{side:1,uid:enemy.uid}),'attack-arrow',during=>{
+   assert.equal(during.preview.target.uid,enemy.uid);
+   assert.equal(during.preview.text,enemy.shield?'ESCUDO':'−'+Math.min(own.attack,enemy.health));
+   assert.deepEqual(during.players[1].board.find(u=>u.uid===enemy.uid).health,enemy.health);
+ });s=await state();assert.deepEqual(s.preview,{});
  const remaining=s.players[0].board.find(u=>u.uid===own.uid);assert(!remaining||remaining.attacks===0);const damaged=s.players[1].board.find(u=>u.uid===enemy.uid);assert(enemy.shield?damaged&&!damaged.shield:!damaged||damaged.health===enemy.health-own.attack);await shot('combat');
  // Equip both supports through the same drop and tap gestures as the player.
  for(const [slot,x] of [0.253,0.747].entries()){
