@@ -102,9 +102,9 @@
     "art": 7,
     "element": "dark",
     "keywords": [
-      "rush"
+      "charge"
     ],
-    "text": "Investida. Pode atacar criaturas ao entrar."
+    "text": "Investida. Pode atacar o herói ao entrar."
   },
   "beetle": {
     "id": "beetle",
@@ -226,7 +226,7 @@
     "keywords": [
       "charge"
     ],
-    "text": "Ímpeto. Pode atacar imediatamente."
+    "text": "Investida. Pode atacar o herói ao entrar."
   },
   "golem": {
     "id": "golem",

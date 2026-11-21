@@ -849,7 +849,6 @@ func paint_battle() -> void:
    oval(rect.grow(11),Color.TRANSPARENT,Color(1,0.9,0.4,0.25),5)
   if unit.frozen>0 or unit.get('frozen_lock',false):
    canvas.draw_style_box(style(Color(0.2,0.75,1,0.15),Color('94e6ff'),30,3),rect.grow(4))
-  if unit.sleeping and unit.attacks==0: text('Z',Rect2(rect.end-Vector2(14,rect.size.y-2),Vector2(30,30)),22,Color('c3dcec'),true,true)
   if 'windfury' in unit.keywords: text('↟',Rect2(rect.position-Vector2(7,20),Vector2(30,30)),20,GOLD,true)
   var radius=minf(rect.size.x*0.18,rect.size.y*0.15)
   var attack_value=state.effective_attack(info.side,unit)
@@ -984,11 +983,22 @@ func paint_targets(selection: Dictionary) -> void:
   if game.target_locked(target):continue
   var valid=false
   if selection.kind=='card' and game.cards[selection.id].get('target','none')!='none':valid=game.rules.can_play(0,int(selection.index),target).ok
-  elif selection.kind=='unit':valid=game.rules.can_attack(0,int(selection.uid),target).ok
+  elif selection.kind=='unit':
+   var result: Dictionary=game.rules.can_attack(0,int(selection.uid),target)
+   valid=result.ok
+   if result.get('reason','')==game.rules.ENTRY_LOCK_REASON and (game.drag.is_empty() or game.target_at(game.pointer)==target):
+    paint_entry_lock(target_center(target))
   elif selection.kind=='power':valid=game.rules.can_power(0,target).ok
   if valid:
    var center=target_center(target)
    canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65+sin(clock*7)*0.2),4)
+
+func paint_entry_lock(center: Vector2) -> void:
+ var at=center+Vector2(0,-42)
+ canvas.draw_circle(at,18,Color('292332'))
+ canvas.draw_arc(at+Vector2(0,-2),5,PI,TAU,12,GOLD,2,true)
+ canvas.draw_rect(Rect2(at-Vector2(8,2),Vector2(16,11)),GOLD)
+ canvas.draw_circle(at+Vector2(0,3),2,Color('292332'))
 
 func element_color(element: String) -> Color:
  return {'fire':Color('ff8a40'),'ice':Color('7edcff'),'lightning':Color('91bdff'),'storm':Color('c49aff'),'nature':Color('85db71'),'heal':Color('8be6ae'),'dark':Color('a085e8'),'shield':Color('ffe39b'),'bite':Color('ffb79c'),'steel':Color('ffdd8f'),'earth':Color('c4a16d')}.get(element,Color('b28bff'))

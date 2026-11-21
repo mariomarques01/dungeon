@@ -6,6 +6,7 @@ func run() -> void:
  await process_frame
  game.speed=2.0
  game.sound_on=false;game.audio_engine.set_enabled(false)
+ check_summon_attack(game)
  var ids=game.cards.keys()
  for id in ids:
   print("FX CARD: ",id)
@@ -30,7 +31,6 @@ func run() -> void:
   if not game.active_actions.is_empty() or game.view.effect_history[-1].id!=id:push_error('Animation did not complete: '+id);failures+=1
   if card.kind=='minion' and not game.rules.players[0].board.is_empty():
    var unit=game.rules.players[0].board[-1]
-   unit.sleeping=false;unit.attacks=1;unit.frozen=0
    var victim={'side':1,'hero':true} if game.rules.players[1].board.is_empty() else {'side':1,'uid':game.rules.players[1].board[0].uid}
    if game.rules.can_attack(0,unit.uid,victim).ok:
     game.request_attack(unit.uid,victim)
@@ -123,7 +123,6 @@ func check_trap_reveal(game,card: Dictionary) -> void:
  match card.trigger:
   'attacked':
    var attacker=game.rules.spawn(1,'wolf')
-   attacker.attacks=1;attacker.sleeping=false
    game.view.prepare()
    # The fixture has a guard with Taunt, so the rival must attack it first.
    game.request_attack(attacker.uid,{'side':0,'uid':player.board[0].uid},1)
@@ -144,3 +143,22 @@ func check_trap_reveal(game,card: Dictionary) -> void:
  game.view.tick(2)
  if not game.view.trap_reveals.is_empty():
   push_error('Trap reveal must expire: '+card.id);failures+=1
+
+func check_summon_attack(game) -> void:
+ game.start_match()
+ game.rules.players[0].mana=10
+ game.rules.players[0].hand=['wolf']
+ var enemy=game.rules.spawn(1,'scout')
+ game.view.prepare()
+ game.request_play(0)
+ game.advance_actions(0.53)
+ var unit=game.rules.players[0].board[-1]
+ var hero={'side':1,'hero':true}
+ game.request_attack(unit.uid,hero)
+ if game.active_actions.size()!=1 or game.toast_text!=game.rules.ENTRY_LOCK_REASON:
+  push_error('A freshly summoned creature must receive the hero lock message');failures+=1
+ game.view.prepare()
+ game.request_attack(unit.uid,{'side':1,'uid':enemy.uid})
+ game.advance_actions(0.39)
+ if game.rules.find_unit(1,enemy.uid)!=null or unit.delay!=game.rules.REUSE_SECONDS or game.view.effect_history[-1].kind!='attack':
+  push_error('Summon must allow an immediate attack timeline against a creature');failures+=1
