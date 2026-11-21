@@ -43,9 +43,9 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  let before=JSON.parse(JSON.stringify(s));const cheap=s.players[0].hand[index];
  await drag(cardPoint(s,index),{x:20,y:250},'invalid-drag');s=await state();assert.deepEqual(s.players[0].hand.slice(0,before.players[0].hand.length),before.players[0].hand);assert(!s.players[0].cooldowns[index]);assert(s.players[0].mana>=1);assert.equal(s.players[0].board.length,0);
  index=s.players[0].hand.indexOf(cheap);await drag(cardPoint(s,index),center(s.drop),'summoning-drag');s=await state();
- assert(s.players[0].mana>=0);assert.equal(s.players[0].board.length,1);assert.equal(s.players[0].hand[index],cheap);assert(s.players[0].cooldowns[index]>0);assert.equal(s.players[0].board[0].attacks,0);assert(s.audioHistory.some(e=>e.kind==='card_soft'));assert(!s.audioHistory.some(e=>e.kind==='charge'));assert(s.effectHistory.some(e=>e.phase==='cast'&&e.id===cheap));await shot('summoned');
+ assert(s.players[0].mana>=0);assert.equal(s.players[0].board.length,1);assert.equal(s.players[0].hand[index],cheap);assert(s.players[0].cooldowns[index]>0);assert.equal(s.players[0].board[0].attacks,1);assert.equal(s.players[0].board[0].delay,0);assert(s.players[0].board[0].entry_lock>0);assert(s.audioHistory.some(e=>e.kind==='card_soft'));assert(!s.audioHistory.some(e=>e.kind==='charge'));assert(s.effectHistory.some(e=>e.phase==='cast'&&e.id===cheap));await shot('summoned');
  let own=s.players[0].board[0],view=s.unitViews.find(u=>u.uid===own.uid);before=JSON.parse(JSON.stringify(s));
- await drag(center(view.rect),center(s.heroes[1]));s=await state();assert.equal(s.players[1].health,30,'Summoning sickness must prevent an immediate attack');assert.equal(s.turn,before.turn);
+ await drag(center(view.rect),center(s.heroes[1]));s=await state();assert.equal(s.players[1].health,30,'Entry lock must prevent an immediate attack on the hero');assert.equal(s.toast,'Recém-invocada: só pode atacar criaturas.');assert.equal(s.turn,before.turn);
  assert(!s.buttons.some(b=>b.id==='end'));await advanceUntil(s=>s.players[0].board.some(u=>u.uid===own.uid&&u.attacks>0)&&s.players[1].board.length>0);s=await state();assert.equal(s.players[0].max_mana,10);assert(s.players[0].mana>0);assert(s.players[1].board.length>0);own=s.players[0].board.find(u=>u.uid===own.uid);assert.equal(own.attacks,1);
  const enemy=s.players[1].board.find(u=>u.keywords.includes('taunt'))||s.players[1].board[0];view=s.unitViews.find(u=>u.uid===own.uid);before=JSON.parse(JSON.stringify(s));
  await drag(center(view.rect),targetPoint(s,{side:1,uid:enemy.uid}),'attack-arrow',during=>{
@@ -117,7 +117,7 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
    const guards=s.players[1].board.filter(u=>u.keywords.includes('taunt'));
    const victim=guards[0];
    let target=victim?{side:1,uid:victim.uid}:{side:1,hero:true};
-   if(unit.sleeping&&!unit.keywords.includes('charge')&&target.hero){const u=s.players[1].board[0];if(!u)break;target={side:1,uid:u.uid}}
+   if(unit.entry_lock>0&&!unit.keywords.includes('charge')&&target.hero){const u=s.players[1].board[0];if(!u)break;target={side:1,uid:u.uid}}
    await drag(targetPoint(s,{side:0,uid:unit.uid}),targetPoint(s,target));attacks++;
   }
   s=await state();if(!s.done)await advance(1000);

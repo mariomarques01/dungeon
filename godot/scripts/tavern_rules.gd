@@ -3,6 +3,8 @@ const MAX_BOARD=5
 const ELEMENT_ADVANTAGE={'fire':'ice','ice':'storm','storm':'steel'}
 const FAMILY_ATTACK_BONUS=1
 const REUSE_SECONDS=5.0
+const ENTRY_LOCK_SECONDS=2.0
+const ENTRY_LOCK_REASON='Recém-invocada: só pode atacar criaturas.'
 var realtime=false
 const MAX_HAND=5
 const DECK_SIZE=30
@@ -89,6 +91,7 @@ func advance_cooldowns(delta: float) -> void:
   player.power_delay=maxf(0,player.power_delay-delta)
   player.power_used=player.power_delay>0
   for unit in player.board:
+   unit.entry_lock=maxf(0,unit.entry_lock-delta)
    if unit.delay<=0:continue
    unit.delay=maxf(0,unit.delay-delta)
    if unit.delay==0:
@@ -252,8 +255,7 @@ func spawn(side: int,id: String,position = -1) -> Dictionary:
  if players[side].board.size()>=MAX_BOARD: return {}
  var c=cards[id]
  var keys=c.get('keywords',[]).duplicate()
- var rush='rush' in keys or 'charge' in keys
- var unit={'delay':REUSE_SECONDS,'uid':next_uid,'id':id,'attack':int(c.attack),'health':int(c.health),'max_health':int(c.health),'keywords':keys,'shield':'shield' in keys,'sleeping':true,'attacks':(2 if 'windfury' in keys else 1) if rush else 0,'frozen':0}
+ var unit={'delay':0.0,'entry_lock':ENTRY_LOCK_SECONDS,'uid':next_uid,'id':id,'attack':int(c.attack),'health':int(c.health),'max_health':int(c.health),'keywords':keys,'shield':'shield' in keys,'sleeping':false,'attacks':2 if 'windfury' in keys else 1,'frozen':0}
  next_uid+=1
  var board: Array=players[side].board
  if position<0 or position>=board.size(): board.append(unit)
@@ -478,10 +480,10 @@ func can_attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  var attacker=find_unit(side,uid)
  if not attacker: return failure('Criatura indisponível.')
  if realtime and attacker.attacks<=0:return failure('Criatura recarregando.')
- if attacker.attacks<=0: return failure('Esta criatura precisa aguardar o próximo turno.' if attacker.sleeping else 'Esta criatura já atacou ou está congelada.')
+ if attacker.attacks<=0: return failure('Esta criatura já atacou ou está congelada.')
  if effective_attack(side,attacker)<=0: return failure('Esta criatura não tem ataque.')
  if not target_exists(target) or int(target.side)==side: return failure('Arraste até um inimigo.')
- if target.get('hero',false) and attacker.sleeping and not 'charge' in attacker.keywords: return failure('Investida só permite atacar criaturas agora.')
+ if target.get('hero',false) and attacker.entry_lock>0 and not 'charge' in attacker.keywords: return failure(ENTRY_LOCK_REASON)
  var taunts=players[1-side].board.filter(func(u): return 'taunt' in u.keywords and u.health>0)
  if not taunts.is_empty():
   if target.get('hero',false) or not taunts.any(func(u): return int(u.uid)==int(target.get('uid',-1))): return failure('Ataque primeiro uma criatura com Provocar.')
@@ -608,10 +610,10 @@ func ai_attack(locked=Callable()) -> Dictionary:
  var best={}; var best_score=-1000.0
  for unit in players[1].board:
   if locked.is_valid() and locked.call({'side':1,'uid':unit.uid}):continue
+  var attack_value=effective_attack(1,unit)
   for target in enemy_targets(1):
    if locked.is_valid() and locked.call(target):continue
    if not can_attack(1,int(unit.uid),target).ok: continue
-   var attack_value=effective_attack(1,unit)
    var score=float(attack_value)*0.5
    if target.get('hero',false): score+=10000 if attack_value>=players[0].health+players[0].armor else 3
    else:

@@ -21,8 +21,7 @@ func run() -> void:
  player.hand=['scout','bolt']
  player.mana=10
  var unit=game.rules.spawn(0,'wolf')
- unit.attacks=1
- unit.sleeping=false
+ unit.entry_lock=0
  rival.hand=['scout']
  rival.mana=1
  game.view.prepare()
