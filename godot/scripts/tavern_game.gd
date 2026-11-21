@@ -13,7 +13,8 @@ var art_layer: Control
 var overlay: Control
 var screen='home'
 var panel=''
-var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'support_hint_seen':false}
+var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'support_hint_seen':false,'reduced_motion':false}
+var reduced_motion=false
 var sound_on=true
 var speed=1.0
 var active_actions: Array[Dictionary]=[]
@@ -112,6 +113,8 @@ func load_profile() -> void:
  elif FileAccess.file_exists('user://tavern-profile.json'):raw=FileAccess.get_file_as_string('user://tavern-profile.json')
  var data=JSON.parse_string(raw) if not raw.is_empty() else null
  if data is Dictionary:
+  reduced_motion=data.get('reduced_motion',false)==true
+  profile.reduced_motion=reduced_motion
   profile.support_hint_seen=data.get('support_hint_seen',false)==true
   if data.get('deck',null) is Array and data.deck.all(func(id): return cards.has(id) and not cards[id].get('token',false)):profile.deck=data.deck
   for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(data.get(key,0)))
@@ -121,6 +124,7 @@ func load_profile() -> void:
    for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(old.get(key,0)))
 
 func save_profile() -> void:
+ profile.reduced_motion=reduced_motion
  var raw=JSON.stringify(profile)
  if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('"+STORAGE+"',"+JSON.stringify(raw)+")")
  else:
@@ -136,6 +140,7 @@ func layout_board() -> void:
  logical_size=Vector2(width,height)
  var factor=minf(size.x/width,size.y/height)
  board_transform=Transform2D(0,Vector2(factor,factor),0,(size-logical_size*factor)/2)
+ if screen=='battle' and panel.is_empty():board_transform.origin+=view.camera_offset()*factor
  art_layer.position=board_transform.origin;art_layer.scale=Vector2(factor,factor)
  overlay.position=board_transform.origin;overlay.scale=Vector2(factor,factor)
 
@@ -181,8 +186,11 @@ func advance_battle(delta: float) -> void:
 func _process(delta: float) -> void:
  if not view:return
  clock+=delta;toast_time=maxf(0,toast_time-delta)
- layout_board();view.tick(delta);audio_engine.update(delta)
- advance_battle(delta*speed)
+ var battle_delta=view.battle_delta(delta)
+ view.tick(battle_delta)
+ layout_board()
+ audio_engine.update(delta)
+ advance_battle(battle_delta*speed)
  if not press.is_empty() and drag.is_empty() and clock-float(press.time)>0.6 and press.kind in ['card','unit','collection']:
   inspect_id=press.id;press={};selected_card=-1
  view.prepare();queue_redraw();overlay.queue_redraw()
@@ -296,7 +304,7 @@ func pointer_down() -> void:
  if not inspect_id.is_empty():inspect_id='';press={};return
  for i in range(view.buttons.size()-1,-1,-1):
   var item=view.buttons[i]
-  if not panel.is_empty() and item.id not in ['mute','speed','credits','close','home']:continue
+  if not panel.is_empty() and item.id not in ['mute','speed','motion','credits','close','home']:continue
   if item.rect.has_point(pointer):
    if item.enabled:
     if item.id=='power' and screen=='battle':press={'kind':'power','origin':item.rect.get_center(),'time':clock}
@@ -407,6 +415,10 @@ func activate_button(id: String) -> void:
   'settings':panel='settings'
   'close':panel=''
   'credits':panel='credits'
+  'motion':
+   reduced_motion=not reduced_motion
+   view.stop_motion()
+   save_profile()
   'mute':
    sound_on=not sound_on;audio_engine.set_enabled(sound_on)
    if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('dungeon_sound','"+('on' if sound_on else 'off')+"')")
