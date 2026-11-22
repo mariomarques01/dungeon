@@ -177,6 +177,12 @@ func _initialize() -> void:
  rules.players[0].health=29
  check(rules.health_preview(0,cast_preview,{'side':0,'hero':true})=='+1','Preview limita a cura à vida faltante')
  check(rules.health_preview(0,cast_preview,enemy_hero)=='','Alvo inválido não mostra cura')
+ fresh()
+ rules.players[0].cooldowns[0]=0.25
+ rules.players[0].power_delay=0.25
+ check(not rules.advance_cooldowns(0.1) and rules.advance_cooldowns(0.15) and not rules.advance_cooldowns(1),'Recargas simultâneas produzem um único aviso de prontidão')
+ rules.players[1].cooldowns[0]=0.1
+ check(not rules.advance_cooldowns(1),'Recarga rival não produz ping do jogador')
  test_entry_lock()
  test_elements()
  test_traps()

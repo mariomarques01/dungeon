@@ -83,11 +83,16 @@ func consume_slot(player: Dictionary,index: int) -> void:
  if realtime:player.cooldowns[index]=REUSE_SECONDS
  else:player.hand.remove_at(index)
 
-func advance_cooldowns(delta: float) -> void:
- for player in players:
+func advance_cooldowns(delta: float) -> bool:
+ var player_ready=false
+ for side in range(players.size()):
+  var player=players[side]
   for index in player.cooldowns.keys():
    player.cooldowns[index]-=delta
-   if player.cooldowns[index]<=0:player.cooldowns.erase(index)
+   if player.cooldowns[index]<=0:
+    player.cooldowns.erase(index)
+    if side==0:player_ready=true
+  if side==0 and player.power_delay>0 and player.power_delay<=delta:player_ready=true
   player.power_delay=maxf(0,player.power_delay-delta)
   player.power_used=player.power_delay>0
   for unit in player.board:
@@ -95,9 +100,12 @@ func advance_cooldowns(delta: float) -> void:
    if unit.delay<=0:continue
    unit.delay=maxf(0,unit.delay-delta)
    if unit.delay==0:
+    if side==0:player_ready=true
     unit.sleeping=false
     unit.frozen=0
     unit.attacks=2 if 'windfury' in unit.keywords else 1
+
+ return player_ready
 
 func support_strength(id: String) -> int:
  return clampi(ceili(float(cards[id].cost)/2),1,4)

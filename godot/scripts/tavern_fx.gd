@@ -4,11 +4,21 @@ var view_ref: WeakRef
 var v:
  get:return view_ref.get_ref()
 var c: CanvasItem
-func _init(view) -> void:view_ref=weakref(view)
+var halo=GradientTexture2D.new()
+func _init(view) -> void:
+ view_ref=weakref(view)
+ halo.width=32
+ halo.height=32
+ halo.fill=GradientTexture2D.FILL_RADIAL
+ halo.fill_from=Vector2(0.5,0.5)
+ halo.fill_to=Vector2(1,0.5)
+ var gradient=Gradient.new()
+ gradient.offsets=PackedFloat32Array([0,0.22,0.45,1])
+ gradient.colors=PackedColorArray([Color.WHITE,Color(1,1,1,0.8),Color(1,1,1,0.15),Color.TRANSPARENT])
+ halo.gradient=gradient
 func glow(at: Vector2,radius: float,color: Color,alpha=1.0) -> void:
  if radius<0.1 or alpha<0.002:return
- for i in range(5,0,-1):c.draw_circle(at,radius*i/2.5,Color(color,alpha*0.045))
- c.draw_circle(at,radius*0.44,Color(color.lightened(0.6),alpha*0.85))
+ c.draw_texture_rect(halo,Rect2(at-Vector2.ONE*radius*2,Vector2.ONE*radius*4),false,Color(color.lightened(0.22),alpha))
 func beam(a: Vector2,b: Vector2,color: Color,width=3.0,alpha=1.0) -> void:
  c.draw_line(a,b,Color(color,alpha*0.1),width*6,true)
  c.draw_line(a,b,Color(color,alpha*0.4),width*2.4,true)

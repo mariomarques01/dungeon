@@ -5,6 +5,7 @@ var game
 var streams: Dictionary = {}
 var music: AudioStreamPlayer
 var voices: Array = []
+var next_voice=0
 var history: Array = []
 var enabled = true
 var duck = 0.0
@@ -34,8 +35,7 @@ func set_enabled(value: bool) -> void:
  if not value:
   music.stream_paused=true
   for voice in voices:
-   if is_instance_valid(voice): voice.stop(); voice.queue_free()
-  voices.clear()
+   voice.stop()
  elif game.screen=="battle" and not game.done: start_music()
 
 func start_music() -> void:
@@ -55,16 +55,16 @@ func clip_for(art: String) -> String:
 
 func play(kind: String, volume = -3.0, pitch = 1.0,context: Dictionary={}) -> void:
  if not enabled or not streams.has(kind): return
- var voice=AudioStreamPlayer.new()
+ if next_voice==voices.size():
+  var added=AudioStreamPlayer.new()
+  game.add_child(added)
+  voices.append(added)
+ var voice=voices[next_voice]
+ next_voice=(next_voice+1)%10
+ voice.stop()
  voice.stream=streams[kind]
  voice.volume_db=volume
  voice.pitch_scale=pitch
- game.add_child(voice)
- voices.append(voice)
- if voices.size()>10:
-  var oldest=voices.pop_front()
-  if is_instance_valid(oldest): oldest.stop(); oldest.queue_free()
- voice.finished.connect(func(): voices.erase(voice); voice.queue_free())
  voice.play()
  var entry={"kind":kind,"tick":Time.get_ticks_msec()};entry.merge(context,true);history.append(entry)
  if history.size()>64: history.pop_front()
