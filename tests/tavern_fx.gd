@@ -6,6 +6,18 @@ func run() -> void:
  await process_frame
  game.speed=2.0
  game.sound_on=false;game.audio_engine.set_enabled(false)
+ game.start_match()
+ game.reduced_motion=false
+ for i in range(18):game.view.burst(Vector2(50,50),Color.GOLD)
+ game.view.tick(0.01)
+ if game.view.bursts.size()!=6 or game.view.torches.size()!=2:
+  push_error('Particle pool exceeded its budget');failures+=1
+ game.reduced_motion=true
+ game.view.stop_motion()
+ game.view.tick(0.01)
+ if game.view.bursts.any(func(n):return n.visible or n.emitting) or game.view.torches.any(func(n):return n.emitting):
+  push_error('Reduced motion left particles running');failures+=1
+ game.reduced_motion=false
  check_summon_attack(game)
  var ids=game.cards.keys()
  for id in ids:

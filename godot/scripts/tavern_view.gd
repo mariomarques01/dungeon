@@ -24,7 +24,65 @@ var banner_left=0.0
 var deal_started=[]
 var known_hand_size=0
 
+var bursts: Array[CPUParticles2D]=[]
+var torches: Array[CPUParticles2D]=[]
+var next_burst=0
+var hit_until=[0.0,0.0]
+var river_until=0.0
+var river_x=0.5
+var crowd_until=0.0
+var sun_until=0.0
+var reflow: Tween
+var reflow_from=[]
+var reflow_progress=1.0
+
+func emitter(count: int,continuous: bool) -> CPUParticles2D:
+ var node=CPUParticles2D.new()
+ node.emitting=false
+ node.amount=count
+ node.one_shot=not continuous
+ node.lifetime=0.65 if continuous else 0.42
+ node.explosiveness=0.0 if continuous else 1.0
+ node.direction=Vector2.UP
+ node.spread=22 if continuous else 100
+ node.gravity=Vector2(0,-12 if continuous else 120)
+ node.initial_velocity_min=25 if continuous else 65
+ node.initial_velocity_max=55 if continuous else 145
+ node.scale_amount_min=2
+ node.scale_amount_max=5
+ node.fixed_fps=30
+ node.z_index=1 if continuous else 89
+ node.visible=false
+ game.art_layer.add_child(node)
+ return node
+
+func burst(at: Vector2,color: Color) -> void:
+ if game.reduced_motion:return
+ if bursts.size()<6:bursts.append(emitter(9,false))
+ var node=bursts[next_burst]
+ next_burst=(next_burst+1)%6
+ node.position=at
+ node.color=color
+ node.show()
+ node.restart()
+ node.emitting=true
+
 func stop_motion() -> void:
+ if reflow:reflow.kill()
+ reflow_progress=1.0
+ reflow_from.clear()
+ hand_lifts.clear()
+ pointer_trail.clear()
+ energy_pulse_end=0
+ pulse_ends.fill(0)
+ hit_until.fill(0)
+ river_until=0
+ crowd_until=0
+ sun_until=0
+ for group in [bursts,torches]:
+  for node in group:
+   node.emitting=false
+   node.hide()
  freeze_left=0
  shake_left=0
  shake_strength=0
@@ -100,7 +158,8 @@ class HandFace extends Node2D:
  var affordable=false
 
  func update(hand: Dictionary,ready: bool,can_pay: bool) -> void:
-  position=hand.rect.position
+  rotation=hand.angle
+  position=hand.rect.get_center()-(hand.rect.size/2).rotated(rotation)
   if card_id==hand.id and card_size==hand.rect.size and ready==available and affordable==can_pay:return
   card_id=hand.id
   card_size=hand.rect.size
@@ -280,6 +339,15 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
+ var lit=game.screen=='battle' and not game.reduced_motion
+ if lit and torches.is_empty():
+  for i in range(2):torches.append(emitter(5,true))
+ for i in range(torches.size()):
+  var torch=torches[i]
+  torch.position=game.logical_size*Vector2(0.285 if i==0 else 0.715,0.069)
+  torch.color=Color('ffbb55')
+  torch.visible=lit
+  torch.emitting=lit
  shake_left=maxf(0,shake_left-delta)
  if not banners.is_empty():
   banner_left-=delta
@@ -339,6 +407,7 @@ func geometry() -> void:
  layout.power=Rect2(w*0.94-power_size/2,h*0.73-power_size/2,power_size,power_size)
  var gear_size=clampf(w*0.066,44,62)
  layout.settings=Rect2(w*0.986-gear_size,h*0.011,gear_size,gear_size)
+ var previous_hand=hand_views
  hand_views=[]; unit_views={}; hero_views=[]; buttons=[]; collection_views=[]
  if game.screen!='battle': return
  var state=game.rules
@@ -351,6 +420,12 @@ func geometry() -> void:
    var uid=int(list[i].uid)
    unit_views[uid]={'side':side,'uid':uid,'rect':layout.slots[side][column],'unit':list[i]}
  var hand: Array=state.players[0].hand
+ if hand.size()!=known_hand_size and known_hand_size>0 and not game.reduced_motion:
+  reflow_from=previous_hand.map(func(h):return h.base_rect.get_center().x)
+  if reflow:reflow.kill()
+  reflow_progress=0
+  reflow=game.create_tween()
+  reflow.tween_property(self,"reflow_progress",1.0,0.24).set_trans(Tween.TRANS_SINE)
  if hand.size()>known_hand_size and not game.reduced_motion:
   deal_started.resize(hand.size())
   for index in range(known_hand_size,hand.size()):
@@ -363,15 +438,17 @@ func geometry() -> void:
  for i in range(hand.size()):
   var f=i-(hand.size()-1)/2.0
   var center=Vector2(w/2+f*spacing,h*0.851)
-  var angle=0.0
+  if i<reflow_from.size():center.x=lerpf(reflow_from[i],center.x,reflow_progress)
+  var angle=0.0 if game.reduced_motion else f*0.035
   var base_rect=Rect2(center-size/2,size)
   var lifted=game.selected_card==i or game.hover_card==i or (game.press.get('kind','')=='card' and int(game.press.get('index',-1))==i)
   var lift=move_toward(float(hand_lifts.get(i,0)),1.0 if lifted and game.drag.is_empty() else 0.0,frame_delta*9)
+  if game.reduced_motion:lift=0
   hand_lifts[i]=lift
   center.y-=(70 if mobile else 110)*lift
   if not game.reduced_motion and i<deal_started.size() and deal_started[i]!=null:
    var travel=smoothstep(0,0.24,clock-float(deal_started[i]))
-   center=Vector2(w*0.92,h*0.77).lerp(center,travel)
+   center=Vector2(w*0.72,h*0.05).lerp(center,travel)
    if travel>=1:deal_started[i]=null
   angle*=1-lift*0.8
   hand_views.append({'index':i,'id':hand[i],'rect':Rect2(center-size/2,size),'base_rect':base_rect,'angle':angle})
@@ -412,6 +489,7 @@ func prepare() -> void:
     var arrival=clampf(spawn[0].age/0.46,0,1)
     var factor=lerpf(0.12,1.0,ease(arrival,0.35))+0.12*sin(PI*arrival)
     rect=Rect2(rect.get_center()-rect.size*factor/2,rect.size*factor)
+    rect.position.y-=45*pow(1-arrival,2)
     rect=stretch(rect,-sin(arrival*TAU)*0.13*(1-arrival))
    elif not attacking and not game.reduced_motion:
     rect=stretch(rect,0.013*sin(clock*2.1+uid*1.7))
@@ -426,7 +504,7 @@ func prepare() -> void:
    if resonating and not game.reduced_motion:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hits.is_empty() else Color(1,1,1,opacity),1)
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hits.is_empty() and not game.reduced_motion else Color(1,1,1,opacity),1)
   if not game.drag.is_empty() and game.drag.kind=='card':
    var rect=held_card_rect()
    prepare_card('drag',game.drag.id,rect,0,50)
@@ -549,6 +627,9 @@ func begin(action: Dictionary) -> void:
  if effect_history.size()>60:effect_history.pop_front()
 
 func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
+ if not game.reduced_motion and action.get('kind','')=='card':
+  river_until=clock+0.55
+  river_x=clampf(action.destination.x/layout.w,0.1,0.9) if action.has('destination') else 0.5
  var elemental=events.filter(func(event):return event.kind in ['damage','freeze','armor','heal','destroy'])
  if not elemental.is_empty():
   var element=str(action.get('element',elemental[0].get('element','arcane')))
@@ -565,7 +646,13 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
  var causes={}
  for event in events:
   var kind=event.kind
+  if kind=='death' and not game.reduced_motion:
+   burst(target_center({'side':event.side,'uid':event.uid}),element_color(game.cards[event.id].element))
+   crowd_until=clock+0.45
   if kind=='damage':
+   if not game.reduced_motion:
+    sun_until=clock+0.28
+    if event.target.get('hero',false):hit_until[event.target.side]=clock+0.28
    if not first_blood:
     first_blood=true
     banners.push_front('PRIMEIRO SANGUE')
@@ -662,7 +749,28 @@ func paint_base(c: CanvasItem) -> void:
     var slot: Rect2=layout.slots[side][column]
     canvas.draw_texture_rect_region(ROYAL_ARENA,slot,layout.slot_sources[side][column])
     canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
-  if not game.reduced_motion:fx.environment()
+  if not game.reduced_motion:
+   fx.environment()
+   for hero in hero_views:
+    var r: Rect2=hero.rect
+    var hit=maxf(0,hit_until[hero.side]-clock)/0.28
+    var idle=1+0.008*(1+sin(clock*2+hero.side))
+    var dest=Rect2(r.get_center()-r.size*idle/2,r.size*idle)
+    dest.position.x+=hit*sin(clock*90)*5
+    canvas.draw_texture_rect_region(ROYAL_ARENA,dest,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()),Color(1,1-hit*0.55,1-hit*0.55))
+   if river_until>clock:
+    var t=1-(river_until-clock)/0.55
+    canvas.draw_set_transform_matrix(game.board_transform*Transform2D(0,Vector2(1,0.12),0,Vector2(layout.w*river_x,layout.h*0.452)))
+    canvas.draw_arc(Vector2.ZERO,6+t*78,0,TAU,32,Color(0.6,0.94,1,1-t),3)
+    canvas.draw_set_transform_matrix(game.board_transform)
+   if sun_until>clock:
+    canvas.draw_circle(Vector2(layout.w*0.5,layout.h*0.452),12+18*(sun_until-clock),Color(1,0.76,0.28,(sun_until-clock)*1.6))
+   if crowd_until>clock:
+    for side in [0.07,0.93]:
+     var r=Rect2(layout.w*(side-0.045),layout.h*0.085,layout.w*0.09,layout.h*0.04)
+     var shifted=r
+     shifted.position.y-=4*absf(sin((crowd_until-clock)*18))
+     canvas.draw_texture_rect_region(ROYAL_ARENA,shifted,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()))
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
  if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
@@ -679,7 +787,7 @@ func paint_base(c: CanvasItem) -> void:
    var rim=Color('64b7ff') if info.side==0 else Color('ff8b57')
    canvas.draw_rect(rect,Color('30261f'))
    canvas.draw_rect(rect,rim,false,3,true)
-   if ready:canvas.draw_rect(rect.grow(2),Color(rim,0.45+0.2*sin(clock*3)),false,3,true)
+   if ready:canvas.draw_rect(rect.grow(2),Color(rim,0.45 if game.reduced_motion else 0.45+0.2*sin(clock*3)),false,3,true)
 
 
 func paint_overlay(c: CanvasItem) -> void:
@@ -866,7 +974,9 @@ var heart=PackedVector2Array([Vector2(0,24),Vector2(-21,4),Vector2(-24,-6),Vecto
 var shield=PackedVector2Array([Vector2(-22,-18),Vector2(0,-23),Vector2(22,-18),Vector2(19,6),Vector2(12,17),Vector2(0,25),Vector2(-12,17),Vector2(-19,6)])
 
 func hero_stat(at: Vector2,value: int,armor: bool) -> void:
- canvas.draw_set_transform(at)
+ var pulse=1.0
+ if not armor and value<=10 and not game.reduced_motion:pulse+=0.12*pow(maxf(0,sin(clock*5)),2)
+ canvas.draw_set_transform(at,0,Vector2.ONE*pulse)
  var shape=shield if armor else heart
  canvas.draw_colored_polygon(shape,Color('355177') if armor else Color('9c2036'))
  canvas.draw_polyline(shape,Color('f6dfb5'),2,true)
@@ -926,7 +1036,7 @@ func paint_battle() -> void:
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
-  fx.status(unit,rect)
+  if not game.reduced_motion:fx.status(unit,rect)
   if unit.attacks==0 and unit.delay>0:
    radial_cooldown(rect.position+rect.size*Vector2(0.78,0.2),rect.size.x*0.11,unit.delay)
   elif info.side==0 and unit.attacks>0 and state.effective_attack(info.side,unit)>0 and not game.target_locked({'side':0,'uid':uid}):
@@ -952,6 +1062,7 @@ func paint_battle() -> void:
   energy_pulse_end=0
  for hand in hand_views:
   if game.drag.get('kind','')=='card' and game.drag.index==hand.index: continue
+  canvas.draw_set_transform_matrix(Transform2D(hand.angle,hand.rect.get_center())*Transform2D(0,-hand.rect.get_center()))
   var remaining=float(state.players[0].cooldowns.get(hand.index,0))
   var card=game.cards[hand.id]
   var ready=hand.ready
@@ -961,7 +1072,7 @@ func paint_battle() -> void:
     pulse_ends[hand.index]=clock+0.6
    ready_mask|=bit
   else:ready_mask &= ~bit
-  if ready and pulse_ends[hand.index]>clock:
+  if not game.reduced_motion and ready and pulse_ends[hand.index]>clock:
    canvas.draw_rect(hand.rect.grow(3),Color(GOLD,(pulse_ends[hand.index]-clock)/0.6),false,5,true)
   if remaining>0:
    var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
@@ -977,7 +1088,8 @@ func paint_battle() -> void:
    var tag=Rect2(hand.rect.position+hand.rect.size*Vector2(0.12,0.39),hand.rect.size*Vector2(0.76,0.14))
    canvas.draw_rect(tag,INK)
    text('Falta %d'%int(card.cost-state.players[0].mana),tag,int(tag.size.y*0.76),PAPER,true,true)
-  if float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
+  if not game.reduced_motion and float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
+  canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
  if game.drag.is_empty():
   if game.selected_card>=0:
    paint_targets({'kind':'card','index':game.selected_card,'id':state.players[0].hand[game.selected_card]})
@@ -989,7 +1101,7 @@ func paint_battle() -> void:
   if game.drag.kind=='card':
    var held_rect=held_card_rect()
    paint_card(game.drag.id,held_rect)
-   fx.aura(game.drag.id,held_rect,1.0)
+   if not game.reduced_motion:fx.aura(game.drag.id,held_rect,1.0)
 
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
   var preview=drag_preview()
@@ -1007,11 +1119,13 @@ func paint_battle() -> void:
   if not game.reduced_motion:fx.action(anim,anim_time)
  for reveal in trap_reveals:paint_trap_reveal(reveal)
  var p=state.players[0]
- if p.health<=10:
+ if p.health<=10 and not game.reduced_motion:
   var strength=0.10+0.05*sin(clock*3.0)
   for band in range(10):
    canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size).grow(-band*3.0),Color(0.9,0.02,0.04,strength*(1-band/10.0)*3),false,3.1)
- if not opening and p.mana>previous_mana:energy_pulse_end=clock+0.6
+ if not opening and p.mana>previous_mana and not game.reduced_motion:
+  energy_pulse_end=clock+0.6
+  burst(energy_bar().get_center(),GOLD)
  previous_mana=p.mana
  var bar=energy_bar()
  var bar_width=bar.size.x
@@ -1086,7 +1200,7 @@ func paint_targets(selection: Dictionary) -> void:
   elif selection.kind=='power':valid=game.rules.can_power(0,target).ok
   if valid:
    var center=target_center(target)
-   canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65+sin(clock*7)*0.2),4)
+   canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65 if game.reduced_motion else 0.65+sin(clock*7)*0.2),4)
 
 func paint_entry_lock(center: Vector2) -> void:
  var at=center+Vector2(0,-42)
@@ -1138,7 +1252,7 @@ func paint_button(info: Dictionary) -> void:
  var primary=info.primary
  if info.id=='solar':
   var bar=energy_bar()
-  canvas.draw_style_box(style(Color('703515'),Color('ffce60').lerp(Color.WHITE,0.25+0.2*sin(clock*4)),8,2),bar)
+  canvas.draw_style_box(style(Color('703515'),Color('ffce60').lerp(Color.WHITE,0.25 if game.reduced_motion else 0.25+0.2*sin(clock*4)),8,2),bar)
   var spacing=(bar.size.x-12)/game.rules.players[0].max_mana
   for i in range(game.rules.players[0].max_mana):
    canvas.draw_rect(Rect2(bar.position.x+6+i*spacing,bar.end.y-6,spacing-2,3),GOLD)

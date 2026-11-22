@@ -172,7 +172,9 @@ func advance_battle(delta: float) -> void:
   player.mana=mini(player.max_mana,player.mana+earned)
   energy_elapsed=fmod(energy_elapsed,ENERGY_SECONDS)
  if player.mana>=player.max_mana:energy_elapsed=0.0
- rules.advance_cooldowns(delta/speed)
+ var player_ready=rules.advance_cooldowns(delta/speed)
+ if player_ready and not reduced_motion:
+  audio_engine.play('ui',-20,1.45,{'event':'cooldown_ready'})
  var rival=rules.players[1]
  rival_energy+=delta
  rival.mana=mini(10,rival.mana+floori(rival_energy/ENERGY_SECONDS))
