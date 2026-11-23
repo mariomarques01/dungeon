@@ -144,9 +144,6 @@ func action(a: Dictionary,time: float) -> void:
   if time<0.52:glow(focus,9+12*charge,color)
   elif a.side==1:shield(dest,1.4,color,clampf(1-(time-0.52)*2,0,1))
  if a.kind=='attack':
-  var frame=Rect2(origin-Vector2(53,65),Vector2(106,130))
-  if v.unit_views.has(int(a.get('uid',-1))):frame=v.unit_views[int(a.uid)].get('draw_rect',v.unit_views[int(a.uid)].rect)
-  aura(id,frame,0.9,time)
   if not ranged(id) and time>0.10 and time<0.42:
    var travel=smoothstep(0.10,0.39,time)
    var direction=(dest-origin).normalized()
@@ -158,9 +155,6 @@ func action(a: Dictionary,time: float) -> void:
   if ranged(id) and time<0.38:
    projectile(origin,dest,clampf(time/0.38,0,1),element,color)
   return
- if a.kind=='card' and time<0.62:
-  var at=origin.lerp(dest,clampf(time/0.6,0,1))
-  aura(id,Rect2(at-Vector2(85,127),Vector2(170,255)),1.0,time)
  if a.get('card_kind','')=='minion':
   if time<0.52:
    ring(dest,60*clampf(time/0.3,0,1),color,0.75,time*2)
@@ -305,8 +299,6 @@ func event(p: Dictionary) -> void:
  c=v.canvas
  var t=clampf(p.age/1.15,0,1);var fade=1-t;var at: Vector2=p.position
  var kind=str(p.kind);var element=str(p.get('element','arcane'));var color=v.element_color(element)
- if kind in ['blocked','shield_break'] and p.has('response_id'):
-  aura(str(p.response_id),Rect2(at-Vector2(50,62),Vector2(100,124)),fade,p.age)
  if kind=='summon' and v.unit_views.has(int(p.uid)):at=v.unit_views[int(p.uid)].rect.get_center()
  match kind:
   'support':
@@ -323,9 +315,10 @@ func event(p: Dictionary) -> void:
     for i in range(4):
      var angle=i*PI/2+shock*0.3
      c.draw_arc(at,radius,angle,angle+1.1,12,Color(color.lightened(0.45),1-shock),3,true)
-   impact(at,element,t,1,str(p.get('id','')))
-   if p.has('response_id') and p.age<0.65:
-    aura(str(p.response_id),Rect2(at-Vector2(50,62),Vector2(100,124)),(1-p.age/0.65)*0.85,p.age)
+   if element=='fire':
+    glow(at,63+t*70,color,fade*0.8)
+    ring(at,28+t*112,color,fade*0.65)
+   else:impact(at,element,t,1,str(p.get('id','')))
   'summon':
    var base=at+Vector2(0,35)
    ring(base,65*(0.6+t*0.6),color,fade,p.age*3)
@@ -351,9 +344,6 @@ func event(p: Dictionary) -> void:
     for i in range(8):glow(at+Vector2.from_angle(i*2.4+p.age)*float(65*(1-t)),6,color,fade)
   'armor','blocked':
    shield(at,1.3+sin(t*PI)*0.15,Color('ffe3a0'),fade)
-   for i in range(6):
-    var angle=i*TAU/6+t*0.8
-    shard(at+Vector2.from_angle(angle)*(26+38*t),angle,14*fade,color,fade)
   'shield_break':
    var corners=[Vector2(-38,-36),Vector2(0,-49),Vector2(38,-36),Vector2(30,13),Vector2(0,48),Vector2(-30,13)]
    for i in range(corners.size()):
@@ -363,9 +353,7 @@ func event(p: Dictionary) -> void:
     var fragment=PackedVector2Array([at+drift,at+edge+drift,at+next+drift])
     c.draw_colored_polygon(fragment,Color(1,0.78,0.36,0.32*fade))
     c.draw_line(fragment[1],fragment[2],Color(1,0.91,0.64,fade),3,true)
-   for i in range(10):shard(at+Vector2.from_angle(i*TAU/10)*(35+t*65),i*TAU/10,22,Color('ffe49b'),fade)
   'heal','buff':
-   leaves(at,t,Color('a3ffd1') if kind=='heal' else Color('ffe197'),fade)
    ring(at,55,Color('b8ffd0') if kind=='heal' else Color('ffe197'),fade,p.age)
   'freeze':
    for i in range(7):shard(at+Vector2(-52+i*17,35),-PI/2,50+i%3*15,Color('b1edff'),fade)
