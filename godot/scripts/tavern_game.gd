@@ -42,6 +42,7 @@ var qa_sample_start=0
 var qa_frames=0
 var qa_frame_label=''
 var previous_viewport=Vector2.ZERO
+var backdrop_screen=''
 var web_touch_callback
 var done: bool:
  get: return rules!=null and rules.done
@@ -138,6 +139,7 @@ var safe_margin=Vector2.ZERO
 func layout_board() -> void:
  if previous_viewport!=size:
   drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;previous_viewport=size
+  queue_redraw()
   if OS.has_feature('web'):
    var raw=JavaScriptBridge.eval("JSON.stringify(['top','right','bottom','left'].map(s=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-'+s))||0))")
    var inset=JSON.parse_string(str(raw))
@@ -207,7 +209,10 @@ func _process(delta: float) -> void:
  advance_battle(battle_delta*speed)
  if not press.is_empty() and drag.is_empty() and clock-float(press.time)>0.6 and press.kind in ['card','unit','collection']:
   inspect_id=press.id;press={};selected_card=-1
- view.prepare();queue_redraw();overlay.queue_redraw()
+ view.prepare();overlay.queue_redraw()
+ if backdrop_screen!=screen:
+  backdrop_screen=screen
+  queue_redraw()
  if qa_enabled:
   var now=Time.get_ticks_usec()
   if qa_sample_start==0:qa_sample_start=now
@@ -236,7 +241,6 @@ func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
  if view:
   if screen=='battle' and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):draw_texture_rect(view.ROYAL_ARENA,Rect2(Vector2.ZERO,size),false)
-  draw_set_transform_matrix(board_transform);view.paint_base(self);draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func notify(message: String) -> void:
  toast_text=message;toast_time=2.1
@@ -442,12 +446,14 @@ func activate_button(id: String) -> void:
   'motion':
    reduced_motion=not reduced_motion
    view.stop_motion()
+   for number in view.floats:view.animate_number(number)
    save_profile()
   'mute':
    sound_on=not sound_on;audio_engine.set_enabled(sound_on)
    if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('dungeon_sound','"+('on' if sound_on else 'off')+"')")
   'speed':
    speed=1.5 if speed==1.0 else 2.0 if speed==1.5 else 1.0
+   view.update_burst_speed()
    if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('dungeon_battle_speed','"+str(speed)+"')")
   'previous':collection_page=maxi(0,collection_page-1)
   'next':collection_page+=1

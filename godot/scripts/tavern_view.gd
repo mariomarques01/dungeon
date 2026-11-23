@@ -27,6 +27,8 @@ var known_hand_size=0
 var bursts: Array[CPUParticles2D]=[]
 var torches: Array[CPUParticles2D]=[]
 var next_burst=0
+var impact_bursts: Array[CPUParticles2D]=[]
+var next_impact_burst=0
 var hit_until=[0.0,0.0]
 var river_until=0.0
 var river_x=0.5
@@ -53,19 +55,33 @@ func emitter(count: int,continuous: bool) -> CPUParticles2D:
  node.fixed_fps=30
  node.z_index=1 if continuous else 89
  node.visible=false
+ if not continuous:node.finished.connect(node.hide)
  game.art_layer.add_child(node)
  return node
+
+func play_burst(node: CPUParticles2D,at: Vector2,color: Color) -> void:
+ node.position=at
+ node.color=color
+ node.speed_scale=game.speed
+ node.show()
+ node.restart()
+
+func impact_burst(at: Vector2,color: Color) -> void:
+ if game.reduced_motion:return
+ if impact_bursts.size()<12:impact_bursts.append(emitter(12,false))
+ play_burst(impact_bursts[next_impact_burst],at,color)
+ next_impact_burst=(next_impact_burst+1)%12
 
 func burst(at: Vector2,color: Color) -> void:
  if game.reduced_motion:return
  if bursts.size()<6:bursts.append(emitter(9,false))
  var node=bursts[next_burst]
  next_burst=(next_burst+1)%6
- node.position=at
- node.color=color
- node.show()
- node.restart()
- node.emitting=true
+ play_burst(node,at,color)
+
+func update_burst_speed() -> void:
+ for group in [bursts,impact_bursts]:
+  for node in group:node.speed_scale=game.speed
 
 func stop_motion() -> void:
  if reflow:reflow.kill()
@@ -79,7 +95,7 @@ func stop_motion() -> void:
  river_until=0
  crowd_until=0
  sun_until=0
- for group in [bursts,torches]:
+ for group in [bursts,impact_bursts,torches]:
   for node in group:
    node.emitting=false
    node.hide()
@@ -87,6 +103,7 @@ func stop_motion() -> void:
  shake_left=0
  shake_strength=0
  deal_started.clear()
+ for node in auras:node.hide()
 
 func battle_delta(delta: float) -> float:
  var held=minf(freeze_left,delta)
@@ -108,6 +125,11 @@ func stretch(rect: Rect2,amount: float) -> Rect2:
 var scenery=[]
 var fragment_cache={}
 var styles={}
+var text_layouts={}
+var arena_layer: Node2D
+var base_layer: Node2D
+var arena_size=Vector2.ZERO
+var arena_screen=''
 var board: Texture2D
 var portrait_board: Texture2D
 const SLOT_ZOOM=1.22
@@ -119,6 +141,7 @@ var spells: Texture2D
 var frames: Texture2D
 var atlas_cache={}
 var nodes={}
+var free_art: Array[TextureRect]=[]
 var used={}
 var hand_shader=Shader.new()
 var shader: Shader
@@ -129,6 +152,16 @@ var hero_views=[]
 var buttons=[]
 var collection_views=[]
 # The scene owns these CanvasItems. Only active effects request redraws.
+class BaseLayer extends Node2D:
+ var owner_view: WeakRef
+ var terrain=false
+
+ func _draw() -> void:
+  var view=owner_view.get_ref()
+  if view==null:return
+  if terrain:view.paint_terrain(self)
+  else:view.paint_base(self)
+
 class EffectSprite extends Node2D:
  var owner_view: WeakRef
  var record: Dictionary
@@ -143,9 +176,23 @@ class EffectSprite extends Node2D:
   match category:
    &"particle":
     if not view.game.reduced_motion:view.fx.event(record)
-   &"number":view.draw_float(record)
    &"remains":
     if not view.game.reduced_motion:view.draw_remains(record)
+  view.canvas=previous
+
+class AuraSprite extends Node2D:
+ var owner_view: WeakRef
+ var card_id=''
+ var bounds=Rect2()
+ var phase=0.0
+ var next_draw=0.0
+
+ func _draw() -> void:
+  var view=owner_view.get_ref()
+  if view==null:return
+  var previous=view.canvas
+  view.canvas=self
+  view.fx.aura(card_id,bounds,1.0,phase)
   view.canvas=previous
 
 # Cache the face of each hand slot. Hover/deal moves the CanvasItem without
@@ -253,7 +300,108 @@ func prepare_hand_faces() -> void:
  for i in range(hand_faces.size()):
   hand_faces[i].visible=i<hand_views.size() and not (game.drag.get('kind','')=='card' and game.drag.index==i)
 
-var free_effects={&"particle":[],&"number":[],&"remains":[]}
+var free_effects={&"particle":[],&"remains":[]}
+var free_numbers: Array[Label]=[]
+var auras: Array[AuraSprite]=[]
+var aura_count=0
+
+func prepare_aura(id: String,rect: Rect2,strength: float,phase=0.0,angle=0.0) -> void:
+ if aura_count==auras.size():
+  var new_aura=AuraSprite.new()
+  new_aura.owner_view=weakref(self)
+  new_aura.z_index=99
+  game.art_layer.add_child(new_aura)
+  auras.append(new_aura)
+ var aura=auras[aura_count]
+ aura_count+=1
+ var bounds=Rect2(-rect.size/2,rect.size)
+ aura.position=rect.get_center()
+ aura.rotation=angle
+ aura.modulate.a=strength
+ if not aura.visible or id!=aura.card_id or bounds!=aura.bounds or clock>=aura.next_draw:
+  aura.card_id=id
+  aura.bounds=bounds
+  aura.phase=phase
+  aura.next_draw=clock+1.0/30
+  aura.queue_redraw()
+ aura.show()
+
+func prepare_auras() -> void:
+ aura_count=0
+ if game.screen=='battle' and not game.reduced_motion:
+  for hand in hand_views:
+   if game.drag.get('kind','')=='card' and game.drag.index==hand.index:continue
+   var lift=float(hand_lifts.get(hand.index,0))
+   if lift>0.05:prepare_aura(hand.id,hand.rect,lift,0,hand.angle)
+  if game.drag.get('kind','')=='card':
+   prepare_aura(game.drag.id,held_card_rect(),1.0)
+  for action in game.active_actions:
+   var age: float=action.age
+   if action.kind=='attack':
+    var frame=Rect2(action.origin-Vector2(53,65),Vector2(106,130))
+    var uid=int(action.get('uid',-1))
+    if unit_views.has(uid):frame=unit_views[uid].draw_rect
+    prepare_aura(action.id,frame,0.9,age)
+   elif action.kind=='card' and age<0.62:
+    var at: Vector2=action.origin.lerp(action.destination,clampf(age/0.6,0,1))
+    prepare_aura(action.id,Rect2(at-Vector2(85,127),Vector2(170,255)),1.0,age)
+  for particle in particles:
+   if not particle.has('response_id'):continue
+   var strength=0.0
+   if particle.kind=='damage':strength=(1-particle.age/0.65)*0.85
+   elif particle.kind in ['blocked','shield_break']:strength=1-particle.age/1.15
+   if strength>0:
+    prepare_aura(particle.response_id,Rect2(particle.position-Vector2(50,62),Vector2(100,124)),strength,particle.age)
+ for i in range(aura_count,auras.size()):auras[i].hide()
+
+func add_number(record: Dictionary) -> void:
+ var label: Label
+ if free_numbers.is_empty():
+  label=Label.new()
+  label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  label.add_theme_font_override('font',game.title_font)
+  label.add_theme_constant_override('shadow_offset_x',1)
+  label.add_theme_constant_override('shadow_offset_y',1)
+  label.z_index=90
+  game.art_layer.add_child(label)
+ else:label=free_numbers.pop_back()
+ record.sprite=label
+ floats.append(record)
+ animate_number(record)
+ label.show()
+
+func animate_number(record: Dictionary) -> void:
+ if record.has('tween'):record.tween.kill()
+ var label: Label=record.sprite
+ var font_size=22 if record.text.length()>8 else 34
+ label.text=record.text
+ label.add_theme_font_size_override('font_size',font_size)
+ label.add_theme_color_override('font_color',record.color)
+ label.add_theme_color_override('font_shadow_color',Color(0,0,0,0.65) if record.color.get_luminance()>0.25 else Color.TRANSPARENT)
+ label.size=Vector2(280,0)
+ label.position=record.position-Vector2(140,65-font_size+game.title_font.get_ascent(font_size))
+ label.modulate.a=1.0
+ # Step with battle time so hit-stop, animation speed and effect expiry agree.
+ var tween=label.create_tween().set_parallel()
+ tween.pause()
+ tween.tween_property(label,'modulate:a',0.35,0.65).set_delay(0.6)
+ if not game.reduced_motion:tween.tween_property(label,'position:y',label.position.y-47*1.25,1.25)
+ record.tween=tween
+ if record.age>0:tween.custom_step(record.age)
+
+func advance_numbers(elapsed: float) -> void:
+ for i in range(floats.size()-1,-1,-1):
+  var record=floats[i]
+  record.age+=elapsed
+  if record.age<1.25:
+   if elapsed>0:record.tween.custom_step(elapsed)
+   continue
+  record.tween.kill()
+  record.sprite.hide()
+  free_numbers.append(record.sprite)
+  floats.remove_at(i)
+
 
 func acquire_effect(active: Array,category: StringName,record: Dictionary) -> void:
  var free: Array=free_effects[category]
@@ -268,8 +416,8 @@ func acquire_effect(active: Array,category: StringName,record: Dictionary) -> vo
  sprite.record=record
  record.sprite=sprite
  active.append(record)
- sprite.show()
- sprite.queue_redraw()
+ sprite.visible=not game.reduced_motion
+ if sprite.visible:sprite.queue_redraw()
 
 func advance_effects(active: Array,elapsed: float,lifetime: float) -> void:
  for i in range(active.size()-1,-1,-1):
@@ -281,7 +429,10 @@ func advance_effects(active: Array,elapsed: float,lifetime: float) -> void:
    sprite.hide()
    sprite.record={}
    free_effects[sprite.category].append(sprite)
-  else:sprite.queue_redraw()
+  else:
+   var was_visible=sprite.visible
+   sprite.visible=not game.reduced_motion
+   if sprite.visible and (elapsed>0 or not was_visible):sprite.queue_redraw()
 
 func reset_effects() -> void:
  stop_motion()
@@ -290,7 +441,7 @@ func reset_effects() -> void:
  banners.clear()
  known_hand_size=0
  advance_effects(particles,INF,1.15)
- advance_effects(floats,INF,1.25)
+ advance_numbers(INF)
  advance_effects(ghosts,INF,1.4)
 
 var ghosts=[]
@@ -304,6 +455,13 @@ var clock=0.0
 func _init(owner) -> void:
  hand_shader.code="shader_type canvas_item; uniform bool muted=false; void fragment(){ if(muted){COLOR.rgb=mix(COLOR.rgb,vec3(dot(COLOR.rgb,vec3(0.299,0.587,0.114))),0.85);} }"
  game=owner
+ arena_layer=BaseLayer.new()
+ arena_layer.owner_view=weakref(self)
+ arena_layer.terrain=true
+ game.art_layer.add_child(arena_layer)
+ base_layer=BaseLayer.new()
+ base_layer.owner_view=weakref(self)
+ game.art_layer.add_child(base_layer)
  fx=preload("res://scripts/tavern_fx.gd").new(self)
  board=load('res://tavern_assets/board.png')
  portrait_board=load('res://tavern_assets/board_portrait.png') if ResourceLoader.exists('res://tavern_assets/board_portrait.png') else board
@@ -312,19 +470,31 @@ func _init(owner) -> void:
  shader.code='shader_type canvas_item; uniform bool ellipse=false; uniform vec4 uv_rect=vec4(0.0,0.0,1.0,1.0); void fragment(){ if(ellipse){vec2 p=(UV-uv_rect.xy)/uv_rect.zw;float d=length((p-vec2(0.5))*2.0);COLOR.a*=1.0-smoothstep(0.97,1.0,d);} }'
 
 func slice(texture: Texture2D,index: int,columns: int,rows: int) -> AtlasTexture:
- var key=str(texture.get_instance_id())+':'+str(index)
- if not atlas_cache.has(key):
+ if not atlas_cache.has(texture):atlas_cache[texture]={}
+ var cache: Dictionary=atlas_cache[texture]
+ var key=Vector3i(index,columns,rows)
+ if not cache.has(key):
   var at=AtlasTexture.new(); at.atlas=texture
   var cell=texture.get_size()/Vector2(columns,rows)
-  at.region=Rect2(Vector2(index%columns,index/columns)*cell+Vector2(1,1),cell-Vector2(2,2)); atlas_cache[key]=at
- return atlas_cache[key]
+  at.region=Rect2(Vector2(index%columns,index/columns)*cell+Vector2(1,1),cell-Vector2(2,2))
+  cache[key]=at
+ return cache[key]
 
 func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint=Color.WHITE,z=0) -> void:
  used[key]=true
  if not nodes.has(key):
-  var node=TextureRect.new(); node.mouse_filter=Control.MOUSE_FILTER_IGNORE
-  node.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; node.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
-  game.art_layer.add_child(node); nodes[key]=node
+  var fresh: TextureRect
+  if free_art.is_empty():
+   fresh=TextureRect.new()
+   fresh.mouse_filter=Control.MOUSE_FILTER_IGNORE
+   fresh.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+   fresh.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+   game.art_layer.add_child(fresh)
+  else:
+   fresh=free_art.pop_back()
+   game.art_layer.move_child(fresh,-1)
+   fresh.show()
+  nodes[key]=fresh
  var node=nodes[key]
  node.texture=texture; node.position=rect.position; node.size=rect.size; node.pivot_offset=rect.size/2; node.rotation=angle; node.modulate=tint; node.z_index=z
  if not ellipse:
@@ -369,7 +539,7 @@ func tick(delta: float) -> void:
   for reveal in trap_reveals:reveal.age+=delta*game.speed
   trap_reveals=trap_reveals.filter(func(reveal):return reveal.age<1.15)
  advance_effects(particles,delta*game.speed,1.15)
- advance_effects(floats,delta*game.speed,1.25)
+ advance_numbers(delta*game.speed)
  advance_effects(ghosts,delta*game.speed,1.4)
 
 func geometry() -> void:
@@ -463,9 +633,19 @@ func held_card_rect() -> Rect2:
 
 func prepare() -> void:
  used={}; geometry()
+ if arena_size!=game.logical_size or arena_screen!=game.screen:
+  arena_size=game.logical_size
+  arena_screen=game.screen
+  arena_layer.queue_redraw()
+ base_layer.queue_redraw()
  prepare_hand_faces()
  if game.screen=='battle':
   var state=game.rules
+  var mana: int=state.players[0].mana
+  if observed_match==game.match_serial and mana>previous_mana and not game.reduced_motion:
+   energy_pulse_end=clock+0.6
+   burst(energy_bar().get_center(),GOLD)
+  previous_mana=mana
   for uid in unit_views:
    var info=unit_views[uid]; var rect: Rect2=info.rect
    var opacity=1.0
@@ -484,27 +664,31 @@ func prepare() -> void:
     else:
      rect.position-=direction*windup*16
      rect.position=rect.position.lerp(action.destination-rect.size/2,advance*0.9)
-   var spawn=particles.filter(func(p): return p.get('uid',-1)==uid and p.kind=='summon')
+   var spawn={}
+   var hit={}
+   var resonating=attacking
+   for effect in particles:
+    if spawn.is_empty() and effect.kind=='summon' and effect.uid==uid:spawn=effect
+    if int(effect.get('target',{}).get('uid',-1))!=uid:continue
+    if effect.kind=='damage' and effect.age<0.28:hit=effect
+    if effect.get('response_id','')==info.unit.id and effect.age<0.65:resonating=true
    if not spawn.is_empty() and not game.reduced_motion:
-    var arrival=clampf(spawn[0].age/0.46,0,1)
+    var arrival=clampf(spawn.age/0.46,0,1)
     var factor=lerpf(0.12,1.0,ease(arrival,0.35))+0.12*sin(PI*arrival)
     rect=Rect2(rect.get_center()-rect.size*factor/2,rect.size*factor)
     rect.position.y-=45*pow(1-arrival,2)
     rect=stretch(rect,-sin(arrival*TAU)*0.13*(1-arrival))
    elif not attacking and not game.reduced_motion:
     rect=stretch(rect,0.013*sin(clock*2.1+uid*1.7))
-   var hits=particles.filter(func(p): return p.kind=='damage' and int(p.get('target',{}).get('uid',-1))==uid and p.age<0.28)
-   if not hits.is_empty():
-    var hit=hits[-1]
+   if not hit.is_empty():
     var recovery=clampf(hit.age/0.28,0,1)
     var recoil=clampf(hit.amount*2.0,4,16)*sin(recovery*TAU)*(1-recovery)
     if not game.reduced_motion:rect.position.y+=recoil*(1 if info.side==0 else -1)
    info.draw_rect=rect
-   var resonating=attacking or particles.any(func(p):return p.get('response_id','')==info.unit.id and p.get('target',{}).get('uid',-1)==uid and p.age<0.65)
    if resonating and not game.reduced_motion:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hits.is_empty() and not game.reduced_motion else Color(1,1,1,opacity),1)
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hit.is_empty() and not game.reduced_motion else Color(1,1,1,opacity),1)
   if not game.drag.is_empty() and game.drag.kind=='card':
    var rect=held_card_rect()
    prepare_card('drag',game.drag.id,rect,0,50)
@@ -538,8 +722,16 @@ func prepare() -> void:
  if game.panel=='result':
   var r=panel_rect()
   button('home',Rect2(r.position+Vector2(55,r.size.y-105),Vector2(r.size.x-110,60)),'VOLTAR À TAVERNA',true,true)
+ prepare_auras()
  for key in nodes.keys():
-  if not used.has(key): nodes[key].queue_free(); nodes.erase(key)
+  if used.has(key):continue
+  var stale: TextureRect=nodes[key]
+  nodes.erase(key)
+  if free_art.size()>=24:stale.queue_free()
+  else:
+   stale.hide()
+   stale.texture=null
+   free_art.append(stale)
 
 func draw_remains(g: Dictionary) -> void:
  var t=clampf(float(g.age)/1.4,0,1)
@@ -638,7 +830,7 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
  var defeated=events.filter(func(event):return event.kind=='death' and event.side!=action.get('side',-1))
  if defeated.size()>=2 and action.has('side'):
   var banner_at=Vector2(layout.w*0.5,(layout.enemy_row+layout.player_row)*0.5)
-  acquire_effect(floats,&"number",{'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
+  add_number({'position':banner_at+Vector2(0,55),'text':'QUEDA DUPLA' if defeated.size()==2 else 'QUEDA MÚLTIPLA','color':GOLD,'age':0.0})
  for side in range(2):
   var health=game.rules.players[side].health
   if before[side].health>=10 and health>0 and health<10:
@@ -664,13 +856,16 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
   if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',action.get('element','dark'))
   if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
-   var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '−'+str(event.get('amount',0)) if kind=='damage' else '+'+str(event.get('amount',0)) if kind in ['heal','buff'] else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
    if kind in ['damage','heal']:
     accumulate(event,at,color)
    elif not event.get('target',{}).has('uid'):
-    acquire_effect(floats,&"number",{'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+    var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '+'+str(event.get('amount',0)) if kind=='buff' else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
+    add_number({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
    acquire_effect(particles,&"particle",{'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+   var element: String=particles[-1].element
+   if kind in ['armor','blocked','shield_break','heal','buff'] or (kind=='damage' and element=='fire'):
+    impact_burst(at,element_color(element) if kind=='damage' else color)
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
      if int(unit.uid)==int(event.target.uid):particles[-1].response_id=unit.id;break
@@ -703,10 +898,11 @@ func accumulate(event: Dictionary,at: Vector2,color: Color) -> void:
   if number.get('kind','')==event.kind and number.get('modifier',0)==modifier:
    number.amount+=event.amount
    number.text=prefix+str(number.amount)+marker
-   number.age=0
+   number.age=0.0
+   animate_number(number)
    return
   if event.kind in ['damage','element_resist'] and number.kind in ['damage','element_resist']:stack_depth+=1
- acquire_effect(floats,&"number",{'position':at+Vector2(0,stack_depth*35),'kind':event.kind,'target':event.target,'amount':event.amount,'modifier':modifier,'text':prefix+str(event.amount)+marker,'color':color,'age':0.0})
+ add_number({'position':at+Vector2(0,stack_depth*35),'kind':event.kind,'target':event.target,'amount':event.amount,'modifier':modifier,'text':prefix+str(event.amount)+marker,'color':color,'age':0.0})
 
 func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
  var key=[fill.to_rgba32(),border.to_rgba32(),radius,width]
@@ -717,11 +913,20 @@ func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
 
 func text(value: String,rect: Rect2,size=20,color=PAPER,center=false,title=false) -> void:
  var font=game.title_font if title else game.body_font
+ var key=[value,size,title]
+ if not text_layouts.has(key):
+  if text_layouts.size()>=512:text_layouts.clear()
+  var lines=value.split('\n')
+  var widths=PackedFloat32Array()
+  for line in lines:widths.append(font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x)
+  text_layouts[key]=[lines,widths]
+ var layout_text: Array=text_layouts[key]
  var y=rect.position.y
- for line in value.split('\n'):
-  var width=font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x
-  var x=rect.position.x+(maxf(0,(rect.size.x-width)/2) if center else 0)
-  if color.get_luminance()>0.25:canvas.draw_string(font,Vector2(x+1,y+size+1),line,HORIZONTAL_ALIGNMENT_LEFT,rect.size.x,size,Color(0,0,0,color.a*0.65))
+ var shadow=color.get_luminance()>0.25
+ for i in range(layout_text[0].size()):
+  var line: String=layout_text[0][i]
+  var x=rect.position.x+(maxf(0,(rect.size.x-layout_text[1][i])/2) if center else 0)
+  if shadow:canvas.draw_string(font,Vector2(x+1,y+size+1),line,HORIZONTAL_ALIGNMENT_LEFT,rect.size.x,size,Color(0,0,0,color.a*0.65))
   canvas.draw_string(font,Vector2(x,y+size),line,HORIZONTAL_ALIGNMENT_LEFT,rect.size.x,size,color)
   y+=size*1.16
 
@@ -738,7 +943,7 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
   text(value_line,Rect2(rect.position.x,y,rect.size.x,size),size,color,center)
   y+=size*1.22
 
-func paint_base(c: CanvasItem) -> void:
+func paint_terrain(c: CanvasItem) -> void:
  canvas=c
  var bounds=Rect2(Vector2.ZERO,game.logical_size)
  if game.screen=='battle':
@@ -749,6 +954,12 @@ func paint_base(c: CanvasItem) -> void:
     var slot: Rect2=layout.slots[side][column]
     canvas.draw_texture_rect_region(ROYAL_ARENA,slot,layout.slot_sources[side][column])
     canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
+ else:
+  canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
+ if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
+func paint_base(c: CanvasItem) -> void:
+ canvas=c
+ if game.screen=='battle':
   if not game.reduced_motion:
    fx.environment()
    for hero in hero_views:
@@ -760,9 +971,9 @@ func paint_base(c: CanvasItem) -> void:
     canvas.draw_texture_rect_region(ROYAL_ARENA,dest,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()),Color(1,1-hit*0.55,1-hit*0.55))
    if river_until>clock:
     var t=1-(river_until-clock)/0.55
-    canvas.draw_set_transform_matrix(game.board_transform*Transform2D(0,Vector2(1,0.12),0,Vector2(layout.w*river_x,layout.h*0.452)))
+    canvas.draw_set_transform_matrix(Transform2D(0,Vector2(1,0.12),0,Vector2(layout.w*river_x,layout.h*0.452)))
     canvas.draw_arc(Vector2.ZERO,6+t*78,0,TAU,32,Color(0.6,0.94,1,1-t),3)
-    canvas.draw_set_transform_matrix(game.board_transform)
+    canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
    if sun_until>clock:
     canvas.draw_circle(Vector2(layout.w*0.5,layout.h*0.452),12+18*(sun_until-clock),Color(1,0.76,0.28,(sun_until-clock)*1.6))
    if crowd_until>clock:
@@ -771,9 +982,6 @@ func paint_base(c: CanvasItem) -> void:
      var shifted=r
      shifted.position.y-=4*absf(sin((crowd_until-clock)*18))
      canvas.draw_texture_rect_region(ROYAL_ARENA,shifted,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()))
- else:
-  canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
- if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
  if game.screen=='home':
   var x=layout.w/2-285 if game.portrait else 110.0
   canvas.draw_style_box(style(Color(0.035,0.045,0.075,0.92),Color('a78654'),24),Rect2(x,layout.h*0.12,570,layout.h*0.78 if game.portrait else layout.h*0.75))
@@ -1088,7 +1296,6 @@ func paint_battle() -> void:
    var tag=Rect2(hand.rect.position+hand.rect.size*Vector2(0.12,0.39),hand.rect.size*Vector2(0.76,0.14))
    canvas.draw_rect(tag,INK)
    text('Falta %d'%int(card.cost-state.players[0].mana),tag,int(tag.size.y*0.76),PAPER,true,true)
-  if not game.reduced_motion and float(hand_lifts.get(hand.index,0))>0.05:fx.aura(hand.id,hand.rect,float(hand_lifts[hand.index]))
   canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
  if game.drag.is_empty():
   if game.selected_card>=0:
@@ -1101,7 +1308,6 @@ func paint_battle() -> void:
   if game.drag.kind=='card':
    var held_rect=held_card_rect()
    paint_card(game.drag.id,held_rect)
-   if not game.reduced_motion:fx.aura(game.drag.id,held_rect,1.0)
 
   else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
   var preview=drag_preview()
@@ -1123,10 +1329,6 @@ func paint_battle() -> void:
   var strength=0.10+0.05*sin(clock*3.0)
   for band in range(10):
    canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size).grow(-band*3.0),Color(0.9,0.02,0.04,strength*(1-band/10.0)*3),false,3.1)
- if not opening and p.mana>previous_mana and not game.reduced_motion:
-  energy_pulse_end=clock+0.6
-  burst(energy_bar().get_center(),GOLD)
- previous_mana=p.mana
  var bar=energy_bar()
  var bar_width=bar.size.x
  canvas.draw_style_box(style(Color('181027'),Color('bd904a'),8,2),bar)
@@ -1220,10 +1422,6 @@ func arrow(a: Vector2,b: Vector2,color: Color) -> void:
   canvas.draw_line(last,p,Color(0.12,0.04,0.02,0.5),9);canvas.draw_line(last,p,color,5);last=p
  var direction=(b-a).normalized();var normal=direction.orthogonal()
  canvas.draw_colored_polygon(PackedVector2Array([b,b-direction*24+normal*13,b-direction*24-normal*13]),color)
-
-func draw_float(f: Dictionary) -> void:
- var pos=f.position-Vector2(0,55+(0 if game.reduced_motion else f.age*47))
- text(f.text,Rect2(pos-Vector2(140,10),Vector2(280,50)),22 if f.text.length()>8 else 34,Color(f.color,clampf(1.6-f.age,0,1)),true,true)
 
 func paint_home() -> void:
  var x=layout.w/2-245 if game.portrait else 150.0
