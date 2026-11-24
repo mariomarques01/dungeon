@@ -213,7 +213,7 @@ func check_hit_feedback(game) -> void:
  game.view.prepare()
  var portrait: TextureRect=game.view.nodes['unit'+str(unit.uid)]
  var label: Label=game.view.floats[0].sprite
- if portrait.material!=game.view.hit_flash or game.view.unit_views[unit.uid].draw_rect.size.y>=target_height:
+ if portrait.material.get_shader_parameter('effect')!=game.view.UNIT_FLASH or game.view.unit_views[unit.uid].draw_rect.size.y>=target_height:
   push_error('A hit must flash white and compress the target');failures+=1
  if label.get_theme_font_size('font_size')!=42 or label.get_theme_color('font_color')!=Color('ff936a'):
   push_error('Heavy damage must use the larger orange number');failures+=1
@@ -227,12 +227,12 @@ func check_hit_feedback(game) -> void:
   push_error('Critical damage must use the larger gold number');failures+=1
  game.view.tick(0.08)
  game.view.prepare()
- if portrait.material!=null:
+ if portrait.material.get_shader_parameter('effect')!=game.view.UNIT_NORMAL:
   push_error('The hit sprite must release its white material');failures+=1
  game.reduced_motion=true
  game.view.ingest([hit],before)
  game.view.prepare()
- if portrait.material!=null or not is_zero_approx(game.view.freeze_left):
+ if portrait.material.get_shader_parameter('effect')!=game.view.UNIT_NORMAL or not is_zero_approx(game.view.freeze_left):
   push_error('Reduced motion must suppress the flash and hit-stop');failures+=1
  game.reduced_motion=false
 
@@ -290,7 +290,7 @@ func check_status_feedback(game) -> void:
  var initial_growth: float=game.view.unit_views[guard.uid].ice_growth
  game.view.tick(0.12)
  game.view.prepare()
- if portrait.material!=game.view.frozen_portrait or initial_growth>=game.view.unit_views[guard.uid].ice_growth:
+ if portrait.material.get_shader_parameter('effect')!=game.view.UNIT_FROZEN or initial_growth>=game.view.unit_views[guard.uid].ice_growth:
   push_error('Frozen creature must grow ice and use the desaturated sprite');failures+=1
  game.reduced_motion=true
  if game.view.fx.unit_statuses(guard)!=[&"taunt",&"frozen"] or game.view.fx.unit_statuses(attacker)!=[&"lifesteal"]:
@@ -298,7 +298,7 @@ func check_status_feedback(game) -> void:
  game.reduced_motion=false
  game.rules.advance_cooldowns(game.rules.REUSE_SECONDS)
  game.view.prepare()
- if portrait.material!=null or &"frozen" in game.view.fx.unit_statuses(guard):
+ if portrait.material.get_shader_parameter('effect')!=game.view.UNIT_NORMAL or &"frozen" in game.view.fx.unit_statuses(guard):
   push_error('Thaw must remove the status and restore the portrait');failures+=1
  before=game.rules.players.duplicate(true)
  game.rules.attack(0,attacker.uid,target)
