@@ -160,17 +160,14 @@ func check_summon_attack(game) -> void:
  game.start_match()
  game.rules.players[0].mana=10
  game.rules.players[0].hand=['wolf']
- var enemy=game.rules.spawn(1,'scout')
  game.view.prepare()
  game.request_play(0)
  game.advance_actions(0.53)
  var unit=game.rules.players[0].board[-1]
  var hero={'side':1,'hero':true}
  game.request_attack(unit.uid,hero)
- if game.active_actions.size()!=1 or game.toast_text!=game.rules.ENTRY_LOCK_REASON:
-  push_error('A freshly summoned creature must receive the hero lock message');failures+=1
- game.view.prepare()
- game.request_attack(unit.uid,{'side':1,'uid':enemy.uid})
+ if game.active_actions.size()!=2 or unit.delay!=0:
+  push_error('Summon must schedule an immediate hero attack without starting cooldown before impact');failures+=1
  game.advance_actions(0.39)
- if game.rules.find_unit(1,enemy.uid)!=null or unit.delay!=game.rules.REUSE_SECONDS or game.view.effect_history[-1].kind!='attack':
-  push_error('Summon must allow an immediate attack timeline against a creature');failures+=1
+ if game.rules.players[1].health!=30-unit.attack or unit.delay!=game.rules.REUSE_SECONDS or game.view.effect_history[-1].kind!='attack':
+  push_error('Immediate hero attack must deal damage and start cooldown at impact');failures+=1

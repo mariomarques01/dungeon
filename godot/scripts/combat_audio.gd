@@ -44,6 +44,10 @@ func start_music() -> void:
  if not music.playing: music.play()
  music_level=-14.0
 
+func set_match_paused(paused: bool) -> void:
+ music.stream_paused=paused or not enabled
+ for voice in voices:voice.stream_paused=paused
+
 func finish_music() -> void:
  music_level=-25.0
 

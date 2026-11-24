@@ -3,8 +3,14 @@ const MAX_BOARD=5
 const ELEMENT_ADVANTAGE={'fire':'ice','ice':'storm','storm':'steel'}
 const FAMILY_ATTACK_BONUS=1
 const REUSE_SECONDS=5.0
-const ENTRY_LOCK_SECONDS=2.0
-const ENTRY_LOCK_REASON='Recém-invocada: só pode atacar criaturas.'
+const ENTRY_LOCK_SECONDS=0.0
+const AI_LEVELS=[
+ {'name':'Fácil','interval':4.5,'hero_bonus':0,'trap_slots':0},
+ {'name':'Normal','interval':3.0,'hero_bonus':3,'trap_slots':1},
+ {'name':'Difícil','interval':2.0,'hero_bonus':24,'trap_slots':2},
+]
+const DEFAULT_AI_LEVEL=1
+var ai_level=DEFAULT_AI_LEVEL
 var realtime=false
 const MAX_HAND=5
 const DECK_SIZE=30
@@ -96,7 +102,6 @@ func advance_cooldowns(delta: float) -> bool:
   player.power_delay=maxf(0,player.power_delay-delta)
   player.power_used=player.power_delay>0
   for unit in player.board:
-   unit.entry_lock=maxf(0,unit.entry_lock-delta)
    if unit.delay<=0:continue
    unit.delay=maxf(0,unit.delay-delta)
    if unit.delay==0:
@@ -112,21 +117,42 @@ func support_strength(id: String) -> int:
 
 func choose_rival_support(locked=Callable()) -> void:
  var rival=players[1]
+ var difficulty: Dictionary=AI_LEVELS[ai_level]
+ var armed_traps=rival.supports.filter(func(slot):return slot.trap!='').size()
  if rival.board.is_empty() and turn<=2:return
  for slot in range(2):
   var support=rival.supports[slot]
-  support.defense=rival.health<14 or (slot==1 and players[0].health>10)
+  support.defense=rival.health<14 or (ai_level!=2 and slot==1 and players[0].health>10)
   var best=-1
+  var arming_trap=false
   for i in range(rival.hand.size()):
    if locked.is_valid() and locked.call(1,i):continue
    var id=rival.hand[i]
    if cards[id].kind=='trap':
-    if can_equip_support(slot,i,1).ok:
-     best=i
-     break
-   elif support.id=='' and can_equip_support(slot,i,1).ok:
+    if armed_traps<difficulty.trap_slots and can_equip_support(slot,i,1).ok:
+     if not arming_trap or trap_priority(id)>trap_priority(rival.hand[best]):
+      best=i
+      arming_trap=true
+   elif not arming_trap and support.id=='' and can_equip_support(slot,i,1).ok:
     if best<0 or support_strength(id)>support_strength(rival.hand[best]):best=i
-  if best>=0:equip_support(slot,best,1)
+  if best>=0 and equip_support(slot,best,1).ok and arming_trap:armed_traps+=1
+
+func trap_priority(id: String) -> int:
+ var card=cards[id]
+ if card.trigger=='attacked':return 3
+ if card.trigger=='low_health' and players[1].health>=card.threshold:return 2
+ if card.trigger=='enemy_spell':return 1
+ return 0
+
+func rival_deck() -> Array:
+ var deck=DEFAULT_DECK.duplicate()
+ if AI_LEVELS[ai_level].trap_slots>=1:
+  deck[deck.find('healing')]='trap_spikes'
+  deck[deck.find('wisdom')]='trap_embers'
+ if AI_LEVELS[ai_level].trap_slots>=2:
+  deck[deck.find('dryad')]='trap_runes'
+  deck[deck.find('beetle')]='trap_bulwark'
+ return deck
 
 func resolve_supports(side: int) -> void:
  for slot in range(2):
@@ -175,6 +201,10 @@ func valid_deck(deck: Array) -> bool:
   counts[id]=counts.get(id,0)+1
   if counts[id]>(1 if cards[id].get('legendary',false) else 2): return false
  return true
+
+func next_card(side: int) -> String:
+ var deck: Array=players[side].deck
+ return '' if deck.is_empty() else deck.back()
 
 func draw(side: int, count=1) -> void:
  for i in range(count):
@@ -491,7 +521,6 @@ func can_attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  if attacker.attacks<=0: return failure('Esta criatura já atacou ou está congelada.')
  if effective_attack(side,attacker)<=0: return failure('Esta criatura não tem ataque.')
  if not target_exists(target) or int(target.side)==side: return failure('Arraste até um inimigo.')
- if target.get('hero',false) and attacker.entry_lock>0 and not 'charge' in attacker.keywords: return failure(ENTRY_LOCK_REASON)
  var taunts=players[1-side].board.filter(func(u): return 'taunt' in u.keywords and u.health>0)
  if not taunts.is_empty():
   if target.get('hero',false) or not taunts.any(func(u): return int(u.uid)==int(target.get('uid',-1))): return failure('Ataque primeiro uma criatura com Provocar.')
@@ -581,16 +610,18 @@ func ai_target(c: Dictionary) -> Dictionary:
   return {}
  var enemies=players[0].board.duplicate()
  enemies.sort_custom(func(a,b): return a.attack>b.attack)
- if rule=='enemy' and int(c.get('amount',0))+spellpower(1)>=int(players[0].health): return {'side':0,'hero':true}
+ if rule=='enemy' and (int(c.get('amount',0))+spellpower(1)>=int(players[0].health)+int(players[0].armor) or ai_level==2):
+  return {'side':0,'hero':true}
  for unit in enemies:
   if c.effect in ['destroy','weaken','frost'] or int(c.get('amount',0))+spellpower(1)>=int(unit.health): return {'side':0,'uid':unit.uid}
  if rule=='enemy': return {'side':0,'hero':true}
  if not enemies.is_empty(): return {'side':0,'uid':enemies[0].uid}
  return {}
 
-func ai_play(locked=Callable()) -> Dictionary:
+func ai_play(locked=Callable(),locked_card=Callable()) -> Dictionary:
  var best={}; var score=-1000.0
  for i in range(players[1].hand.size()):
+  if locked_card.is_valid() and locked_card.call(1,i):continue
   var c=cards[players[1].hand[i]]
   var target=ai_target(c)
   if locked.is_valid() and locked.call(target):continue
@@ -623,7 +654,7 @@ func ai_attack(locked=Callable()) -> Dictionary:
    if locked.is_valid() and locked.call(target):continue
    if not can_attack(1,int(unit.uid),target).ok: continue
    var score=float(attack_value)*0.5
-   if target.get('hero',false): score+=10000 if attack_value>=players[0].health+players[0].armor else 3
+   if target.get('hero',false): score+=10000 if attack_value>=players[0].health+players[0].armor else AI_LEVELS[ai_level].hero_bonus
    else:
     var enemy=find_unit(0,int(target.uid))
     var outgoing=maxi(0,attack_value+elemental_modifier(target,cards[unit.id].element))

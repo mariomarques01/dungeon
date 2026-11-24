@@ -10,7 +10,7 @@ func check(ok: bool,label: String) -> void:
 func fresh() -> void:
  rules=Rules.new(cards);rules.start(Rules.DEFAULT_DECK,[],42);rules.events=[]
 func ready(side: int,id: String):
- var unit=rules.spawn(side,id);unit.entry_lock=0;return unit
+ return rules.spawn(side,id)
 func _initialize() -> void:
  cards=JSON.parse_string(FileAccess.get_file_as_string('res://tavern_assets/cards.json'))
  fresh()
@@ -21,8 +21,7 @@ func _initialize() -> void:
  check(result.ok and rules.players[0].mana==0 and rules.players[0].hand.is_empty(),'Invocar consome mana e carta exatamente uma vez')
  var unit=rules.players[0].board[0]
  check(unit.attack==1 and unit.health==2 and unit.attacks==1 and unit.delay==0 and not unit.sleeping,'Criatura entra pronta e sem recarga')
- check(rules.can_attack(0,unit.uid,{'side':1,'hero':true}).get('reason','')==Rules.ENTRY_LOCK_REASON,'Herói bloqueado imediatamente após a invocação')
- rules.advance_cooldowns(Rules.ENTRY_LOCK_SECONDS)
+ check(rules.can_attack(0,unit.uid,{'side':1,'hero':true}).ok,'Herói pode ser atacado imediatamente após a invocação')
  rules.end_turn();rules.end_turn()
  check(unit.attacks==1 and rules.players[0].mana==0,'Próximo turno renova criatura e preserva energia gasta')
  var hp=rules.players[1].health
@@ -38,9 +37,9 @@ func _initialize() -> void:
  check(not rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok and not rules.can_attack(0,a.uid,{'side':1,'uid':other.uid}).ok,'Provocar protege o herói e as outras criaturas')
  check(rules.can_attack(0,a.uid,{'side':1,'uid':b.uid}).ok,'Provocar permite atacar o protetor')
  fresh();a=rules.spawn(0,'panther');b=ready(1,'orc')
- check(rules.can_attack(0,a.uid,{'side':1,'uid':b.uid}).ok and rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Investida da Pantera permite atacar o herói imediatamente')
+ check(rules.can_attack(0,a.uid,{'side':1,'uid':b.uid}).ok and rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Pantera entra pronta para atacar qualquer inimigo legal')
  fresh();a=rules.spawn(0,'gryphon')
- check(rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Investida do Grifo preserva o ataque imediato ao herói')
+ check(rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Grifo entra pronto para atacar o herói')
  fresh();a=ready(0,'familiar');rules.attack(0,a.uid,{'side':1,'hero':true});rules.attack(0,a.uid,{'side':1,'hero':true})
  check(rules.players[1].health==26 and not rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Fúria dos Ventos concede exatamente dois ataques')
  fresh();a=ready(0,'serpent');b=ready(1,'golem');rules.attack(0,a.uid,{'side':1,'uid':b.uid})
@@ -183,21 +182,24 @@ func _initialize() -> void:
  check(not rules.advance_cooldowns(0.1) and rules.advance_cooldowns(0.15) and not rules.advance_cooldowns(1),'Recargas simultâneas produzem um único aviso de prontidão')
  rules.players[1].cooldowns[0]=0.1
  check(not rules.advance_cooldowns(1),'Recarga rival não produz ping do jogador')
- test_entry_lock()
+ test_attack_readiness()
+ test_ai_levels()
+ test_next_card_and_costs()
  test_elements()
  test_traps()
  test_families()
  print('RESULT: %d passed, %d failures' % [passed,failed]);quit(1 if failed else 0)
 
-func test_entry_lock() -> void:
+func test_attack_readiness() -> void:
  rules.start(Rules.DEFAULT_DECK,[],42,true)
  var attacker=rules.spawn(0,'scout')
  var hero={'side':1,'hero':true}
- check(attacker.entry_lock==Rules.ENTRY_LOCK_SECONDS and not rules.attack(0,attacker.uid,hero).ok and attacker.attacks==1 and attacker.delay==0,'Bloqueio de entrada não consome ataque nem inicia recarga')
- rules.advance_cooldowns(1.75)
- check(attacker.entry_lock>0 and not rules.can_attack(0,attacker.uid,hero).ok,'Herói segue bloqueado antes dos dois segundos')
- rules.advance_cooldowns(0.25)
- check(attacker.entry_lock==0 and rules.can_attack(0,attacker.uid,hero).ok,'Herói vira alvo após dois segundos, sem recarga de entrada')
+ check(Rules.ENTRY_LOCK_SECONDS==0 and attacker.entry_lock==0 and attacker.delay==0,'Criatura começa sem bloqueio nem recarga')
+ check(rules.attack(0,attacker.uid,hero).ok and attacker.delay==Rules.REUSE_SECONDS,'Ataque imediato ao herói inicia recarga')
+ rules.advance_cooldowns(4.9)
+ check(not rules.can_attack(0,attacker.uid,hero).ok,'Ataque segue indisponível durante a recarga')
+ rules.advance_cooldowns(0.11)
+ check(rules.can_attack(0,attacker.uid,hero).ok,'Fim da recarga libera novo ataque')
  var familiar=rules.spawn(0,'familiar')
  var enemy=rules.spawn(1,'scout')
  var creature={'side':1,'uid':enemy.uid}
@@ -207,22 +209,60 @@ func test_entry_lock() -> void:
  check(rules.attack(0,familiar.uid,{'side':1,'uid':second_enemy.uid}).ok and familiar.delay==Rules.REUSE_SECONDS,'Último ataque inicia a recarga')
  var recruit=rules.spawn(0,'stoneguard')
  rules.freeze_unit(0,recruit.uid)
- rules.advance_cooldowns(Rules.ENTRY_LOCK_SECONDS)
- check(recruit.entry_lock==0 and recruit.delay>0 and recruit.attacks==0,'Congelamento inicia recarga independente do bloqueio de entrada')
- rules.advance_cooldowns(Rules.REUSE_SECONDS-Rules.ENTRY_LOCK_SECONDS)
- check(recruit.delay==0 and recruit.attacks==1 and recruit.frozen==0,'Fim da recarga libera ataque da criatura congelada')
+ check(recruit.delay>0 and recruit.attacks==0,'Congelamento continua impedindo ações')
+ rules.advance_cooldowns(Rules.REUSE_SECONDS)
+ check(recruit.delay==0 and recruit.attacks==1 and recruit.frozen==0,'Fim do congelamento libera ataque')
 
  rules.start(Rules.DEFAULT_DECK,[],42,true)
  var rival=rules.spawn(1,'scout')
- check(rules.ai_attack().is_empty(),'IA aguarda sem um alvo legal durante o bloqueio de entrada')
- var ally=rules.spawn(0,'scout')
  var plan=rules.ai_attack()
- check(plan.get('target',{}).get('uid',-1)==ally.uid,'IA usa a criatura recém-invocada para atacar outra criatura')
- rules.attack(1,rival.uid,plan.target)
- var charging=rules.spawn(1,'panther')
- rules.players[0].health=1
- plan=rules.ai_attack()
- check(plan.get('uid',-1)==charging.uid and plan.get('target',{}).get('hero',false),'IA pode atacar o herói imediatamente com Investida')
+ check(plan.get('uid',-1)==rival.uid and plan.get('target',{}).get('hero',false),'IA pode atacar o herói com uma criatura recém-invocada')
+
+func test_ai_levels() -> void:
+ for level in range(Rules.AI_LEVELS.size()):
+  fresh()
+  rules.ai_level=level
+  var deck: Array=rules.rival_deck()
+  var trap_count=deck.filter(func(id):return cards[id].kind=='trap').size()
+  check(rules.valid_deck(deck) and trap_count==level*2,'Baralho válido e quantidade de armadilhas esperada no nível %d'%level)
+  rules.start(Rules.DEFAULT_DECK,deck,42,true)
+  var ally=rules.spawn(0,'scout')
+  rules.spawn(1,'wolf')
+  var target: Dictionary=rules.ai_attack().target
+  check(target.get('hero',false) if level==2 else target.get('uid',-1)==ally.uid,'Agressividade muda o alvo no nível %d'%level)
+  ally.health=10
+  var pressure_target: Dictionary=rules.ai_attack().target
+  check(pressure_target.get('hero',false)==(level>0),'Níveis mais agressivos evitam uma troca sem abate')
+  rules.players[0].health=1
+  check(rules.ai_attack().target.get('hero',false),'IA reconhece ataque letal no nível %d'%level)
+  var rival=rules.players[1]
+  rival.hand=['trap_spring','trap_spikes','trap_embers']
+  rival.mana=10
+  rules.choose_rival_support()
+  var armed=rival.supports.filter(func(slot):return slot.trap!='')
+  check(armed.size()==level,'IA respeita o limite de armadilhas no nível %d'%level)
+  if level>0:check(armed[0].trap=='trap_spikes','IA avalia o gatilho ao escolher qual armadilha armar')
+  rules.choose_rival_support()
+  check(rival.supports.filter(func(slot):return slot.trap!='').size()==level,'Nova decisão respeita armadilhas já armadas no nível %d'%level)
+
+func test_next_card_and_costs() -> void:
+ fresh()
+ var player=rules.players[0]
+ player.deck=['orc','wolf']
+ var previous: Array=player.deck.duplicate()
+ check(rules.next_card(0)=='wolf' and player.deck==previous,'Prévia lê o topo sem alterar o baralho')
+ rules.draw(0)
+ check(player.hand.back()=='wolf' and rules.next_card(0)=='orc','Prévia acompanha a ordem de compra')
+ player.deck.clear()
+ check(rules.next_card(0)=='','Baralho vazio limpa a prévia')
+ player.hand=['wolf']
+ player.mana=2
+ check(not rules.can_play(0,0).ok,'Lobo custa mais energia após o rebalanceamento')
+ player.mana=3
+ check(rules.play(0,0).ok and player.mana==0,'Lobo custa exatamente 3')
+ player.hand=['barrier']
+ player.mana=1
+ check(rules.play(0,0).ok and player.mana==0,'Barreira custa exatamente 1')
 
 func test_elements() -> void:
  fresh()
