@@ -5,7 +5,7 @@ const ArenaRoom=preload("res://scripts/tavern_environment.gd")
 const Audio=preload('res://scripts/combat_audio.gd')
 const STORAGE='dungeon_tavern_v3'
 const EMOTES=['Olá!','Boa jogada!','Obrigado!','Belo duelo!']
-const PANEL_BUTTONS={'pause':['resume'],'settings':['mute','speed','motion','credits','theme','tilt','close'],'credits':['close'],'result':['home']}
+const PANEL_BUTTONS={'pause':['resume'],'settings':['mute','speed','motion','credits','theme','tilt','difficulty','close'],'credits':['close'],'result':['home'],'rewards':['close'],'missions':['close'],'shop':['collection','close']}
 var title_font=preload('res://assets/title.ttf')
 var body_font=preload('res://tavern_assets/reading.ttf')
 var cards: Dictionary
@@ -336,8 +336,9 @@ func rect_json(rect: Rect2) -> Dictionary:
 
 func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
- if view and view.room.back.texture and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
-  draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
+ if view and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
+  if screen=='home':draw_texture_rect(view.HOME_PORTAL,Rect2(Vector2.ZERO,size),false,Color(0.29,0.31,0.42))
+  elif view.room.back.texture:draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
 
 func notify(message: String) -> void:
  toast_text=message;toast_time=2.1
@@ -569,9 +570,11 @@ func activate_button(id: String) -> void:
    notify('Nova carta: '+str(cards[result.id].name))
   'solar':request_solar()
   'start':start_match()
-  'collection':screen='collection';collection_page=0;selected_card=-1
+  'collection':screen='collection';panel='';collection_page=0;selected_card=-1
   'home':screen='home';panel='';inspect_id='';match_serial+=1;active_actions.clear();audio_engine.stop_music()
   'settings':panel='settings'
+  'rewards','missions','shop':
+   if screen=='home':panel=id
   'close':panel=''
   'theme':
    arena_theme=(arena_theme+1)%ArenaRoom.THEMES.size()

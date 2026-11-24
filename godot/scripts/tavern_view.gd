@@ -6,6 +6,18 @@ const HEAVY_DAMAGE=5
 const CRITICAL_DAMAGE=8
 const HIT_FLASH_SECONDS=0.055
 const HIT_RECOIL_SECONDS=0.28
+const HOME_ART=preload("res://tavern_assets/menu/home.jpg")
+const HOME_PORTAL=preload("res://tavern_assets/menu/portal.jpg")
+const HOME_ASSETS=preload("res://tavern_assets/menu/menu_assets.jpg")
+const HOME_BUTTONS=[
+ ['start','Jogar Duelo',Rect2(227,485,505,131)],
+ ['collection','Coleção de Cartas',Rect2(254,629,452,96)],
+ ['rewards','Recompensas',Rect2(255,736,450,80)],
+ ['missions','Missões',Rect2(256,829,448,81)],
+ ['shop','Loja',Rect2(254,920,453,82)],
+ ['settings','Configurações',Rect2(255,1011,451,83)],
+]
+const HOME_PANELS={'rewards':'Recompensas','missions':'Missões','shop':'Loja'}
 const ArenaRoom=preload("res://scripts/tavern_environment.gd")
 const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
 var game
@@ -686,6 +698,7 @@ func held_card_rect() -> Rect2:
 func prepare() -> void:
  used={}; geometry()
  room.configure(game.logical_size,game.arena_theme,game.portrait,game.screen=='battle')
+ room.visible=game.screen!='home'
  if arena_size!=game.logical_size or arena_screen!=game.screen:
   arena_size=game.logical_size
   arena_screen=game.screen
@@ -797,10 +810,18 @@ func prepare() -> void:
   button('motion',Rect2(rect.position+Vector2(45,297),Vector2(rect.size.x-90,55)),'REDUZIR MOVIMENTO · '+('SIM' if game.reduced_motion else 'NÃO'))
   button('credits',Rect2(rect.position+Vector2(45,233),Vector2(rect.size.x-90,55)),'CRÉDITOS DE ÁUDIO')
   button('theme',Rect2(rect.position+Vector2(45,361),Vector2(rect.size.x-90,55)),'TEMA · '+ArenaRoom.THEMES[game.arena_theme].name.to_upper())
+  if game.screen=='home':
+   button('difficulty',Rect2(rect.position+Vector2(45,425),Vector2(rect.size.x-90,55)),'IA · '+game.rules.AI_LEVELS[game.difficulty].name)
   if game.tilt_available:
    var label='INCLINAÇÃO · '+('SIM' if game.tilt_enabled else 'NÃO')
-   button('tilt',Rect2(rect.position+Vector2(45,425),Vector2(rect.size.x-90,55)),label,not game.reduced_motion)
+   var tilt_y=489 if game.screen=='home' else 425
+   button('tilt',Rect2(rect.position+Vector2(45,tilt_y),Vector2(rect.size.x-90,55)),label,not game.reduced_motion)
   button('close',Rect2(rect.position+Vector2(rect.size.x-58,14),Vector2(42,42)),'×')
+ if game.panel in HOME_PANELS:
+  var rect=panel_rect()
+  button('close',Rect2(rect.position+Vector2(rect.size.x-58,14),Vector2(42,42)),'×')
+  if game.panel=='shop':
+   button('collection',Rect2(rect.position+Vector2(45,215),Vector2(rect.size.x-90,55)),'VER COLEÇÃO',true,true)
  if game.panel=='credits': button('close',Rect2(panel_rect().position+Vector2(panel_rect().size.x-58,14),Vector2(42,42)),'×')
  if game.panel=='pause':
   var r=panel_rect()
@@ -859,16 +880,20 @@ func prepare_card(key: String,id: String,rect: Rect2,angle=0.0,z=0,tint=Color.WH
  local.position=center-local.size/2
  art(key,slice(creatures if card.kind=='minion' else spells,int(card.art),5 if card.kind=='minion' else 4,5 if card.kind=='minion' else 4),local,card.kind=='minion',angle,tint,z)
 
+func home_art_rect() -> Rect2:
+ var source_size=HOME_ART.get_size()
+ var factor=minf(game.logical_size.x/source_size.x,game.logical_size.y/source_size.y)
+ var display=source_size*factor
+ return Rect2((game.logical_size-display)/2.0,display)
+
 func prepare_home() -> void:
- var w=layout.w; var h=layout.h
- var positions=[Vector2(w/2-185,h*0.46),Vector2(w/2,h*0.43),Vector2(w/2+185,h*0.46)] if game.portrait else [Vector2(w*0.65,h*0.5),Vector2(w*0.79,h*0.43),Vector2(w*0.91,h*0.52)]
- for i in range(3): prepare_card('home'+str(i),['treant','dragon','fireball'][i],Rect2(positions[i]-Vector2(100,150),Vector2(200,300)),(i-1)*0.1)
- var x=w/2-245 if game.portrait else 150.0
- var y=h*0.66 if game.portrait else h*0.57
- button('difficulty',Rect2(x,y,490,49),'IA · '+game.rules.AI_LEVELS[game.difficulty].name)
- button('start',Rect2(x,y+59,490,68),'DUELAR',game.rules.valid_deck(game.profile.deck),true)
- button('collection',Rect2(x,y+139,490,56),'COLEÇÃO E BARALHO')
- button('settings',layout.settings,'⚙')
+ if not game.panel.is_empty():return
+ var artwork=home_art_rect()
+ var factor=artwork.size.x/HOME_ART.get_width()
+ for item in HOME_BUTTONS:
+  var source: Rect2=item[2]
+  var rect=Rect2(artwork.position+source.position*factor,source.size*factor)
+  button(item[0],rect,item[1])
 
 func prepare_collection() -> void:
  var ids=game.collectible_ids()
@@ -892,7 +917,9 @@ func prepare_collection() -> void:
 
 func panel_rect() -> Rect2:
  if game.panel=='pause':return Rect2(Vector2(layout.w/2-240,layout.h/2-110),Vector2(480,220))
- return Rect2(Vector2(layout.w/2-280,layout.h/2-260),Vector2(560,520))
+ var height=568.0 if game.panel=='settings' and game.screen=='home' else 520.0
+ if game.panel in HOME_PANELS:height=320.0
+ return Rect2(Vector2(layout.w/2-280,layout.h/2-height/2),Vector2(560,height))
 func inspect_rect() -> Rect2:
  var size=Vector2(440,660) if game.portrait else Vector2(260,390)
  return Rect2(Vector2(layout.w/2-size.x/2,layout.h/2-size.y/2-25),size)
@@ -1047,7 +1074,14 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 
 func paint_terrain(c: CanvasItem) -> void:
  canvas=c
- if game.screen=='battle':
+ if game.screen=='home':
+  var artwork=home_art_rect()
+  if artwork.size!=game.logical_size:
+   var factor=maxf(game.logical_size.x/HOME_PORTAL.get_width(),game.logical_size.y/HOME_PORTAL.get_height())
+   var background=HOME_PORTAL.get_size()*factor
+   canvas.draw_texture_rect(HOME_PORTAL,Rect2((game.logical_size-background)/2,background),false,Color(0.29,0.31,0.42))
+  canvas.draw_texture_rect(HOME_ART,artwork,false)
+ elif game.screen=='battle':
   for side in range(2):
    for column in range(SLOT_COLUMNS.size()):
     var slot: Rect2=layout.slots[side][column]
@@ -1093,9 +1127,6 @@ func paint_base(c: CanvasItem) -> void:
      var shifted=r
      shifted.position.y-=4*absf(sin((crowd_until-clock)*18))
      canvas.draw_texture_rect_region(ROYAL_ARENA,shifted,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()))
- if game.screen=='home':
-  var x=layout.w/2-285 if game.portrait else 110.0
-  canvas.draw_style_box(style(Color(0.035,0.045,0.075,0.92),Color('a78654'),24),Rect2(x,layout.h*0.12,570,layout.h*0.78 if game.portrait else layout.h*0.75))
  if not game.inspect_id.is_empty(): canvas.draw_style_box(style(Color(0.02,0.025,0.04,0.95),Color('9e815a'),18),inspect_rect().grow(20))
  if game.screen=='collection': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.025,0.02,0.05,0.69))
  if game.screen=='battle':
@@ -1111,14 +1142,13 @@ func paint_base(c: CanvasItem) -> void:
 
 func paint_overlay(c: CanvasItem) -> void:
  canvas=c
- if game.screen=='home': paint_home()
- elif game.screen=='collection': paint_collection()
- else: paint_battle()
+ if game.screen=='collection':paint_collection()
+ elif game.screen=='battle':paint_battle()
  if game.screen=='battle' and game.panel.is_empty() and game.emote_time>0:
   var bubble=Rect2(layout.player_hero.position+Vector2(0,-49),Vector2(layout.player_hero.size.x,38))
   canvas.draw_style_box(style(Color('33262b'),GOLD,8,2),bubble)
   text(game.emote_text,bubble,20,GOLD,true)
- if game.panel.is_empty():
+ if game.panel.is_empty() and game.screen!='home':
   for button_info in buttons:paint_button(button_info)
  if not game.inspect_id.is_empty():
   var card_rect=inspect_rect()
@@ -1544,17 +1574,6 @@ func arrow(a: Vector2,b: Vector2,color: Color) -> void:
  var direction=(b-a).normalized();var normal=direction.orthogonal()
  canvas.draw_colored_polygon(PackedVector2Array([b,b-direction*24+normal*13,b-direction*24-normal*13]),color)
 
-func paint_home() -> void:
- var x=layout.w/2-245 if game.portrait else 150.0
- var top=layout.h*0.15 if game.portrait else layout.h*0.16
- text('D U N G E O N   C A R D S',Rect2(x,top,490,35),18,GOLD,true)
- text('Duelos da\nTaverna',Rect2(x,top+48,490,150),48,PAPER,true,true)
- wrapped('Invoque criaturas. Escolha seus alvos.\nCada carta muda o tabuleiro.'.replace('\n',' '),Rect2(x+30,top+190,430,75),20,PAPER,true)
- var positions=[Vector2(layout.w/2-185,layout.h*0.46),Vector2(layout.w/2,layout.h*0.43),Vector2(layout.w/2+185,layout.h*0.46)] if game.portrait else [Vector2(layout.w*0.65,layout.h*0.5),Vector2(layout.w*0.79,layout.h*0.43),Vector2(layout.w*0.91,layout.h*0.52)]
- for i in range(3): paint_card(['treant','dragon','fireball'][i],Rect2(positions[i]-Vector2(100,150),Vector2(200,300)),(i-1)*0.1)
- text('%d / 30 cartas no baralho' % game.profile.deck.size(),Rect2(x,layout.h*0.60 if game.portrait else layout.h*0.51,490,30),19,GOLD,true)
- text('%d moedas  ·  %d vitórias' % [game.profile.coins,game.profile.wins],Rect2(25,layout.h-50,layout.w-50,30),17,PAPER,true)
-
 func paint_collection() -> void:
  text('Seu grimório',Rect2(layout.w/2-230,35,460,50),35,PAPER,true,true)
  text('%d / 30 cartas · até 2 cópias · lendárias únicas' % game.profile.deck.size(),Rect2(50,100,layout.w-100,35),19,GOLD,true)
@@ -1598,6 +1617,17 @@ func paint_panel() -> void:
  canvas.draw_style_box(style(Color('17202b'),Color('b49b6e'),20),rect)
  if game.panel=='pause':text('Partida pausada',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),30,PAPER,true,true)
  elif game.panel=='settings':text('Configurações',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),30,PAPER,true,true)
+ elif game.panel in HOME_PANELS:
+  var heading=Rect2(rect.position+Vector2(35,35),Vector2(rect.size.x-100,52))
+  canvas.draw_texture_rect_region(HOME_ASSETS,heading,Rect2(835,739,330,52))
+  text(HOME_PANELS[game.panel],heading,30,GOLD,true,true)
+  var area=Rect2(rect.position+Vector2(45,104),Vector2(rect.size.x-90,104))
+  match game.panel:
+   'rewards':
+    text('%d moedas   ·   %d XP' % [game.profile.coins,game.profile.xp],area,27,GOLD,true,true)
+    text('%d vitórias   ·   %d derrotas' % [game.profile.wins,game.profile.losses],Rect2(area.position+Vector2(0,48),area.size),21,PAPER,true)
+   'missions':wrapped('Ainda não há missões disponíveis.',area,23,PAPER,true)
+   'shop':wrapped('Todas as cartas do jogo estão disponíveis na Coleção.',area,23,PAPER,true)
  elif game.panel=='credits':
   text('Créditos de áudio',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),28,PAPER,true,true)
   wrapped('Dark Descent — Matthew Pablo, matthewpablo.com. CC BY 3.0. Música convertida e normalizada.\n\nEfeitos elementais — leohpaz, CC BY 4.0. Impactos e criaturas — rubberduck e artisticdude, CC0.\n\nFontes, links e alterações estão descritos no projeto.'.replace('\n',' '),Rect2(rect.position+Vector2(45,110),Vector2(rect.size.x-90,340)),21,PAPER)
