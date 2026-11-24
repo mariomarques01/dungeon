@@ -1695,7 +1695,7 @@ func paint_battle() -> void:
   if not preview.is_empty():paint_drag_result(preview)
  for anim in game.active_actions:
   var anim_time=anim.age
-  if not game.reduced_motion and anim.kind=='card' and anim_time<0.62:
+  if not game.reduced_motion and anim.kind=='card' and anim.card_kind!='spell' and anim_time<0.62:
    var size=Vector2(170,255)
    var at=anim.origin.lerp(anim.destination,clampf(anim_time/0.6,0,1))
    paint_card(anim.id,Rect2(at-size/2,size),0,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))

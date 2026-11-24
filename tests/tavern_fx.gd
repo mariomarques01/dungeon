@@ -133,6 +133,18 @@ func run() -> void:
  check_environment(game)
  if game.view.element_hint('wind')!='Vento  ▲ Água  ▼ Terra' or game.view.element_color('water')==game.view.element_color('wind'):
   push_error('Inspect must show the canonical element, matchup names and color');failures+=1
+ # Run the review loop through normal card scheduling, including random targets.
+ game.active_actions.clear()
+ for id in game.QA_SPELLS:
+  game.advance_spell_preview(1.0)
+  if game.active_actions.size()!=1 or game.active_actions[0].id!=id:
+   push_error('Preview skipped '+id);failures+=1;break
+  game.advance_spell_preview(0.53)
+  if not game.active_actions[0].resolved:
+   push_error('Preview missed impact for '+id);failures+=1
+  game.advance_spell_preview(1.0)
+ if game.qa_spell_index!=0:
+  push_error('Spell preview failed to loop');failures+=1
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 
