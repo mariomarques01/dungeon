@@ -3,6 +3,8 @@ const Rules=preload('res://scripts/tavern_rules.gd')
 const View=preload('res://scripts/tavern_view.gd')
 const Audio=preload('res://scripts/combat_audio.gd')
 const STORAGE='dungeon_tavern_v3'
+const EMOTES=['Olá!','Boa jogada!','Obrigado!','Belo duelo!']
+const PANEL_BUTTONS={'pause':['resume'],'settings':['mute','speed','motion','credits','close'],'credits':['close'],'result':['home']}
 var title_font=preload('res://assets/title.ttf')
 var body_font=preload('res://tavern_assets/reading.ttf')
 var cards: Dictionary
@@ -13,6 +15,10 @@ var art_layer: Control
 var overlay: Control
 var screen='home'
 var panel=''
+var difficulty=Rules.DEFAULT_AI_LEVEL
+var emotes_open=false
+var emote_text=''
+var emote_time=0.0
 var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'intro_seen':false,'support_hint_seen':false,'reduced_motion':false}
 var reduced_motion=false
 var sound_on=true
@@ -114,6 +120,8 @@ func load_profile() -> void:
  elif FileAccess.file_exists('user://tavern-profile.json'):raw=FileAccess.get_file_as_string('user://tavern-profile.json')
  var data=JSON.parse_string(raw) if not raw.is_empty() else null
  if data is Dictionary:
+  var saved_level=data.get('difficulty',Rules.DEFAULT_AI_LEVEL)
+  if saved_level is float or saved_level is int:difficulty=clampi(int(saved_level),0,Rules.AI_LEVELS.size()-1)
   reduced_motion=data.get('reduced_motion',false)==true
   profile.reduced_motion=reduced_motion
   profile.intro_seen=data.get('intro_seen',data.get('support_hint_seen',false))==true
@@ -124,9 +132,11 @@ func load_profile() -> void:
   var old=JSON.parse_string(str(JavaScriptBridge.eval("localStorage.getItem('dungeon_cards_v15') || '{}'")))
   if old is Dictionary:
    for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(old.get(key,0)))
+ profile.difficulty=difficulty
 
 func save_profile() -> void:
  profile.reduced_motion=reduced_motion
+ profile.difficulty=difficulty
  var raw=JSON.stringify(profile)
  if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('"+STORAGE+"',"+JSON.stringify(raw)+")")
  else:
@@ -159,7 +169,7 @@ func layout_board() -> void:
  overlay.position=board_transform.origin;overlay.scale=Vector2(factor,factor)
 
 const ENERGY_SECONDS=3.0
-const RIVAL_SECONDS=12.0
+const SUPPORT_SECONDS=12.0
 var energy_elapsed=0.0
 var rival_elapsed=0.0
 var support_elapsed=0.0
@@ -185,7 +195,7 @@ func advance_battle(delta: float) -> void:
  rival_elapsed+=delta
  advance_actions(delta)
  if rules.done:return
- if support_elapsed>=RIVAL_SECONDS:
+ if support_elapsed>=SUPPORT_SECONDS:
   support_elapsed=0
   var before=rules.players.duplicate(true)
   rules.events=[]
@@ -195,17 +205,23 @@ func advance_battle(delta: float) -> void:
    if rules.players[side].hand.size()<rules.MAX_HAND:rules.draw(side)
   rules.check_end()
   view.ingest(rules.events,before);play_events(rules.events,'dark',before);check_result()
- if rival_elapsed>=3.0 and not rules.done:
+ if rival_elapsed>=rival_interval() and not rules.done:
   rival_elapsed=0
   rival_action()
 
+func rival_interval() -> float:
+ return Rules.AI_LEVELS[rules.ai_level].interval
+
 func _process(delta: float) -> void:
  if not view:return
- clock+=delta;toast_time=maxf(0,toast_time-delta)
- var battle_delta=view.battle_delta(delta)
- view.tick(battle_delta)
+ var battle_delta=0.0
+ if panel!='pause':
+  clock+=delta;toast_time=maxf(0,toast_time-delta)
+  emote_time=maxf(0,emote_time-delta)
+  battle_delta=view.battle_delta(delta)
+  view.tick(battle_delta)
+  audio_engine.update(delta)
  layout_board()
- audio_engine.update(delta)
  advance_battle(battle_delta*speed)
  if not press.is_empty() and drag.is_empty() and clock-float(press.time)>0.6 and press.kind in ['card','unit','collection']:
   inspect_id=press.id;press={};selected_card=-1
@@ -231,7 +247,7 @@ func _process(delta: float) -> void:
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
   var latest={} if active_actions.is_empty() else active_actions.back()
-  var snap={'tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -284,7 +300,7 @@ func _input(event: InputEvent) -> void:
    if event.pressed:pointer_down()
    else:pointer_up()
    get_viewport().set_input_as_handled()
-  elif event.button_index==MOUSE_BUTTON_RIGHT and event.pressed:
+  elif event.button_index==MOUSE_BUTTON_RIGHT and event.pressed and panel.is_empty():
    if screen=='collection':
     for item in view.collection_views:
      if item.rect.has_point(pointer):inspect_id=item.id;return
@@ -295,9 +311,12 @@ func _input(event: InputEvent) -> void:
     if target.has('uid'):inspect_id=rules.find_unit(target.side,target.uid).id
  elif event is InputEventMouseMotion and event.device!=-1:
   pointer=board_transform.affine_inverse()*event.position;pointer_move()
- elif event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
-  if panel=='result':activate_button('home');return
-  drag={};press={};selected_card=-1;selected_attacker=-1;inspect_id='';panel=''
+ elif event is InputEventKey and event.pressed and not event.echo and event.keycode==KEY_ESCAPE:
+  if panel=='result':activate_button('home')
+  elif panel=='pause':set_match_paused(false)
+  elif screen=='battle' and panel.is_empty() and inspect_id.is_empty():set_match_paused(true)
+  else:drag={};press={};selected_card=-1;selected_attacker=-1;inspect_id='';panel=''
+  get_viewport().set_input_as_handled()
 
 var pending_support = -1
 
@@ -307,6 +326,7 @@ func support_at(point: Vector2) -> int:
  return -1
 
 func place_support(slot: int,index: int) -> void:
+ if panel=='pause':return
  pending_support=-1;selected_card=-1;selected_attacker=-1
  if card_locked(0,index):notify('Carta em ação.');return
  var result=rules.equip_support(slot,index)
@@ -327,7 +347,7 @@ func pointer_down() -> void:
  if not inspect_id.is_empty():inspect_id='';press={};return
  for i in range(view.buttons.size()-1,-1,-1):
   var item=view.buttons[i]
-  if not panel.is_empty() and item.id not in ['mute','speed','motion','credits','close','home']:continue
+  if not panel.is_empty() and item.id not in PANEL_BUTTONS[panel]:continue
   if item.rect.has_point(pointer):
    if item.enabled:
     if item.id=='power' and screen=='battle':press={'kind':'power','origin':item.rect.get_center(),'time':clock}
@@ -424,8 +444,36 @@ func drop_position(point: Vector2) -> int:
   if point.x<view.unit_views[int(board[i].uid)].rect.get_center().x:return i
  return board.size()
 
+func set_match_paused(paused: bool) -> void:
+ if screen!='battle' or rules.done:return
+ if (paused and not panel.is_empty()) or (not paused and panel!='pause'):return
+ panel='pause' if paused else ''
+ drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;pending_support=-1;inspect_id=''
+ emotes_open=false
+ art_layer.process_mode=Node.PROCESS_MODE_DISABLED if paused else Node.PROCESS_MODE_INHERIT
+ view.set_match_paused(paused)
+ audio_engine.set_match_paused(paused)
+
 func activate_button(id: String) -> void:
+ if not panel.is_empty() and id not in PANEL_BUTTONS[panel]:return
+ if id.begins_with('emote_'):
+  var choice=id.trim_prefix('emote_')
+  if not choice.is_valid_int():return
+  var index=choice.to_int()
+  if screen=='battle' and emotes_open and index>=0 and index<EMOTES.size():
+   emote_text=EMOTES[index]
+   emote_time=2.0
+   emotes_open=false
+  return
  match id:
+  'pause':set_match_paused(true)
+  'resume':set_match_paused(false)
+  'emotes':
+   if screen=='battle' and not rules.done:emotes_open=not emotes_open
+  'difficulty':
+   if screen=='home':
+    difficulty=(difficulty+1)%Rules.AI_LEVELS.size()
+    save_profile()
   'help':tutorial_visible=not tutorial_visible
   'exchange':
    if screen!='battle' or not panel.is_empty():return
@@ -473,8 +521,12 @@ func start_match() -> void:
  if not rules.valid_deck(profile.deck):notify('Monte um baralho de 30 cartas antes de duelar.');return
  match_serial+=1;screen='battle';panel='';active_actions.clear();rewarded=false;selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id=''
  pending_support=-1
+ emotes_open=false;emote_text='';emote_time=0.0
+ art_layer.process_mode=Node.PROCESS_MODE_INHERIT
+ audio_engine.set_match_paused(false)
  energy_elapsed=0.0; rival_elapsed=0.0;support_elapsed=0.0;rival_energy=0.0
- rules.start(profile.deck,[],qa_seed,true)
+ rules.ai_level=difficulty
+ rules.start(profile.deck,rules.rival_deck(),qa_seed,true)
  view.reset_effects();view.scenery=[]
  audio_engine.start_music();toast_time=0
  tutorial_visible=not profile.intro_seen
@@ -508,6 +560,7 @@ func schedule(action: Dictionary,impact: float,duration: float) -> void:
  if action.kind!='attack':audio_engine.charge(action.element)
 
 func advance_actions(delta: float) -> void:
+ if panel=='pause':return
  var impacts=[]
  for action in active_actions:
   action.age+=delta
@@ -547,7 +600,7 @@ func resolve_action(action: Dictionary) -> void:
  if action.side==1 and not rules.done:rules.choose_rival_support(card_locked)
 
 func request_play(index: int,target: Dictionary={},position = -1,origin=Vector2.ZERO,side=0) -> void:
- if rules.done:return
+ if rules.done or panel=='pause':return
  var valid=rules.can_play(side,index,target)
  if not valid.ok:notify(valid.reason);return
  if cards[rules.players[side].hand[index]].get('target','none')=='none':target={}
@@ -560,7 +613,7 @@ func request_play(index: int,target: Dictionary={},position = -1,origin=Vector2.
  schedule({'kind':'card','side':side,'id':id,'index':index,'position':position,'origin':from,'destination':destination,'target':target,'element':card.element,'card_kind':card.kind},0.52,1.3 if card.kind=='spell' else 1.15)
 
 func request_attack(uid: int,target: Dictionary,side=0) -> void:
- if rules.done:return
+ if rules.done or panel=='pause':return
  var valid=rules.can_attack(side,uid,target)
  if not valid.ok:notify(valid.reason);return
  if target_locked({'side':side,'uid':uid}) or target_locked(target):notify('Criatura ou alvo em ação.');return
@@ -578,7 +631,7 @@ func request_solar() -> void:
  schedule({'kind':'power','side':0,'id':'solar','card_kind':'spell','element':'fire','origin':view.layout.player_hero.get_center(),'destination':view.target_center(target),'target':target},0.52,1.12)
 
 func request_power(target: Dictionary,side=0) -> void:
- if rules.done:return
+ if rules.done or panel=='pause':return
  var valid=rules.can_power(side,target)
  if not valid.ok:notify(valid.reason);return
  if power_locked(side,'power' if side==0 else 'token_guard') or target_locked(target):notify('Poder ou alvo em ação.');return
@@ -624,7 +677,7 @@ func rival_action() -> void:
  if not plan.is_empty():
   request_attack(plan.uid,plan.target,1)
   return
- plan=rules.ai_play(target_locked)
+ plan=rules.ai_play(target_locked,card_locked)
  if not plan.is_empty():
   request_play(plan.index,plan.target,-1,Vector2.ZERO,1)
  elif rules.can_power(1).ok:request_power({},1)

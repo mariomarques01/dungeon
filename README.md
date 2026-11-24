@@ -6,7 +6,11 @@ Jogo de cartas tático em **Godot 4.4.1 / GDScript**, com duelos em tempo real c
 
 ## Como jogar
 
-Arraste uma criatura da mão para o seu lado do tabuleiro. Uma criatura pode atacar inimigos no campo assim que é invocada. Nos primeiros 2 segundos, o herói rival fica bloqueado como alvo, exceto para criaturas com **Investida**, que podem atacá-lo desde a entrada. A criatura recarrega por 5 segundos após usar seus ataques disponíveis ou ser congelada. **Fúria dos Ventos** permite dois ataques antes da recarga. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
+Arraste uma criatura da mão para o seu lado do tabuleiro. Uma criatura pode atacar inimigos, inclusive o herói rival, assim que é invocada. **Provocar** restringe os alvos normalmente. A criatura recarrega por 5 segundos após usar seus ataques disponíveis ou ser congelada. **Fúria dos Ventos** permite dois ataques antes da recarga. Arraste um feitiço até seu alvo; feitiços sem alvo podem ser soltos sobre o tabuleiro. Jogadas inválidas devolvem a carta sem gastar mana. Segure uma carta ou criatura para ler seus detalhes.
+
+Escolha a IA na taverna antes de duelar. A Fácil age a cada 4,5 s e mantém o foco nas trocas do tabuleiro, sem armar armadilhas. A Normal age a cada 3 s e pode manter uma armadilha armada. A Difícil age a cada 2 s, prioriza o herói quando pode e pode manter duas armadilhas armadas. Esses intervalos usam o relógio de combate.
+
+O indicador **Próxima carta** mostra o topo do baralho, o tempo até a compra e a quantidade restante. Durante a partida, use **Emotes** para exibir uma das quatro reações e **Pausa** ou `Esc` para suspender o duelo. Volte pelo botão **Continuar** ou por `Esc`.
 
 Cada herói começa com 30 de vida. Cada jogador tem um baralho de 30 cartas, até cinco cartas na mão e espaço para cinco criaturas no campo. Você começa com 1 de energia e recupera 1 a cada 3 segundos de jogo, até 10. Ao jogar uma carta ou equipá-la como apoio, ela permanece na mão e recarrega por 5 segundos. A borda azul mostra o progresso e a verde indica uma carta disponível. Cada cópia recarrega separadamente. A IA age durante o duelo e os apoios ativam a cada 12 segundos de jogo.
 
@@ -14,7 +18,7 @@ Toque em uma carta pronta e escolha **Trocar · 1 energia** para colocá-la no f
 
 Com 10/10 de energia, toque em **Lançar Erupção Solar** na barra abaixo da mão. A habilidade consome os 10 pontos, causa 6 de dano ao herói rival e concede 4 de armadura à sua heroína. Você também pode guardar a carga para jogar cartas.
 
-O conjunto tem **47 cartas colecionáveis**: 25 criaturas, 16 feitiços e 6 armadilhas, além de três fichas de invocação. Há Provocar, Escudo Divino, Investida, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
+O conjunto tem **47 cartas colecionáveis**: 25 criaturas, 16 feitiços e 6 armadilhas, além de três fichas de invocação. Há Provocar, Escudo Divino, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
 
 A coleção permite adicionar cartas, remover pelo contador e restaurar o baralho inicial. O limite é de duas cópias por carta e uma cópia por lendária. Todas as cartas estão disponíveis, sem compras.
 
@@ -57,7 +61,7 @@ npm install --prefix /tmp/dungeon-browser playwright-core
 NODE_PATH=/tmp/dungeon-browser/node_modules node tests/tavern_browser.cjs
 ```
 
-O teste joga por gestos reais: arraste inválido, invocação, bloqueio temporário do ataque ao herói, ataque entre criaturas, feitiços com alvo, partida completa, recompensa, persistência e arraste por toque no celular. `DUNGEON_URL`, `SCREENSHOT_DIR` e `CHROMIUM_PATH` podem ser definidos. `?qa=1` expõe um retrato somente de leitura do estado do motor para as verificações; não injeta jogadas.
+O teste joga por gestos reais: arraste inválido, invocação, ataque imediato ao herói, ataque entre criaturas, feitiços com alvo, partida completa, recompensa, persistência e arraste por toque no celular. `DUNGEON_URL`, `SCREENSHOT_DIR` e `CHROMIUM_PATH` podem ser definidos. `?qa=1` expõe um retrato somente de leitura do estado do motor para as verificações; não injeta jogadas.
 
 O GitHub Actions executa os testes de regras e publica o Godot no Pages com pacotes exclusivos por tentativa e arquivos com versão, com redirecionamentos de `/classic/` e `/godot/` para a Taverna.
 

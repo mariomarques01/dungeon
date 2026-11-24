@@ -105,6 +105,12 @@ func stop_motion() -> void:
  deal_started.clear()
  for node in auras:node.hide()
 
+func set_match_paused(paused: bool) -> void:
+ if paused:frame_delta=0.0
+ if reflow and reflow.is_valid():
+  if paused:reflow.pause()
+  else:reflow.play()
+
 func battle_delta(delta: float) -> float:
  var held=minf(freeze_left,delta)
  freeze_left-=held
@@ -231,7 +237,6 @@ const HAND_EFFECTS={
  "drake": "Entrada · 1 dano",
  "shieldbearer": "Provocar",
  "dryad": "Cura 3 PV",
- "panther": "Investida",
  "beetle": "Escudo Divino",
  "orc": "Orc",
  "firelord": "Área · 2 dano",
@@ -240,7 +245,6 @@ const HAND_EFFECTS={
  "knight": "Guarda e escudo",
  "necro": "Invoca esqueletos",
  "skeleton": "Mortos-vivos",
- "gryphon": "Investida",
  "golem": "Provocar",
  "familiar": "Dois ataques",
  "serpent": "Veneno",
@@ -596,6 +600,7 @@ func geometry() -> void:
   reflow_progress=0
   reflow=game.create_tween()
   reflow.tween_property(self,"reflow_progress",1.0,0.24).set_trans(Tween.TRANS_SINE)
+  if game.panel=='pause':reflow.pause()
  if hand.size()>known_hand_size and not game.reduced_motion:
   deal_started.resize(hand.size())
   for index in range(known_hand_size,hand.size()):
@@ -700,6 +705,14 @@ func prepare() -> void:
    prepare_card('cast%d_%d'%[anim.side,anim.index],anim.id,Rect2(p-size/2,size),0,45,Color(1,1,1,clampf(1-anim_time/0.85,0,1)))
   button('settings',layout.settings,'⚙')
   button('help',Rect2(layout.settings.position+Vector2(0,layout.settings.size.y+24),layout.settings.size),'?')
+  if not state.done and game.panel.is_empty():
+   var x: float=layout.w-121
+   var y: float=layout.settings.end.y+layout.settings.size.y+32
+   button('pause',Rect2(x,y,111,50),'Pausa')
+   button('emotes',Rect2(x,y+56,111,50),'Emotes')
+   if game.emotes_open:
+    for i in range(game.EMOTES.size()):
+     button('emote_%d'%i,Rect2(layout.w-202,y+112+i*52,192,48),game.EMOTES[i])
   if state.solar_ready() and not game.target_locked({'side':1,'hero':true}):
    button('solar',energy_bar().grow_individual(0,5,0,5),'Lançar Erupção Solar')
   if game.selected_card>=0 and not game.card_locked(0,game.selected_card) and not state.done:
@@ -719,6 +732,9 @@ func prepare() -> void:
   button('credits',Rect2(rect.position+Vector2(45,249),Vector2(rect.size.x-90,55)),'CRÉDITOS DE ÁUDIO')
   button('close',Rect2(rect.position+Vector2(rect.size.x-58,14),Vector2(42,42)),'×')
  if game.panel=='credits': button('close',Rect2(panel_rect().position+Vector2(panel_rect().size.x-58,14),Vector2(42,42)),'×')
+ if game.panel=='pause':
+  var r=panel_rect()
+  button('resume',Rect2(r.position+Vector2(55,105),Vector2(r.size.x-110,60)),'CONTINUAR',true,true)
  if game.panel=='result':
   var r=panel_rect()
   button('home',Rect2(r.position+Vector2(55,r.size.y-105),Vector2(r.size.x-110,60)),'VOLTAR À TAVERNA',true,true)
@@ -779,8 +795,9 @@ func prepare_home() -> void:
  for i in range(3): prepare_card('home'+str(i),['treant','dragon','fireball'][i],Rect2(positions[i]-Vector2(100,150),Vector2(200,300)),(i-1)*0.1)
  var x=w/2-245 if game.portrait else 150.0
  var y=h*0.66 if game.portrait else h*0.57
- button('start',Rect2(x,y,490,78),'DUELAR',game.rules.valid_deck(game.profile.deck),true)
- button('collection',Rect2(x,y+98,490,65),'COLEÇÃO E BARALHO')
+ button('difficulty',Rect2(x,y,490,49),'IA · '+game.rules.AI_LEVELS[game.difficulty].name)
+ button('start',Rect2(x,y+59,490,68),'DUELAR',game.rules.valid_deck(game.profile.deck),true)
+ button('collection',Rect2(x,y+139,490,56),'COLEÇÃO E BARALHO')
  button('settings',layout.settings,'⚙')
 
 func prepare_collection() -> void:
@@ -804,6 +821,7 @@ func prepare_collection() -> void:
  button('reset_deck',Rect2(layout.w/2-150,layout.h-98,300,55),'BARALHO INICIAL')
 
 func panel_rect() -> Rect2:
+ if game.panel=='pause':return Rect2(Vector2(layout.w/2-240,layout.h/2-110),Vector2(480,220))
  return Rect2(Vector2(layout.w/2-280,layout.h/2-260),Vector2(560,520))
 func inspect_rect() -> Rect2:
  var size=Vector2(440,660) if game.portrait else Vector2(260,390)
@@ -1003,7 +1021,12 @@ func paint_overlay(c: CanvasItem) -> void:
  if game.screen=='home': paint_home()
  elif game.screen=='collection': paint_collection()
  else: paint_battle()
- for button_info in buttons: paint_button(button_info)
+ if game.screen=='battle' and game.panel.is_empty() and game.emote_time>0:
+  var bubble=Rect2(layout.player_hero.position+Vector2(0,-49),Vector2(layout.player_hero.size.x,38))
+  canvas.draw_style_box(style(Color('33262b'),GOLD,8,2),bubble)
+  text(game.emote_text,bubble,20,GOLD,true)
+ if game.panel.is_empty():
+  for button_info in buttons:paint_button(button_info)
  if not game.inspect_id.is_empty():
   var card_rect=inspect_rect()
   paint_card(game.inspect_id,card_rect)
@@ -1018,7 +1041,7 @@ func paint_overlay(c: CanvasItem) -> void:
   canvas.draw_style_box(style(Color('33262b'),GOLD,8,2),strip)
   text(banners[0],strip,23,GOLD,true,true)
  if not game.panel.is_empty(): paint_panel()
- if game.toast_time>0 and not (game.screen=='battle' and game.tutorial_visible and game.selected_card<0):
+ if game.panel!='pause' and game.toast_time>0 and not (game.screen=='battle' and game.tutorial_visible and game.selected_card<0):
   var toast_y=layout.h*0.409 if game.screen=='battle' else layout.h*0.19
   var width=minf(layout.w-70,650)
   canvas.draw_style_box(style(Color(0.025,0.03,0.055,0.94),Color('d8ba7a'),12),Rect2(layout.w/2-width/2,toast_y,width,48))
@@ -1143,21 +1166,28 @@ func drag_preview() -> Dictionary:
  return {} if label.is_empty() else {'text':label,'target':target}
 
 func paint_next_card(player: Dictionary) -> void:
+ var next_id: String=game.rules.next_card(0)
  var width=minf(layout.w*0.085,layout.h*0.068)
  var rect=Rect2(Vector2(layout.w*0.68,layout.h*0.012),Vector2(width,width*1.38))
  canvas.draw_style_box(style(INK,GOLD,4,2),rect)
- if not player.deck.is_empty():
-  var card=game.cards[player.deck.back()]
+ if not next_id.is_empty():
+  var card=game.cards[next_id]
   var creature=card.kind=='minion'
   draw_card_picture(slice(creatures if creature else spells,int(card.art),5 if creature else 4,5 if creature else 4),rect.grow(-3))
   badge(rect.position+Vector2(5,7),str(int(card.cost)),INK,9)
+ var label=Rect2(rect.position.x-16,rect.end.y+4,layout.w*0.20,22)
+ text('Próxima carta' if not next_id.is_empty() else 'Baralho vazio',label,16,GOLD,true,true)
+ if not next_id.is_empty():
+  var name: String=game.cards[next_id].name
+  var name_rect=Rect2(label.position+Vector2(0,19),label.size)
+  text(name,name_rect,mini(15,int(name_rect.size.x*1.7/(name.length()+1))),PAPER,true)
  var at=rect.end+Vector2(20,-rect.size.y*0.65)
  canvas.draw_circle(at,15,INK)
  canvas.draw_arc(at,15,0,TAU,32,Color('705d42'),3,true)
- var progress=game.support_elapsed/game.RIVAL_SECONDS
- if player.hand.size()<game.rules.MAX_HAND and not player.deck.is_empty():
+ var progress=game.support_elapsed/game.SUPPORT_SECONDS
+ if player.hand.size()<game.rules.MAX_HAND and not next_id.is_empty():
   canvas.draw_arc(at,15,-PI/2,-PI/2+TAU*progress,32,GOLD,3,true)
-  text(str(ceili(game.RIVAL_SECONDS-game.support_elapsed)),Rect2(at-Vector2(13,9),Vector2(26,18)),14,PAPER,true)
+  text(str(ceili(game.SUPPORT_SECONDS-game.support_elapsed)),Rect2(at-Vector2(13,9),Vector2(26,18)),14,PAPER,true)
  else:text('Ⅱ',Rect2(at-Vector2(12,9),Vector2(24,18)),14,GOLD,true)
  var pile=Rect2(at+Vector2(-16,24),Vector2(13,17))
  canvas.draw_rect(pile,GOLD,false,2)
@@ -1230,7 +1260,7 @@ func paint_battle() -> void:
    if support.id!='':
     var timer=Rect2(rect.position+Vector2(rect.size.x*0.46,2),Vector2(rect.size.x*0.51,22))
     canvas.draw_rect(timer,Color('292332'))
-    text('%d s'%ceili(game.RIVAL_SECONDS-game.support_elapsed),timer,15,PAPER,true)
+    text('%d s'%ceili(game.SUPPORT_SECONDS-game.support_elapsed),timer,15,PAPER,true)
    if support.get('trap','')!='':
     paint_trap_back(armed_trap_rect(rect))
     if support.id=='':label='Armadilha'
@@ -1395,21 +1425,11 @@ func paint_targets(selection: Dictionary) -> void:
   var valid=false
   if selection.kind=='card' and game.cards[selection.id].get('target','none')!='none':valid=game.rules.can_play(0,int(selection.index),target).ok
   elif selection.kind=='unit':
-   var result: Dictionary=game.rules.can_attack(0,int(selection.uid),target)
-   valid=result.ok
-   if result.get('reason','')==game.rules.ENTRY_LOCK_REASON and (game.drag.is_empty() or game.target_at(game.pointer)==target):
-    paint_entry_lock(target_center(target))
+   valid=game.rules.can_attack(0,int(selection.uid),target).ok
   elif selection.kind=='power':valid=game.rules.can_power(0,target).ok
   if valid:
    var center=target_center(target)
    canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65 if game.reduced_motion else 0.65+sin(clock*7)*0.2),4)
-
-func paint_entry_lock(center: Vector2) -> void:
- var at=center+Vector2(0,-42)
- canvas.draw_circle(at,18,Color('292332'))
- canvas.draw_arc(at+Vector2(0,-2),5,PI,TAU,12,GOLD,2,true)
- canvas.draw_rect(Rect2(at-Vector2(8,2),Vector2(16,11)),GOLD)
- canvas.draw_circle(at+Vector2(0,3),2,Color('292332'))
 
 func element_color(element: String) -> Color:
  return {'fire':Color('ff8a40'),'ice':Color('7edcff'),'lightning':Color('91bdff'),'storm':Color('c49aff'),'nature':Color('85db71'),'heal':Color('8be6ae'),'dark':Color('a085e8'),'shield':Color('ffe39b'),'bite':Color('ffb79c'),'steel':Color('ffdd8f'),'earth':Color('c4a16d')}.get(element,Color('b28bff'))
@@ -1444,7 +1464,6 @@ func paint_collection() -> void:
   text(('− REMOVER ×'+str(count)) if count>0 else 'TOQUE PARA ADICIONAR',Rect2(item.rect.position+Vector2(-5,item.rect.size.y+4),Vector2(item.rect.size.x+10,26)),14,Color('a9e0b3') if count else PAPER,true)
 
 func paint_button(info: Dictionary) -> void:
- if not game.panel.is_empty() and info.id not in ['mute','speed','motion','close','credits','home']: return
  var rect: Rect2=info.rect
  var enabled=info.enabled
  var primary=info.primary
@@ -1476,7 +1495,8 @@ func paint_panel() -> void:
  canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.01,0.02,0.04,0.70))
  var rect=panel_rect()
  canvas.draw_style_box(style(Color('17202b'),Color('b49b6e'),20),rect)
- if game.panel=='settings':text('Configurações',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),30,PAPER,true,true)
+ if game.panel=='pause':text('Partida pausada',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),30,PAPER,true,true)
+ elif game.panel=='settings':text('Configurações',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),30,PAPER,true,true)
  elif game.panel=='credits':
   text('Créditos de áudio',Rect2(rect.position+Vector2(25,35),Vector2(rect.size.x-50,45)),28,PAPER,true,true)
   wrapped('Dark Descent — Matthew Pablo, matthewpablo.com. CC BY 3.0. Música convertida e normalizada.\n\nEfeitos elementais — leohpaz, CC BY 4.0. Impactos e criaturas — rubberduck e artisticdude, CC0.\n\nFontes, links e alterações estão descritos no projeto.'.replace('\n',' '),Rect2(rect.position+Vector2(45,110),Vector2(rect.size.x-90,340)),21,PAPER)
@@ -1506,4 +1526,4 @@ func paint_panel() -> void:
     var point=rect.position+Vector2(30+fposmod(i*43.0+sin(clock+i)*10,rect.size.x-60),fposmod(result_time*40+i*37,rect.size.y-130))
     canvas.draw_circle(point,2.5,Color(GOLD,0.6))
  for button_info in buttons:
-  if button_info.id in ['mute','speed','motion','close','credits'] or game.panel=='result' and button_info.id=='home': paint_button(button_info)
+  if button_info.id in game.PANEL_BUTTONS[game.panel]:paint_button(button_info)
