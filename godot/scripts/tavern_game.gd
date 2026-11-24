@@ -1,10 +1,11 @@
 extends Control
 const Rules=preload('res://scripts/tavern_rules.gd')
 const View=preload('res://scripts/tavern_view.gd')
+const ArenaRoom=preload("res://scripts/tavern_environment.gd")
 const Audio=preload('res://scripts/combat_audio.gd')
 const STORAGE='dungeon_tavern_v3'
 const EMOTES=['Olá!','Boa jogada!','Obrigado!','Belo duelo!']
-const PANEL_BUTTONS={'pause':['resume'],'settings':['mute','speed','motion','credits','close'],'credits':['close'],'result':['home']}
+const PANEL_BUTTONS={'pause':['resume'],'settings':['mute','speed','motion','credits','theme','tilt','close'],'credits':['close'],'result':['home']}
 var title_font=preload('res://assets/title.ttf')
 var body_font=preload('res://tavern_assets/reading.ttf')
 var cards: Dictionary
@@ -21,6 +22,14 @@ var emote_text=''
 var emote_time=0.0
 var profile={'deck':Rules.DEFAULT_DECK.duplicate(),'coins':0,'xp':0,'wins':0,'losses':0,'intro_seen':false,'support_hint_seen':false,'reduced_motion':false}
 var reduced_motion=false
+var arena_theme=0
+var parallax_contact=false
+var tilt_available=false
+var tilt_enabled=false
+var tilt_home=Vector2.ZERO
+var tilt_value=Vector2.ZERO
+var tilt_calibrated=false
+var web_tilt_callback
 var sound_on=true
 var speed=1.0
 var active_actions: Array[Dictionary]=[]
@@ -58,7 +67,8 @@ class TopLayer extends Control:
   game.view.paint_overlay(self)
 
 func _exit_tree() -> void:
- if OS.has_feature('web'):JavaScriptBridge.eval('window.dungeonClassicActive=false;')
+ if OS.has_feature('web'):
+  JavaScriptBridge.eval("window.dungeonClassicActive=false; window.dungeonSetTilt?.(false); delete window.dungeonTilt; delete window.dungeonSetTilt;")
 
 func _ready() -> void:
  if OS.has_feature('web'):JavaScriptBridge.eval('window.dungeonClassicActive=true;')
@@ -71,7 +81,10 @@ func _ready() -> void:
  overlay=TopLayer.new();overlay.z_index=100;overlay.game=self;overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(overlay)
  view=View.new(self)
  audio_engine=Audio.new(self);audio_engine.set_enabled(sound_on)
- if OS.has_feature('web'): install_web_touch()
+ if OS.has_feature('web'):
+  install_web_touch()
+  install_web_tilt()
+ else:tilt_available=OS.has_feature('mobile')
  if OS.has_feature('web'): qa_enabled=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))=='1'
  if qa_enabled:
   var seed_text=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('seed') || ''"))
@@ -108,7 +121,70 @@ func web_touch(args: Array) -> void:
   'touchstart':pointer_down()
   'touchmove':pointer_move()
   'touchend':pointer_up()
-  'touchcancel':press={};drag={};hover_card=-1
+  'touchcancel':press={};drag={};hover_card=-1;parallax_contact=false
+
+func install_web_tilt() -> void:
+ tilt_available=str(JavaScriptBridge.eval("window.isSecureContext && typeof window.DeviceOrientationEvent !== 'undefined' && navigator.maxTouchPoints > 0 ? 'yes' : 'no'"))=='yes'
+ if not tilt_available:return
+ web_tilt_callback=JavaScriptBridge.create_callback(web_tilt)
+ JavaScriptBridge.get_interface('window').dungeonTilt=web_tilt_callback
+ JavaScriptBridge.eval("""
+ (() => {
+  function sample(event) {
+   if (event.gamma == null || event.beta == null) return;
+   const angle=(screen.orientation?.angle ?? window.orientation ?? 0)*Math.PI/180;
+   const x=event.gamma/90, y=event.beta/90;
+   window.dungeonTilt?.(x*Math.cos(angle)+y*Math.sin(angle),-x*Math.sin(angle)+y*Math.cos(angle));
+  }
+  let ticket=0;
+  window.dungeonSetTilt=async enabled=>{
+   const current=++ticket;
+   window.removeEventListener('deviceorientation',sample);
+   if (!enabled) return;
+   try {
+    const Device=window.DeviceOrientationEvent;
+    const allowed=typeof Device.requestPermission!=='function' || await Device.requestPermission()==='granted';
+    if (current!==ticket) return;
+    if (allowed) window.addEventListener('deviceorientation',sample,{passive:true});
+    else window.dungeonTilt?.('denied');
+   } catch (_) {
+    if (current===ticket) window.dungeonTilt?.('denied');
+   }
+  };
+ })();
+ """)
+
+func web_tilt(args: Array) -> void:
+ if not tilt_enabled or args.is_empty():return
+ if args.size()==1:
+  tilt_enabled=false
+  notify('Inclinação indisponível. O parallax por toque continua ativo.')
+  return
+ record_tilt(Vector2(float(args[0]),float(args[1])))
+
+func record_tilt(sample: Vector2) -> void:
+ if not tilt_calibrated:
+  tilt_home=sample
+  tilt_calibrated=true
+ tilt_value=((sample-tilt_home)*2.4).limit_length()
+
+func toggle_tilt() -> void:
+ if not tilt_available or reduced_motion:return
+ tilt_enabled=not tilt_enabled
+ tilt_calibrated=false
+ tilt_value=Vector2.ZERO
+ if OS.has_feature('web'):
+  JavaScriptBridge.eval("window.dungeonSetTilt("+str(tilt_enabled)+");")
+
+func environment_lean() -> Vector2:
+ if reduced_motion or screen!='battle' or not panel.is_empty():return Vector2.ZERO
+ if tilt_enabled and not OS.has_feature('web'):
+  var gravity=Input.get_gravity()
+  if gravity.length_squared()>0.01:record_tilt(Vector2(gravity.x,-gravity.y)/9.81)
+ var touch=Vector2.ZERO
+ if parallax_contact and logical_size.x>0 and logical_size.y>0:
+  touch=(pointer/logical_size*2.0-Vector2.ONE).limit_length()
+ return (touch*0.74+(tilt_value if tilt_enabled else Vector2.ZERO)).limit_length()
 
 func load_profile() -> void:
  var raw=''
@@ -122,6 +198,9 @@ func load_profile() -> void:
  if data is Dictionary:
   var saved_level=data.get('difficulty',Rules.DEFAULT_AI_LEVEL)
   if saved_level is float or saved_level is int:difficulty=clampi(int(saved_level),0,Rules.AI_LEVELS.size()-1)
+  var saved_theme=data.get('arena_theme','tavern')
+  for i in range(ArenaRoom.THEMES.size()):
+   if saved_theme==ArenaRoom.THEMES[i].id:arena_theme=i
   reduced_motion=data.get('reduced_motion',false)==true
   profile.reduced_motion=reduced_motion
   profile.intro_seen=data.get('intro_seen',data.get('support_hint_seen',false))==true
@@ -133,10 +212,12 @@ func load_profile() -> void:
   if old is Dictionary:
    for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(old.get(key,0)))
  profile.difficulty=difficulty
+ profile.arena_theme=ArenaRoom.THEMES[arena_theme].id
 
 func save_profile() -> void:
  profile.reduced_motion=reduced_motion
  profile.difficulty=difficulty
+ profile.arena_theme=ArenaRoom.THEMES[arena_theme].id
  var raw=JSON.stringify(profile)
  if OS.has_feature('web'):JavaScriptBridge.eval("localStorage.setItem('"+STORAGE+"',"+JSON.stringify(raw)+")")
  else:
@@ -148,7 +229,7 @@ var safe_margin=Vector2.ZERO
 
 func layout_board() -> void:
  if previous_viewport!=size:
-  drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;previous_viewport=size
+  drag={};press={};hover_card=-1;selected_card=-1;selected_attacker=-1;parallax_contact=false;tilt_calibrated=false;tilt_value=Vector2.ZERO;previous_viewport=size
   queue_redraw()
   if OS.has_feature('web'):
    var raw=JavaScriptBridge.eval("JSON.stringify(['top','right','bottom','left'].map(s=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-'+s))||0))")
@@ -247,7 +328,7 @@ func _process(delta: float) -> void:
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
   var latest={} if active_actions.is_empty() else active_actions.back()
-  var snap={'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'environment':{'theme':profile.arena_theme,'portrait':portrait,'offset':[view.room.offset.x,view.room.offset.y],'light':[view.room.room_light.r,view.room.room_light.g,view.room.room_light.b]},'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -255,8 +336,8 @@ func rect_json(rect: Rect2) -> Dictionary:
 
 func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
- if view:
-  if screen=='battle' and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):draw_texture_rect(view.ROYAL_ARENA,Rect2(Vector2.ZERO,size),false)
+ if view and view.room.back.texture and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
+  draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
 
 func notify(message: String) -> void:
  toast_text=message;toast_time=2.1
@@ -344,6 +425,7 @@ func place_support(slot: int,index: int) -> void:
  else:notify('Apoio equipado. Toque nele para alternar ataque e defesa.')
 
 func pointer_down() -> void:
+ parallax_contact=true
  if not inspect_id.is_empty():inspect_id='';press={};return
  for i in range(view.buttons.size()-1,-1,-1):
   var item=view.buttons[i]
@@ -406,6 +488,7 @@ func pointer_move() -> void:
   selected_card=-1;selected_attacker=-1
 
 func pointer_up() -> void:
+ parallax_contact=false
  var held=press.duplicate(true);press={}
  if not drag.is_empty():
   var released=drag.duplicate(true);drag={}
@@ -490,6 +573,12 @@ func activate_button(id: String) -> void:
   'home':screen='home';panel='';inspect_id='';match_serial+=1;active_actions.clear();audio_engine.stop_music()
   'settings':panel='settings'
   'close':panel=''
+  'theme':
+   arena_theme=(arena_theme+1)%ArenaRoom.THEMES.size()
+   view.room.configure(logical_size,arena_theme,portrait,screen=='battle')
+   queue_redraw()
+   save_profile()
+  'tilt':toggle_tilt()
   'credits':panel='credits'
   'motion':
    reduced_motion=not reduced_motion
