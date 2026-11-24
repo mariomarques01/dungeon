@@ -92,6 +92,6 @@ func action_clip(id: String,element: String) -> String:
  if id in ['wolf','panther','serpent','gryphon','token_wolf']:return 'bite_hit'
  if id in ['treant']:return 'wood_hit'
  if id in ['stoneguard','golem']:return 'stone_hit'
- if id in ['orc','knight','shieldbearer','beetle','token_guard']:return 'steel_heavy'
- if id in ['scout','skeleton','token_skeleton']:return 'steel_light'
+ if id in ['knight','beetle']:return 'steel_heavy'
+ if id=='token_skeleton':return 'steel_light'
  return clip_for(element)

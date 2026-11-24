@@ -18,7 +18,7 @@ Toque em uma carta pronta e escolha **Trocar · 1 energia** para colocá-la no f
 
 Com 10/10 de energia, toque em **Lançar Erupção Solar** na barra abaixo da mão. A habilidade consome os 10 pontos, causa 6 de dano ao herói rival e concede 4 de armadura à sua heroína. Você também pode guardar a carga para jogar cartas.
 
-O conjunto tem **47 cartas colecionáveis**: 25 criaturas, 16 feitiços e 6 armadilhas, além de três fichas de invocação. Há Provocar, Escudo Divino, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
+O conjunto tem **44 cartas colecionáveis**: 22 criaturas, 16 feitiços e 6 armadilhas, além de três fichas de invocação. Há Provocar, Escudo Divino, Fúria dos Ventos, Veneno, Roubo de Vida, efeitos ao entrar e efeitos ao morrer. Ataques entre criaturas causam dano simultâneo. Feitiços de alvo, dano em área, cura, armadura, congelamento, compra e fortalecimento têm regras próprias.
 
 A coleção permite adicionar cartas, remover pelo contador e restaurar o baralho inicial. O limite é de duas cópias por carta e uma cópia por lendária. Todas as cartas estão disponíveis, sem compras.
 
@@ -71,7 +71,7 @@ As texturas usam compressão com qualidade 0,78. `scripts/optimize_web.py` separ
 
 As animações em `godot/scripts/tavern_fx.gd` usam desenho vetorial com contornos suavizados, preservando nitidez em telas de alta densidade sem acrescentar atlas pesados. Cada feitiço tem sua sequência: meteoros em área, raios ramificados, nevasca, projéteis de gelo, mísseis, raízes, cura, bênção, lâmina, vórtice, invocação de lobos, compra e cristal de mana. Criaturas possuem entradas por família, avanço/recuo, reação ao dano e morte; escudos, bloqueios, armadura e congelamento têm efeitos próprios. O áudio de manuseio é uma gravação curta e discreta de papel, com eventos separados para invocação e impacto.
 
-`godot --headless --path godot --script "$PWD/tests/tavern_fx.gd"` exercita as 44 sequências de carta com alvos legais e confirma que cada ação conclui e libera a interação. O teste do navegador também verifica o som de papel e a ausência do antigo som genérico de carga.
+`godot --headless --path godot --script "$PWD/tests/tavern_fx.gd"` exercita as 47 sequências de cartas e fichas com alvos legais e confirma que cada ação conclui e libera a interação. O teste do navegador também verifica o som de papel e a ausência do antigo som genérico de carga.
 
 Ao escolher uma carta, a elevação é suave e o elemento aparece fora da moldura, incluindo uma manifestação acima dela. Ao arrastar, a carta mantém sua aura e deixa um rastro da mesma cor; criaturas exibem um círculo no ponto de chegada. A aura acompanha quem ataca e reaparece no defensor ao receber dano ou bloquear. Conjuradores permanecem em posição enquanto lançam o ataque; criaturas corpo a corpo avançam até o alvo. O teste das 44 cartas também exercita os ataques das criaturas.
 

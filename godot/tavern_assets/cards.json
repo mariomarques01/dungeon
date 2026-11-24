@@ -1,16 +1,15 @@
 {
-  "scout": {
-    "id": "scout",
-    "name": "Batedor Goblin",
+  "ember_spark": {
+    "id": "ember_spark",
+    "name": "Centelha Viva",
     "kind": "minion",
     "cost": 1,
     "attack": 1,
     "health": 2,
-    "art": 0,
-    "element": "earth",
-    "fx": "steel",
+    "art": 10,
+    "element": "fire",
     "keywords": [],
-    "text": "Pequeno, veloz e sempre metido em confusão."
+    "text": "Uma pequena chama que ganhou vida."
   },
   "stoneguard": {
     "id": "stoneguard",
@@ -68,21 +67,6 @@
     "battlecry": "ping",
     "family": "dragons"
   },
-  "shieldbearer": {
-    "id": "shieldbearer",
-    "name": "Escudeiro da Aurora",
-    "kind": "minion",
-    "cost": 3,
-    "attack": 2,
-    "health": 4,
-    "art": 5,
-    "element": "earth",
-    "fx": "steel",
-    "keywords": [
-      "taunt"
-    ],
-    "text": "Provocar. Ninguém passa por sua guarda."
-  },
   "dryad": {
     "id": "dryad",
     "name": "Curandeira Silvestre",
@@ -104,7 +88,7 @@
     "attack": 4,
     "health": 2,
     "art": 7,
-    "element": "earth",
+    "element": "nature",
     "fx": "dark",
     "keywords": [],
     "text": "Caça veloz nas matas da taverna."
@@ -123,19 +107,6 @@
       "shield"
     ],
     "text": "Escudo Divino. Ignora o primeiro dano recebido."
-  },
-  "orc": {
-    "id": "orc",
-    "name": "Brutamontes Orc",
-    "kind": "minion",
-    "cost": 4,
-    "attack": 4,
-    "health": 4,
-    "art": 9,
-    "element": "earth",
-    "fx": "steel",
-    "keywords": [],
-    "text": "Força bruta, um machado e nenhuma paciência."
   },
   "firelord": {
     "id": "firelord",
@@ -186,7 +157,7 @@
     "attack": 4,
     "health": 5,
     "art": 13,
-    "element": "earth",
+    "element": "fire",
     "fx": "steel",
     "keywords": [
       "shield",
@@ -207,20 +178,6 @@
     "keywords": [],
     "text": "Ao morrer: invoca dois Esqueletos 1/1. Família: Mortos-vivos.",
     "deathrattle": "skeletons",
-    "family": "undead"
-  },
-  "skeleton": {
-    "id": "skeleton",
-    "name": "Soldado Esquecido",
-    "kind": "minion",
-    "cost": 1,
-    "attack": 2,
-    "health": 1,
-    "art": 15,
-    "element": "earth",
-    "fx": "dark",
-    "keywords": [],
-    "text": "Os mortos também têm contas a acertar. Família: Mortos-vivos.",
     "family": "undead"
   },
   "gryphon": {
@@ -607,16 +564,16 @@
     "token": true,
     "family": "wolves"
   },
-  "token_guard": {
-    "id": "token_guard",
-    "name": "Recruta Orc",
+  "token_pebble": {
+    "id": "token_pebble",
+    "name": "Centelha de Granito",
     "kind": "minion",
     "cost": 1,
     "attack": 1,
     "health": 1,
-    "art": 9,
+    "art": 1,
     "element": "earth",
-    "fx": "steel",
+    "fx": "earth",
     "keywords": [],
     "text": "Invocado pelo poder do rival.",
     "token": true

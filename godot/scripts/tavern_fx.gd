@@ -344,7 +344,7 @@ func event(p: Dictionary) -> void:
     for i in range(3):
      var point=at+Vector2((i-1)*28,40-t*75)
      for j in range(3):beam(point+Vector2(j*6,-18),point+Vector2(j*6+8,10),color,2,fade)
-   elif id in ['necro','skeleton','token_skeleton']:
+   elif id in ['necro','token_skeleton']:
     for i in range(6):glow(at+Vector2(sin(i*17+t*5)*44,40-t*100+i*5),9,Color('bb8cf7'),fade)
    elif element in ['nature','heal']:leaves(at,t,color,fade)
    elif element=='earth':impact(at,'earth',t,0.7)

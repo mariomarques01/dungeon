@@ -291,7 +291,7 @@ class HandFace extends Node2D:
   var previous=view.canvas
   view.canvas=self
   var tint=Color.WHITE if affordable else Color('898396')
-  view.paint_card(card_id,Rect2(Vector2.ZERO,card_size),0,tint,true)
+  view.paint_card(card_id,Rect2(Vector2.ZERO,card_size),0,tint,true,{},0,false)
   view.canvas=previous
 
 var hand_faces: Array[HandFace]=[]
@@ -1101,7 +1101,9 @@ func accumulate(event: Dictionary,at: Vector2,color: Color) -> void:
 func style(fill: Color,border: Color,radius=12,width=2) -> StyleBoxFlat:
  var key=[fill.to_rgba32(),border.to_rgba32(),radius,width]
  if styles.has(key):return styles[key]
- var s=StyleBoxFlat.new();s.bg_color=fill;s.border_color=border;s.set_border_width_all(width);s.set_corner_radius_all(radius);s.shadow_color=Color(0,0,0,0.45);s.shadow_size=7
+ var s=StyleBoxFlat.new();s.bg_color=fill;s.border_color=border;s.set_border_width_all(width);s.set_corner_radius_all(radius)
+ if fill.a>0:
+  s.shadow_color=Color(0,0,0,0.45);s.shadow_size=7
  styles[key]=s
  return s
 
@@ -1188,7 +1190,7 @@ func paint_base(c: CanvasItem) -> void:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
    var unit=info.unit
    var ready=int(info.side)==0 and int(unit.attacks)>0 and not game.target_locked({'side':0,'uid':uid})
-   var rim=Color('64b7ff') if info.side==0 else Color('ff8b57')
+   var rim=element_color(game.cards[unit.id].element)
    if ready:
     var outline=style(Color.TRANSPARENT,Color(rim,0.45 if game.reduced_motion else 0.45+0.2*sin(clock*3)),int(card_radius(rect)+3),3)
     canvas.draw_style_box(outline,rect.grow(4))
@@ -1324,7 +1326,48 @@ func card_stat(rect: Rect2,icon: String,value: int,color: Color) -> void:
  var number=Rect2(rect.position+Vector2(rect.size.x*0.43,0),rect.size*Vector2(0.49,1))
  card_text(str(value),number,int(rect.size.y*0.65))
 
-func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE,show_cost=false,unit: Dictionary={},side=0) -> void:
+func paint_card_motes(element: String,rect: Rect2,color: Color,phase: float) -> void:
+ if game.reduced_motion or rect.size.x<32:return
+ var size=rect.size
+ var scale_factor=size.x*0.026
+ for index in range(4):
+  var t=fposmod(clock*(0.28 if element=='wind' else 0.18)+phase+index*0.25,1.0)
+  var lane=0.18+index*0.21
+  var x=lane+sin(t*TAU+index)*0.059
+  var y=lerpf(0.59,0.24,t)
+  var ink=Color(color.lightened(0.40),sin(t*PI)*0.61)
+  if element=='nature':y=lerpf(0.23,0.59,t)
+  if element=='wind':
+   x=lerpf(0.18,0.80,t)
+   y=0.24+index*0.105+sin(t*TAU+index)*0.022
+  var at=rect.position+size*Vector2(x,y)
+  match element:
+   'fire':
+    canvas.draw_line(at,at+Vector2(-0.7,1.7)*scale_factor,ink,maxf(1,scale_factor*0.55),true)
+   'water':
+    canvas.draw_arc(at,scale_factor*(0.85+t*0.45),0,TAU,10,ink,maxf(1,scale_factor*0.42),true)
+   'earth':
+    canvas.draw_circle(at,scale_factor*(0.58+t*0.25),ink,true,-1,true)
+   'nature':
+    var stem=Vector2.from_angle(t*PI+index)*scale_factor
+    var blade=stem.orthogonal()*0.55
+    canvas.draw_colored_polygon(PackedVector2Array([at-stem,at+blade,at+stem,at-blade]),ink)
+   'wind':
+    canvas.draw_line(at-Vector2(1.6,0.0)*scale_factor,at+Vector2(1.8,-0.6)*scale_factor,ink,maxf(1,scale_factor*0.46),true)
+
+func paint_card_seal_motion(at: Vector2,radius: float,color: Color,phase: float) -> void:
+ if game.reduced_motion:return
+ var orbit=clock*1.5+phase*TAU
+ canvas.draw_arc(at,radius*0.79,orbit,orbit+1.25,10,Color(color.lightened(0.5),0.72),maxf(1.0,radius*0.105),true)
+
+func paint_card_selection(rect: Rect2) -> void:
+ var blue=Color('54dcff')
+ for band in range(3,0,-1):
+  var glow=rect.grow(float(band)*2.0)
+  canvas.draw_style_box(style(Color.TRANSPARENT,Color(blue,0.11*(4-band)),int(card_radius(rect))+band*2,4),glow)
+ canvas.draw_style_box(style(Color.TRANSPARENT,blue.lightened(0.4),int(card_radius(rect))+2,3),rect.grow(2))
+
+func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE,show_cost=false,unit: Dictionary={},side=0,animated=true) -> void:
  if rect.size.x<=0 or rect.size.y<=0:return
  var card: Dictionary=game.cards[id]
  var minion=card.kind=='minion'
@@ -1332,29 +1375,33 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE,show_cost=fals
  var local=Rect2(-rect.size/2,rect.size)
  var size=local.size
  var radius=card_radius(local)
+ var color=element_color(card.element)
+ var phase=float(int(card.art)%7)/7.0
  if unit.is_empty():
   var grid=5 if minion else 4
   rounded_card_picture(slice(creatures if minion else spells,int(card.art),grid,grid),local,radius,tint)
- canvas.draw_style_box(style(Color.TRANSPARENT,Color(GOLD,tint.a),int(radius),maxi(1,int(size.x*0.020))),local)
+ if animated:paint_card_motes(card.element,local,color,phase)
+ canvas.draw_style_box(style(Color.TRANSPARENT,Color(color,tint.a*0.27),int(radius)+2,2),local.grow(2))
+ canvas.draw_style_box(style(Color.TRANSPARENT,Color(color.lightened(0.22),tint.a),int(radius),maxi(1,int(size.x*0.026))),local)
 
  # Battle portraits provide live stats; hand and collection use the card definition.
  var corner=minf(size.x*0.132,size.y*0.165)
  if minion:
   var health=int(unit.get('health',card.health))
   var heart_at=local.position+Vector2(corner*1.22,corner*1.14)
-  card_polygon(Array(heart),heart_at,corner/23,Color('a92337'),Color('f3cb90'))
+  card_polygon(Array(heart),heart_at,corner/23,Color('a92337'),color.lightened(0.34))
   card_text(str(health),Rect2(heart_at-Vector2(corner,corner*0.84),Vector2(corner*2,corner*1.55)),int(corner*1.25))
- var color=element_color(card.element)
  var seal=local.end.x-corner*1.19
  var at=Vector2(seal,local.position.y+corner*1.14)
  canvas.draw_circle(at,corner,Color('261e29'),true,-1,true)
  canvas.draw_circle(at,corner*0.85,color.darkened(0.50),true,-1,true)
- canvas.draw_arc(at,corner,0,TAU,24,Color('efce8c'),maxf(1.0,corner*0.10),true)
+ canvas.draw_arc(at,corner,0,TAU,24,color.lightened(0.28),maxf(1.0,corner*0.10),true)
  card_icon(card.element,at,corner,color.lightened(0.20))
+ if animated:paint_card_seal_motion(at,corner,color,phase)
 
  var font_size=maxi(9,int(minf(size.x*0.104,size.y*0.092)))
  var label=Rect2(local.position+size*Vector2(0.045,0.672),size*Vector2(0.91,0.112))
- canvas.draw_style_box(style(Color('11141eef'),Color('8b683c'),int(radius*0.44),1),label)
+ canvas.draw_style_box(style(Color('11141eef'),color.darkened(0.44),int(radius*0.44),1),label)
  card_text(card.name,label.grow(-2),font_size,PAPER)
  if minion:
   var attack=int(card.attack) if unit.is_empty() else game.rules.effective_attack(side,unit)
@@ -1366,7 +1413,7 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE,show_cost=fals
   var token=Vector2(0,local.position.y+size.y*0.875)
   var token_radius=minf(corner,size.y*0.075)
   canvas.draw_circle(token,token_radius,Color('161925'),true,-1,true)
-  canvas.draw_arc(token,token_radius,0,TAU,24,GOLD,maxf(1.0,token_radius*0.09),true)
+  canvas.draw_arc(token,token_radius,0,TAU,24,color,maxf(1.0,token_radius*0.09),true)
   card_icon(CARD_EFFECT_ICONS.get(card.effect,'damage'),token,token_radius*0.9,color.lightened(0.22))
  if show_cost:
   var gem=Vector2(0,local.position.y+corner*0.97)
@@ -1421,8 +1468,7 @@ func paint_trap_reveal(reveal: Dictionary) -> void:
   paint_trap_back(rect)
   return
  var card=game.cards[reveal.id]
- canvas.draw_style_box(style(Color('39274c'),Color('e9bbff'),4,2),rect)
- draw_card_picture(slice(spells,int(card.art),4,4),rect.grow(-minf(3,rect.size.x*0.15)))
+ paint_card(reveal.id,rect)
  if game.reduced_motion or progress>=0.88:
   var label=Rect2(center+Vector2(-slot.size.x*0.85,size.y*0.48),Vector2(slot.size.x*1.7,24))
   canvas.draw_style_box(style(Color('39274c'),Color('e9bbff'),4,1),label)
@@ -1452,17 +1498,40 @@ func drag_preview() -> Dictionary:
  var area=drag.kind=='card' and game.cards[drag.id].get('effect','') in ['aoe','blizzard']
  if not area and game.target_locked(target):return {}
  var label=game.rules.health_preview(0,drag,target)
- return {} if label.is_empty() else {'text':label,'target':target}
+ if label.is_empty():return {}
+ var marker=label.right(1) if label.ends_with(' ▲') or label.ends_with(' ▼') else ''
+ return {'text':label,'target':target,'marker':marker}
+
+func paint_drag_result(preview: Dictionary) -> void:
+ var at=target_center(preview.target)
+ var marker: String=preview.marker
+ var value: String=preview.text
+ if not marker.is_empty() and unit_views.has(preview.target.get('uid',-1)):
+  var unit=unit_views[preview.target.uid]
+  var rect: Rect2=unit.get('draw_rect',unit.rect)
+  var size=clampf(rect.size.x*0.34,22,40)
+  var badge_center=rect.position+rect.size*Vector2(0.5,0.36)
+  var badge_rect=Rect2(badge_center-Vector2.ONE*size/2,Vector2.ONE*size)
+  var color=Color('92ffaf') if marker=='▲' else Color('ff946b')
+  canvas.draw_style_box(style(Color('202330'),color,int(size/3),2),badge_rect)
+  card_text(marker,badge_rect,int(size*0.64),color)
+  at=rect.position+rect.size*Vector2(0.5,0.90)
+  value=value.left(-2)
+ var label_rect=Rect2(at-Vector2(83,40),Vector2(166,35))
+ canvas.draw_style_box(style(Color('292332'),GOLD,8,2),label_rect)
+ text(value,label_rect,23,Color('a7f4bf') if value.begins_with('+') else Color('ffb69c'),true,true)
 
 func paint_next_card(player: Dictionary) -> void:
  var next_id: String=game.rules.next_card(0)
  var width=minf(layout.w*0.085,layout.h*0.068)
  var rect=Rect2(Vector2(layout.w*0.68,layout.h*0.012),Vector2(width,width*1.38))
- canvas.draw_style_box(style(INK,GOLD,4,2),rect)
  if not next_id.is_empty():
   var card=game.cards[next_id]
   var creature=card.kind=='minion'
-  draw_card_picture(slice(creatures if creature else spells,int(card.art),5 if creature else 4,5 if creature else 4),rect.grow(-3))
+  var grid=5 if creature else 4
+  rounded_card_picture(slice(creatures if creature else spells,int(card.art),grid,grid),rect,card_radius(rect),Color.WHITE)
+  canvas.draw_style_box(style(Color.TRANSPARENT,element_color(card.element),int(card_radius(rect)),2),rect)
+ else:canvas.draw_style_box(style(INK,GOLD,4,2),rect)
  var label=Rect2(rect.position.x-16,rect.end.y+4,layout.w*0.20,22)
  text('Próxima carta' if not next_id.is_empty() else 'Baralho vazio',label,16,GOLD,true,true)
  if not next_id.is_empty():
@@ -1555,6 +1624,8 @@ func paint_battle() -> void:
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   paint_card(unit.id,rect,0,Color.WHITE,false,unit,int(info.side))
+  if info.side==0 and (game.selected_attacker==uid or (game.drag.get('kind','')=='unit' and game.drag.uid==uid)):
+   paint_card_selection(rect)
   if unit.attacks==0 and unit.delay>0:
    radial_cooldown(rect.position+rect.size*Vector2(0.5,0.43),rect.size.x*0.10,unit.delay)
   elif info.side==0 and unit.attacks>0 and state.effective_attack(info.side,unit)>0 and not game.target_locked({'side':0,'uid':uid}):
@@ -1574,6 +1645,12 @@ func paint_battle() -> void:
   canvas.draw_set_transform_matrix(Transform2D(hand.angle,hand.rect.get_center())*Transform2D(0,-hand.rect.get_center()))
   var remaining=float(state.players[0].cooldowns.get(hand.index,0))
   var card=game.cards[hand.id]
+  var color=element_color(card.element)
+  var phase=float(int(card.art)%7)/7.0
+  paint_card_motes(card.element,hand.rect,color,phase)
+  var corner=minf(hand.rect.size.x*0.132,hand.rect.size.y*0.165)
+  var seal=Vector2(hand.rect.end.x-corner*1.19,hand.rect.position.y+corner*1.14)
+  paint_card_seal_motion(seal,corner,color,phase)
   var ready=hand.ready
   var bit=1<<int(hand.index)
   if ready:
@@ -1582,21 +1659,20 @@ func paint_battle() -> void:
    ready_mask|=bit
   else:ready_mask &= ~bit
   if not game.reduced_motion and ready and pulse_ends[hand.index]>clock:
-   canvas.draw_rect(hand.rect.grow(3),Color(GOLD,(pulse_ends[hand.index]-clock)/0.6),false,5,true)
+   var glow=hand.rect.grow(3)
+   canvas.draw_style_box(style(Color.TRANSPARENT,Color(color,0.32),int(card_radius(glow)),3),glow)
   if remaining>0:
    var center=hand.rect.position+hand.rect.size*Vector2(0.5,0.38)
    var radius=hand.rect.size.x*0.16
    radial_cooldown(center,radius,remaining)
-  elif ready:
-   canvas.draw_rect(hand.rect.grow(2),Color(GOLD,0.30),false,5,true)
-   canvas.draw_rect(hand.rect,GOLD,false,2,true)
-  elif card.cost<=state.players[0].mana:
+  elif not ready and card.cost<=state.players[0].mana:
    var reason='Campo cheio' if hand.full else 'Sem alvo'
    text(reason,Rect2(hand.rect.position+hand.rect.size*Vector2(0,0.38),hand.rect.size),maxi(9,int(hand.rect.size.x*0.12)),PAPER,true,true)
   if card.cost>state.players[0].mana:
    var tag=Rect2(hand.rect.position+hand.rect.size*Vector2(0.12,0.39),hand.rect.size*Vector2(0.76,0.14))
    canvas.draw_rect(tag,INK)
    text('Falta %d'%int(card.cost-state.players[0].mana),tag,int(tag.size.y*0.76),PAPER,true,true)
+  if game.selected_card==hand.index:paint_card_selection(hand.rect)
   canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
  if game.drag.is_empty():
   if game.selected_card>=0:
@@ -1609,17 +1685,14 @@ func paint_battle() -> void:
   if game.drag.kind=='card':
    var held_rect=held_card_rect()
    paint_card(game.drag.id,held_rect,0,Color.WHITE,true)
+   paint_card_selection(held_rect)
 
   else:
    var guard=taunt_pull_target(game.drag,game.target_at(game.pointer))
    if guard.is_empty():arrow(game.drag.origin,game.pointer,Color('ed694a'))
    else:fx.taunt_pull(game.drag.origin,game.pointer,target_center(guard))
   var preview=drag_preview()
-  if not preview.is_empty():
-   var at=target_center(preview.target)
-   var label_rect=Rect2(at-Vector2(83,40),Vector2(166,35))
-   canvas.draw_style_box(style(Color('292332'),GOLD,8,2),label_rect)
-   text(preview.text,label_rect,23,Color('a7f4bf') if preview.text.begins_with('+') else Color('ffb69c'),true,true)
+  if not preview.is_empty():paint_drag_result(preview)
  for anim in game.active_actions:
   var anim_time=anim.age
   if not game.reduced_motion and anim.kind=='card' and anim_time<0.62:

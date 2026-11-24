@@ -38,7 +38,7 @@ Comparadas aos apoios recorrentes, as armadilhas oferecem proteção imediata ou
 | Família | Membros |
 | --- | --- |
 | Lobos | Lobo Prateado e Lobo Espectral |
-| Mortos-vivos | Tecelão de Ossos, Soldado Esquecido e Esqueleto |
+| Mortos-vivos | Tecelão de Ossos e Esqueleto |
 | Dragões | Draco de Brasa, Dragão Âmbar e Serpe do Inverno |
 
 Com dois ou mais membros vivos da mesma família no mesmo campo, cada membro recebe +1 de ataque e a insígnia de ataque fica verde. Fichas contam. O bônus vale em ataques e contra-ataques, soma-se a outros efeitos de ataque e desaparece assim que sobrar um único membro vivo. Ter um terceiro membro amplia o número de criaturas beneficiadas. O bônus individual continua em +1, o que limita o crescimento da sinergia em campos cheios.
