@@ -127,6 +127,7 @@ func run() -> void:
   push_error('Rematch inherited event banners');failures+=1
  check_haptic_routes()
  check_status_feedback(game)
+ check_environment(game)
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 
@@ -311,3 +312,39 @@ func check_status_feedback(game) -> void:
  var restored=game.rules.events.filter(func(e):return e.kind=='heal' and e.has('drained_from'))
  if restored.size()!=1 or restored[0].target.side!=1 or restored[0].drained_from.uid!=challenger.uid:
   push_error('Retaliation must send life steal to the defending hero');failures+=1
+
+
+func check_environment(game) -> void:
+ game.start_match()
+ game.reduced_motion=false
+ var room=game.view.room
+ var textures={}
+ for theme in range(room.THEMES.size()):
+  for is_portrait in [false,true]:
+   var size=Vector2(760,1350) if is_portrait else Vector2(1280,800)
+   room.configure(size,theme,is_portrait,true)
+   textures[room.back.texture.resource_path]=true
+   if room.middle.position!=size/2 or (room.back.texture.get_width()<room.back.texture.get_height())!=is_portrait:
+    push_error('Theme must use orientation-specific art with a fixed playing surface');failures+=1
+ if textures.size()!=6 or room.lights.size()!=2 or room.smoke.size()!=2:
+  push_error('Expected six theme variants and two torches with light and smoke');failures+=1
+ game.view.prepare()
+ game.parallax_contact=true
+ game.pointer=game.logical_size*Vector2(0.8,0.5)
+ game.view.tick(0.2)
+ if room.offset.x<=0 or room.back.position.x>=room.middle.position.x or room.front.position.x<=room.middle.position.x:
+  push_error('Touch must shift scenery layers without moving the board');failures+=1
+ game.parallax_contact=false
+ game.view.begin({'kind':'card','card_kind':'spell','element':'fire'})
+ game.view.tick(0.12)
+ if room.room_light.r<=1 or not room.motes.emitting or not room.smoke[0].emitting:
+  push_error('A fire cast must brighten the scenery while ambient emitters are active');failures+=1
+ game.view.begin({'kind':'card','card_kind':'spell','element':'dark'})
+ game.view.tick(0.2)
+ if room.room_light.r>=1:
+  push_error('A dark cast must dim the scenery');failures+=1
+ game.reduced_motion=true
+ game.view.tick(0.01)
+ if room.offset!=Vector2.ZERO or room.room_light!=Color.WHITE or room.motes.emitting or room.smoke[0].emitting:
+  push_error('Reduced motion must neutralize scenery motion and flashes');failures+=1
+ game.reduced_motion=false

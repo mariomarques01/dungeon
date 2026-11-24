@@ -6,6 +6,7 @@ const HEAVY_DAMAGE=5
 const CRITICAL_DAMAGE=8
 const HIT_FLASH_SECONDS=0.055
 const HIT_RECOIL_SECONDS=0.28
+const ArenaRoom=preload("res://scripts/tavern_environment.gd")
 const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
 var game
 var fx
@@ -90,6 +91,7 @@ func update_burst_speed() -> void:
   for node in group:node.speed_scale=game.speed
 
 func stop_motion() -> void:
+ room.reset_motion()
  if reflow:reflow.kill()
  reflow_progress=1.0
  reflow_from.clear()
@@ -145,12 +147,11 @@ var scenery=[]
 var fragment_cache={}
 var styles={}
 var text_layouts={}
+var room: ArenaRoom
 var arena_layer: Node2D
 var base_layer: Node2D
 var arena_size=Vector2.ZERO
 var arena_screen=''
-var board: Texture2D
-var portrait_board: Texture2D
 const SLOT_ZOOM=1.22
 const SLOT_COLUMNS=[89,141,192,243,295]
 const ROYAL_ARENA = preload("res://tavern_assets/royal/arena.webp")
@@ -490,6 +491,8 @@ var clock=0.0
 func _init(owner) -> void:
  hand_shader.code="shader_type canvas_item; uniform bool muted=false; void fragment(){ if(muted){COLOR.rgb=mix(COLOR.rgb,vec3(dot(COLOR.rgb,vec3(0.299,0.587,0.114))),0.85);} }"
  game=owner
+ room=ArenaRoom.new()
+ game.art_layer.add_child(room)
  arena_layer=BaseLayer.new()
  arena_layer.owner_view=weakref(self)
  arena_layer.terrain=true
@@ -498,8 +501,6 @@ func _init(owner) -> void:
  base_layer.owner_view=weakref(self)
  game.art_layer.add_child(base_layer)
  fx=preload("res://scripts/tavern_fx.gd").new(self)
- board=load('res://tavern_assets/board.png')
- portrait_board=load('res://tavern_assets/board_portrait.png') if ResourceLoader.exists('res://tavern_assets/board_portrait.png') else board
  creatures=load('res://tavern_assets/creatures.png'); spells=load('res://tavern_assets/spells.png'); frames=load('res://tavern_assets/frames.png')
  var white_shader=Shader.new()
  white_shader.code="shader_type canvas_item; void fragment(){ COLOR.rgb=vec3(1.0); }"
@@ -561,13 +562,15 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
   node.material.set_shader_parameter('uv_rect',Vector4(region.position.x/size.x,region.position.y/size.y,region.size.x/size.x,region.size.y/size.y))
 
 func tick(delta: float) -> void:
+ room.configure(game.logical_size,game.arena_theme,game.portrait,game.screen=='battle')
+ room.advance(delta,game.environment_lean(),game.reduced_motion,clock)
  var lit=game.screen=='battle' and not game.reduced_motion
  if lit and torches.is_empty():
   for i in range(2):torches.append(emitter(5,true))
  for i in range(torches.size()):
   var torch=torches[i]
-  torch.position=game.logical_size*Vector2(0.285 if i==0 else 0.715,0.069)
-  torch.color=Color('ffbb55')
+  torch.position=room.torch_position(i)
+  torch.color=ArenaRoom.THEMES[game.arena_theme].torch
   torch.visible=lit
   torch.emitting=lit
  shake_left=maxf(0,shake_left-delta)
@@ -603,8 +606,6 @@ func geometry() -> void:
  var arena_scale=Vector2(w/384.0,h/512.0)
  layout.slot_sizes=[]
  layout.slots=[[],[]]
- layout.slot_sources=[[],[]]
- var texture_scale=ROYAL_ARENA.get_size()/Vector2(384,512)
  layout.player_row=282*arena_scale.y
  layout.enemy_row=170.5*arena_scale.y
  for side in range(2):
@@ -613,9 +614,7 @@ func geometry() -> void:
   layout.slot_sizes.append(size)
   for x in SLOT_COLUMNS:
    var center=Vector2(x*arena_scale.x,layout.player_row if side==0 else layout.enemy_row)
-   var floor_sample=Rect2(42,258 if side==0 else 139,22,54)
    layout.slots[side].append(Rect2(center-size/2,size))
-   layout.slot_sources[side].append(Rect2(floor_sample.position*texture_scale,floor_sample.size*texture_scale))
  layout.player_drop=Rect2(w*0.045,h*0.468,w*0.91,h*0.205)
  layout.board_zone=Rect2(w*0.035,h*0.15,w*0.93,h*0.57)
  var gold_width=minf(w*0.15,h*0.118)
@@ -686,6 +685,7 @@ func held_card_rect() -> Rect2:
 
 func prepare() -> void:
  used={}; geometry()
+ room.configure(game.logical_size,game.arena_theme,game.portrait,game.screen=='battle')
  if arena_size!=game.logical_size or arena_screen!=game.screen:
   arena_size=game.logical_size
   arena_screen=game.screen
@@ -793,9 +793,13 @@ func prepare() -> void:
  if game.panel=='settings':
   var rect=panel_rect()
   button('mute',Rect2(rect.position+Vector2(45,105),Vector2(rect.size.x-90,55)),'SOM LIGADO' if game.sound_on else 'SOM DESLIGADO')
-  button('speed',Rect2(rect.position+Vector2(45,177),Vector2(rect.size.x-90,55)),'ANIMAÇÕES ×'+str(game.speed))
-  button('motion',Rect2(rect.position+Vector2(45,321),Vector2(rect.size.x-90,55)),'REDUZIR MOVIMENTO · '+('SIM' if game.reduced_motion else 'NÃO'))
-  button('credits',Rect2(rect.position+Vector2(45,249),Vector2(rect.size.x-90,55)),'CRÉDITOS DE ÁUDIO')
+  button('speed',Rect2(rect.position+Vector2(45,169),Vector2(rect.size.x-90,55)),'ANIMAÇÕES ×'+str(game.speed))
+  button('motion',Rect2(rect.position+Vector2(45,297),Vector2(rect.size.x-90,55)),'REDUZIR MOVIMENTO · '+('SIM' if game.reduced_motion else 'NÃO'))
+  button('credits',Rect2(rect.position+Vector2(45,233),Vector2(rect.size.x-90,55)),'CRÉDITOS DE ÁUDIO')
+  button('theme',Rect2(rect.position+Vector2(45,361),Vector2(rect.size.x-90,55)),'TEMA · '+ArenaRoom.THEMES[game.arena_theme].name.to_upper())
+  if game.tilt_available:
+   var label='INCLINAÇÃO · '+('SIM' if game.tilt_enabled else 'NÃO')
+   button('tilt',Rect2(rect.position+Vector2(45,425),Vector2(rect.size.x-90,55)),label,not game.reduced_motion)
   button('close',Rect2(rect.position+Vector2(rect.size.x-58,14),Vector2(42,42)),'×')
  if game.panel=='credits': button('close',Rect2(panel_rect().position+Vector2(panel_rect().size.x-58,14),Vector2(42,42)),'×')
  if game.panel=='pause':
@@ -899,6 +903,8 @@ func target_center(target: Dictionary) -> Vector2:
  return Vector2(layout.w/2,layout.player_row)
 
 func begin(action: Dictionary) -> void:
+ if not game.reduced_motion and action.get('card_kind','')=='spell':
+  room.illuminate(action.get('element','arcane'))
  effect_history.append({'phase':'cast','id':action.get('id','power'),'kind':action.kind,'element':action.get('element','arcane')})
  if effect_history.size()>60:effect_history.pop_front()
 
@@ -1041,18 +1047,15 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 
 func paint_terrain(c: CanvasItem) -> void:
  canvas=c
- var bounds=Rect2(Vector2.ZERO,game.logical_size)
  if game.screen=='battle':
-  canvas.draw_rect(bounds,Color('19132b'))
-  canvas.draw_texture_rect(ROYAL_ARENA,bounds,false)
   for side in range(2):
    for column in range(SLOT_COLUMNS.size()):
     var slot: Rect2=layout.slots[side][column]
-    canvas.draw_texture_rect_region(ROYAL_ARENA,slot,layout.slot_sources[side][column])
+    canvas.draw_rect(slot,Color(0.07,0.06,0.10,0.17))
     canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
  else:
-  canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
- if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
+  canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.42))
+
 func hero_hit_age(side: int) -> float:
  return clampf(clock+HIT_RECOIL_SECONDS-hit_until[side],0,HIT_RECOIL_SECONDS)
 
@@ -1076,7 +1079,7 @@ func paint_base(c: CanvasItem) -> void:
    for hero in hero_views:
     var age=hero_hit_age(hero.side)
     var hit=1-age/HIT_RECOIL_SECONDS
-    canvas.draw_texture_rect_region(ROYAL_ARENA,hero_hit_rect(hero,age),hero_source(hero.rect),Color(1,1-hit*0.55,1-hit*0.55))
+    if hit>0:canvas.draw_texture_rect_region(ROYAL_ARENA,hero_hit_rect(hero,age),hero_source(hero.rect),room.room_light*Color(1,1-hit*0.55,1-hit*0.55))
    if river_until>clock:
     var t=1-(river_until-clock)/0.55
     canvas.draw_set_transform_matrix(Transform2D(0,Vector2(1,0.12),0,Vector2(layout.w*river_x,layout.h*0.452)))
@@ -1084,7 +1087,7 @@ func paint_base(c: CanvasItem) -> void:
     canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
    if sun_until>clock:
     canvas.draw_circle(Vector2(layout.w*0.5,layout.h*0.452),12+18*(sun_until-clock),Color(1,0.76,0.28,(sun_until-clock)*1.6))
-   if crowd_until>clock:
+   if crowd_until>clock and game.arena_theme==0:
     for side in [0.07,0.93]:
      var r=Rect2(layout.w*(side-0.045),layout.h*0.085,layout.w*0.09,layout.h*0.04)
      var shifted=r
