@@ -51,6 +51,10 @@ var toast_time=0.0
 var clock=0.0
 var match_serial=0
 var rewarded=false
+const QA_SPELLS=['fireball','meteor','bolt','missiles','thunderstorm','frost','blizzard','healing','blessing','roots','pack','barrier','vortex','rune_blade','crystal','wisdom']
+var qa_spell_preview=false
+var qa_spell_index=0
+var qa_spell_delay=0.0
 var qa_enabled=false
 var qa_seed=-1
 var qa_sample_start=0
@@ -85,7 +89,10 @@ func _ready() -> void:
   install_web_touch()
   install_web_tilt()
  else:tilt_available=OS.has_feature('mobile')
- if OS.has_feature('web'): qa_enabled=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))=='1'
+ if OS.has_feature('web'):
+  var mode=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('qa') || ''"))
+  qa_enabled=mode in ['1','fx']
+  qa_spell_preview=mode=='fx'
  if qa_enabled:
   var seed_text=str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('seed') || ''"))
   if seed_text.is_valid_int():qa_seed=seed_text.to_int()
@@ -303,7 +310,8 @@ func _process(delta: float) -> void:
   view.tick(battle_delta)
   audio_engine.update(delta)
  layout_board()
- advance_battle(battle_delta*speed)
+ if qa_spell_preview:advance_spell_preview(battle_delta)
+ else:advance_battle(battle_delta*speed)
  if not press.is_empty() and drag.is_empty() and clock-float(press.time)>0.6 and press.kind in ['card','unit','collection']:
   inspect_id=press.id;press={};selected_card=-1
  view.prepare();overlay.queue_redraw()
@@ -330,6 +338,34 @@ func _process(delta: float) -> void:
   var latest={} if active_actions.is_empty() else active_actions.back()
   var snap={'environment':{'theme':profile.arena_theme,'portrait':portrait,'offset':[view.room.offset.x,view.room.offset.y],'light':[view.room.room_light.r,view.room.room_light.g,view.room.room_light.b]},'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect),'action':rect_json(item.action),'count':item.count}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
+
+func advance_spell_preview(delta: float) -> void:
+ if not active_actions.is_empty():
+  advance_actions(delta)
+  return
+ qa_spell_delay-=delta
+ if qa_spell_delay>0:return
+ screen='battle'
+ panel=''
+ rules.start(Rules.DEFAULT_DECK,rules.rival_deck(),69,true)
+ var ally=rules.spawn(0,'stoneguard')
+ var enemy=rules.spawn(1,'stoneguard')
+ rules.spawn(1,'wolf')
+ var id: String=QA_SPELLS[qa_spell_index]
+ rules.players[0].hand=[id]
+ rules.players[0].mana=10
+ rules.players[0].health=20
+ view.reset_effects()
+ view.prepare()
+ var target={}
+ match cards[id].get('target','none'):
+  'friendly':target={'side':0,'hero':true}
+  'friendly_minion':target={'side':0,'uid':ally.uid}
+  'enemy','enemy_minion':target={'side':1,'uid':enemy.uid}
+ request_play(0,target)
+ notify(cards[id].name)
+ qa_spell_index=(qa_spell_index+1)%QA_SPELLS.size()
+ qa_spell_delay=0.75
 
 func rect_json(rect: Rect2) -> Dictionary:
  return {'x':rect.position.x,'y':rect.position.y,'w':rect.size.x,'h':rect.size.y}

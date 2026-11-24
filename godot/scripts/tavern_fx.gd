@@ -75,8 +75,8 @@ func ranged(id: String) -> bool:
  return id in ['apprentice','archmage','drake','dragon','demon','firelord','frostling','wyrm','necro','dryad','familiar','phoenix']
 
 func aura(id: String,rect: Rect2,strength=1.0,phase=0.0) -> void:
- c=v.canvas
  var card=v.game.cards.get(id,{})
+ c=v.canvas
  if card.is_empty():return
  var element=str(card.get('fx',card.element));var color=v.element_color(card.element)
  var center=rect.get_center();var top=rect.position.y
@@ -142,7 +142,6 @@ func action(a: Dictionary,time: float) -> void:
  if a.is_empty():return
  var element=str(a.get('fx',a.get('element','wind')));var id=str(a.get('id',''))
  var color=v.element_color(element);var origin: Vector2=a.origin;var dest: Vector2=a.destination
- var card=v.game.cards.get(id,{})
  if a.kind=='power':
   var charge=clampf(time/0.52,0,1)
   var focus=origin.lerp(dest,smoothstep(0.12,0.52,time))
@@ -185,37 +184,87 @@ func action(a: Dictionary,time: float) -> void:
    else:
     impact(dest,'fire',clampf((time-0.52)/0.60,0,1),fade)
     shield(origin,1.25,Color('ffda70'),fade)
-  'meteor':
-   var row=v.layout.enemy_row if a.get('side',0)==0 else v.layout.player_row
-   for i in range(5):
-    var end=Vector2(v.layout.w*(0.22+i*0.14),row+sin(i*12)*28)
-    projectile(end+Vector2(-170,-320),end,clampf((time-i*0.035)/0.42,0,1),'fire',color)
-    if time>0.46:impact(end,'fire',clampf((time-0.46)/0.6,0,1),fade,'meteor')
-  'thunderstorm','blizzard':
-   var row=v.layout.enemy_row if a.get('side',0)==0 else v.layout.player_row
-   for i in range(5):
-    var end=Vector2(v.layout.w*(0.20+i*0.15),row)
-    if id=='thunderstorm':lightning(end-Vector2(22,170),end,time,color,fade)
-    else:
-     for j in range(3):shard(end+Vector2(sin(i*17+j)*32,-120+fmod(time*230+j*53,170)),1.8,24,Color('c1f8ff'),fade)
-    if time>0.48:impact(end,element,clampf((time-0.48)/0.6,0,1),fade)
-  'missiles':
+  'fireball','meteor','bolt','missiles','thunderstorm','frost','blizzard','healing','blessing','roots','pack','barrier','vortex','rune_blade','crystal','wisdom':
+   spell(a,time,element,color)
+  _:
+   if time<0.52:projectile(origin,dest,t,element,color)
+   else:impact(dest,element,clampf((time-0.52)/0.65,0,1),fade,id)
+# The impact clock comes from the scheduled action. Random missiles acquire
+# their real endpoints only once the rules have resolved their hits.
+func spell(a: Dictionary,time: float,element: String,color: Color) -> void:
+ var id: String=a.id
+ var origin: Vector2=a.origin
+ var dest: Vector2=a.destination
+ var row: float=v.layout.enemy_row if a.side==0 else v.layout.player_row
+ if id in ['meteor','thunderstorm','blizzard']:dest.y=row
+ if id=='barrier':dest=(v.layout.player_hero if a.side==0 else v.layout.enemy_hero).get_center()
+ var hit: float=a.impact
+ var t=smoothstep(hit*0.24,hit,time)
+ var age=clampf((time-hit)/(a.duration-hit),0,1)
+ var fade=1.0-smoothstep(0.24,1.0,age)
+ if time<hit:
+  if id in ['fireball','meteor']:
+   var count=3 if id=='meteor' else 1
+   for i in range(count):
+    var end=dest+Vector2((i-(count-1)*0.5)*v.layout.w*0.23,0)
+    var apex=end+Vector2(-85,-215)
+    var head=origin.lerp(apex,smoothstep(0,0.42,t)).lerp(end,smoothstep(0.42,1,t))
+    c.draw_circle(end,11+18*t,Color(0.12,0.055,0.02,t*0.38),true,-1,true)
+    glow(head,12+14*t,color)
+    shard(head-Vector2(7,17)*t,1.2,28*t,Color('ffd78c'))
+  elif id=='missiles':
+   for i in range(3):glow(origin+Vector2.from_angle(i*TAU/3+t*2)*24,10,color)
+  elif id in ['roots','healing','blessing','pack']:
+   var bud=origin.lerp(dest,t)-Vector2.DOWN*sin(t*PI)*38
+   glow(bud,14,color)
    for i in range(3):
-    var end=dest
-    var points=a.get('impact_points',[])
-    if i<points.size():end=points[i]
-    var flight=clampf((time-0.52)/0.3,0,1)
-    var p=origin.lerp(end,flight)+Vector2(sin(flight*PI)*(i-1)*85,-sin(flight*PI)*80)
-    if time<0.52:p=origin+Vector2.from_angle(i*TAU/3+time*5)*30
-    if time<0.82:glow(p,14,color)
-    elif time<1.3:impact(end,'arcane',clampf((time-0.82)/0.48,0,1),fade)
+    var direction=(dest-origin).angle()+sin(i*2+t*5)*0.6
+    shard(bud-Vector2.from_angle(direction)*i*11,direction,11-i,color)
+  else:projectile(origin,dest,t,element,color)
+  return
+ if id in ['fireball','meteor']:
+  var count=3 if id=='meteor' else 1
+  for i in range(count):
+   var end=dest+Vector2((i-(count-1)*0.5)*v.layout.w*0.23,0)
+   var radius=18+28*smoothstep(0,0.3,age)
+   c.draw_set_transform(end,0,Vector2(1,0.38))
+   c.draw_circle(Vector2.ZERO,radius,Color(0.16,0.06,0.03,0.62*fade))
+   c.draw_arc(Vector2.ZERO,radius,0,TAU,32,Color(color,fade),3,true)
+   c.draw_set_transform(Vector2.ZERO,0,Vector2.ONE)
+   impact(end,'fire',clampf(age*2,0,1),fade,id)
+  return
+ if id in ['bolt','missiles','thunderstorm']:
+  var points: Array=a.get('impact_points',[])
+  var last=origin
+  var count=maxi(1,points.size())
+  for i in range(count):
+   var end: Vector2=points[i] if i<points.size() else dest
+   var strike=age-i*0.055
+   if strike>=0 and strike<0.32:
+    var start=last if id!='missiles' else origin+Vector2((i-1)*25,-16)
+    lightning(start,end,strike,color,1-strike/0.32)
+   if strike>=0:glow(end,23,color,fade)
+   last=end
+  if age<0.12:c.draw_rect(Rect2(Vector2.ZERO,v.game.logical_size),Color(color,0.09*(1-age/0.12)))
+  return
+ if id in ['frost','blizzard']:
+  var spread=1.0 if id=='frost' else 4.0
+  for i in range(9):
+   var foot=dest+Vector2((i-4)*15*spread,20+sin(i*7)*14)
+   shard(foot,-PI/2+sin(i)*0.4,(12+8*(i%3))*smoothstep(0,0.28,age),Color('b8edff'),fade)
+  for unit in v.unit_views.values():
+   if (id=='blizzard' and unit.side!=a.side) or unit.uid==a.target.get('uid',-1):
+    c.draw_rect(unit.rect,Color(0.66,0.90,1.0,0.18*fade))
+  return
+ var growth=smoothstep(0,0.42,age)
+ match id:
   'barrier':
-   dest=v.layout.player_hero.get_center() if a.get('side',0)==0 else v.layout.enemy_hero.get_center()
-   shield(dest,1.3+sin(t*PI)*0.25,Color('ffe69b'),fade)
+   shield(dest,0.85+growth*0.5,Color('ffe69b'),fade)
+   for i in range(6):shard(dest+Vector2((i-2.5)*25,35),-PI/2,30*growth,color,fade)
    ring(dest,80,Color('ffd45e'),fade,time)
-  'roots':roots(dest,t,fade)
+  'roots':roots(dest,growth,fade)
   'healing','blessing':
-   leaves(dest,t,Color('95ffc4') if id=='healing' else Color('ffdb79'),fade)
+   leaves(dest,growth,Color('95ffc4') if id=='healing' else Color('ffdb79'),fade)
    for i in range(5):
     var p=dest+Vector2(sin(i*17)*45,40-fmod(time*110+i*29,135))
     beam(p-Vector2(6,0),p+Vector2(6,0),color,2,fade);beam(p-Vector2(0,6),p+Vector2(0,6),color,2,fade)
@@ -225,26 +274,31 @@ func action(a: Dictionary,time: float) -> void:
    ring(dest,67,Color('ffe39a'),fade,time*2)
   'vortex':
    for i in range(4):
-    var radius=(25+i*18)*(1.0-t*0.6)
+    var radius=(25+i*18)*(1.0-growth*0.6)
     c.draw_arc(dest,radius,time*8+i,time*8+i+PI*1.6,64,Color(color,fade*(0.9-i*0.13)),6,true)
    glow(dest,28,Color('cda3ff'),fade)
   'pack':
    for i in range(2):
     var p=dest+Vector2((i-0.5)*125,0)
-    ring(p,58*t,Color('91f1bd'),fade,time*(1 if i==0 else -1)*3)
-    leaves(p,t,Color('91f1bd'),fade)
+    ring(p,58*growth,Color('91f1bd'),fade,time*(1 if i==0 else -1)*3)
+    leaves(p,growth,Color('91f1bd'),fade)
   'wisdom':
    for i in range(2):
-    var p=origin.lerp(dest,t)+Vector2((i-0.5)*65,-sin(t*PI)*90)
+    var p=dest+Vector2((i-0.5)*65,-growth*24)
     var rect=Rect2(p-Vector2(20,29),Vector2(40,58))
     c.draw_rect(rect,Color(0.91,0.76,0.45,fade*0.3));c.draw_rect(rect,Color(0.95,0.85,0.61,fade),false,2)
     for j in range(3):beam(p+Vector2(-12,-12+j*10),p+Vector2(12,-12+j*10),color,1,fade)
   'crystal':
-   var p=dest.lerp(Vector2(v.layout.w*0.5,v.layout.h*0.966),t)
+   var p=dest-Vector2.DOWN*24*growth
    shard(p,-PI/2,36,Color('81deff'),fade);ring(p,43,Color('7fcfff'),fade,time*3)
-  _:
-   if time<0.52:projectile(origin,dest,t,element,color)
-   else:impact(dest,element,clampf((time-0.52)/0.65,0,1),fade,id)
+ if id in ['rune_blade','wisdom','crystal']:
+  for i in range(4):
+   var angle=i*TAU/4+growth*0.35
+   var radial=Vector2.from_angle(angle)
+   var tip=dest+radial*62
+   beam(tip-radial*12,tip,color,2,fade)
+   beam(tip,tip-radial.rotated(0.8)*9,color,2,fade)
+
 func projectile(origin: Vector2,dest: Vector2,t: float,element: String,color: Color) -> void:
  # Sample the same arc as the projectile so the tail follows its trajectory.
  for i in range(4):
