@@ -165,6 +165,7 @@ var used={}
 var hand_shader=Shader.new()
 var shader: Shader
 var hit_flash: ShaderMaterial
+var frozen_portrait: ShaderMaterial
 var layout={}
 var hand_views=[]
 var unit_views={}
@@ -504,6 +505,10 @@ func _init(owner) -> void:
  white_shader.code="shader_type canvas_item; void fragment(){ COLOR.rgb=vec3(1.0); }"
  hit_flash=ShaderMaterial.new()
  hit_flash.shader=white_shader
+ var ice_shader=Shader.new()
+ ice_shader.code="shader_type canvas_item; void fragment(){ float gray=dot(COLOR.rgb,vec3(0.299,0.587,0.114)); COLOR.rgb=mix(COLOR.rgb,gray*vec3(0.82,0.96,1.13),0.93); }"
+ frozen_portrait=ShaderMaterial.new()
+ frozen_portrait.shader=ice_shader
  var portrait_flash_shader=Shader.new()
  portrait_flash_shader.code="shader_type canvas_item; uniform vec4 uv_rect; void fragment(){ vec2 p=(UV-uv_rect.xy)/uv_rect.zw; COLOR=vec4(1.0,1.0,1.0,0.85*(1.0-smoothstep(0.72,1.0,length((p-vec2(0.5))*2.0)))); }"
  for side in range(2):
@@ -714,11 +719,13 @@ func prepare() -> void:
      rect.position=rect.position.lerp(action.destination-rect.size/2,advance*0.9)
    var spawn={}
    var hit={}
+   var ice_age=INF
    var resonating=attacking
    for effect in particles:
     if spawn.is_empty() and effect.kind=='summon' and effect.uid==uid:spawn=effect
     if int(effect.get('target',{}).get('uid',-1))!=uid:continue
     if effect.kind=='damage' and effect.age<HIT_RECOIL_SECONDS:hit=effect
+    if effect.kind=='freeze':ice_age=effect.age
     if effect.get('response_id','')==info.unit.id and effect.age<0.65:resonating=true
    if not spawn.is_empty() and not game.reduced_motion:
     var arrival=clampf(spawn.age/0.46,0,1)
@@ -735,11 +742,14 @@ func prepare() -> void:
     rect=impact_stretch(rect,recovery)
     rect.position.y+=recoil*(1 if info.side==0 else -1)
    info.draw_rect=rect
+   info.ice_growth=smoothstep(0.0,0.34,ice_age)
    if resonating and not game.reduced_motion:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
    var tint=Color(1,0.6,0.5,opacity) if showing_hit else Color(1,1,1,opacity)
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,tint,1,hit_flash if showing_hit and hit.age<HIT_FLASH_SECONDS else null)
+   var material=frozen_portrait if fx.frozen(info.unit) else null
+   if showing_hit and hit.age<HIT_FLASH_SECONDS:material=hit_flash
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,tint,1,material)
   if not game.reduced_motion:
    for hero in hero_views:
     var age=hero_hit_age(hero.side)
@@ -940,9 +950,17 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
    elif not event.get('target',{}).has('uid'):
     var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '+'+str(event.get('amount',0)) if kind=='buff' else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
     add_number({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
-   acquire_effect(particles,&"particle",{'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
+   var particle={'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')}
+   if kind=='shield_break':
+    var bubble=Rect2(at-Vector2(50,60),Vector2(100,120))
+    var uid=int(event.target.get('uid',-1))
+    if unit_views.has(uid):bubble=unit_views[uid].get('draw_rect',unit_views[uid].rect)
+    particle.position=bubble.get_center()
+    particle.bubble_radius=bubble.size/2+Vector2.ONE*7
+   if event.has('drained_from'):particle.drain_origin=target_center(event.drained_from)
+   acquire_effect(particles,&"particle",particle)
    var element: String=particles[-1].element
-   if kind in ['armor','blocked','shield_break','heal','buff'] or (kind=='damage' and element=='fire'):
+   if kind in ['armor','blocked','heal','buff'] or (kind=='damage' and element=='fire'):
     impact_burst(at,element_color(element) if kind=='damage' else color)
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
     for unit in before[int(event.target.side)].board:
@@ -1267,15 +1285,6 @@ func paint_next_card(player: Dictionary) -> void:
  canvas.draw_rect(Rect2(pile.position+Vector2(3,-3),pile.size),GOLD,false,2)
  text(str(player.deck.size()),Rect2(pile.position+Vector2(20,-4),Vector2(38,25)),17,PAPER)
 
-func oval(rect: Rect2,fill: Color,edge: Color,width: float) -> void:
- var points=PackedVector2Array()
- for i in range(64):
-  var angle=i*TAU/64
-  points.append(rect.get_center()+Vector2(cos(angle)*rect.size.x/2,sin(angle)*rect.size.y/2))
- if fill.a>0:canvas.draw_colored_polygon(points,fill)
- points.append(points[0])
- canvas.draw_polyline(points,edge,width,true)
-
 func badge(center: Vector2,value: String,color: Color,radius=21.0) -> void:
  canvas.draw_circle(center,radius+2,Color('312317'));canvas.draw_circle(center,radius,color);canvas.draw_arc(center,radius,0,TAU,36,Color('e8d7a6'),2)
  text(value,Rect2(center-Vector2(radius,radius*0.77),Vector2(radius*2,radius*1.6)),int(radius*1.3),Color.WHITE,true,true)
@@ -1342,22 +1351,19 @@ func paint_battle() -> void:
  for hero in hero_views:
   var p=state.players[int(hero.side)]
   hero_stat(hero.rect.position+hero.rect.size*Vector2(0.84,0.86),p.health,false)
-  hero_stat(hero.rect.position+hero.rect.size*Vector2(0.16,0.86),p.armor,true)
+  var armor_at: Vector2=hero.rect.position+hero.rect.size*Vector2(0.16,0.86)
+  fx.armor_plates(armor_at,p.armor)
+  hero_stat(armor_at,p.armor,true)
  for uid in unit_views:
   var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect);var unit=info.unit
   canvas.draw_rect(rect.grow(-2),Color('e5bd70'),false,1,true)
-  if not game.reduced_motion:fx.status(unit,rect)
   if unit.attacks==0 and unit.delay>0:
    radial_cooldown(rect.position+rect.size*Vector2(0.78,0.2),rect.size.x*0.11,unit.delay)
   elif info.side==0 and unit.attacks>0 and state.effective_attack(info.side,unit)>0 and not game.target_locked({'side':0,'uid':uid}):
    var tag=Rect2(rect.position+Vector2(0,-2),Vector2(rect.size.x,19))
    canvas.draw_rect(tag,Color('234d3a'))
    text('ATACAR',tag,14,Color('b7ffce'),true,true)
-  if unit.shield:
-   oval(rect.grow(7),Color(1,0.9,0.4,0.08),Color(1,0.9,0.4,0.8),3)
-   oval(rect.grow(11),Color.TRANSPARENT,Color(1,0.9,0.4,0.25),5)
-  if unit.frozen>0 or unit.get('frozen_lock',false):
-   canvas.draw_style_box(style(Color(0.2,0.75,1,0.15),Color('94e6ff'),30,3),rect.grow(4))
+  fx.status(unit,rect,info.ice_growth)
   if 'windfury' in unit.keywords: text('↟',Rect2(rect.position-Vector2(7,20),Vector2(30,30)),20,GOLD,true)
   var radius=minf(rect.size.x*0.18,rect.size.y*0.15)
   var attack_value=state.effective_attack(info.side,unit)
@@ -1411,7 +1417,10 @@ func paint_battle() -> void:
    var held_rect=held_card_rect()
    paint_card(game.drag.id,held_rect)
 
-  else: arrow(game.drag.origin,game.pointer,Color('ed694a'))
+  else:
+   var guard=taunt_pull_target(game.drag,game.target_at(game.pointer))
+   if guard.is_empty():arrow(game.drag.origin,game.pointer,Color('ed694a'))
+   else:fx.taunt_pull(game.drag.origin,game.pointer,target_center(guard))
   var preview=drag_preview()
   if not preview.is_empty():
    var at=target_center(preview.target)
@@ -1487,6 +1496,23 @@ func paint_drop_preview() -> void:
   var creature=card.kind=='minion'
   var picture=slice(creatures if creature else spells,int(card.art),5 if creature else 4,5 if creature else 4)
   draw_card_picture(picture,landing.grow(-4),Color(1,1,1,0.40))
+
+func taunt_pull_target(selection: Dictionary,hovered: Dictionary) -> Dictionary:
+ if selection.kind!='unit' or hovered.get('side',-1)!=1:return {}
+ var uid=int(selection.uid)
+ if game.rules.can_attack(0,uid,hovered).ok:return {}
+ var nearest={}
+ var shortest=INF
+ var at=target_center(hovered)
+ for unit in game.rules.players[1].board:
+  if 'taunt' not in unit.keywords:continue
+  var candidate={'side':1,'uid':unit.uid}
+  if game.target_locked(candidate) or not game.rules.can_attack(0,uid,candidate).ok:continue
+  var distance=at.distance_squared_to(target_center(candidate))
+  if distance<shortest:
+   shortest=distance
+   nearest=candidate
+ return nearest
 
 func paint_targets(selection: Dictionary) -> void:
  var candidates=[]

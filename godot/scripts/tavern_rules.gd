@@ -475,7 +475,7 @@ func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
   trigger_traps(side,'low_health',{'before':previous_health,'after':players[side].health})
  return actual
 
-func heal(target: Dictionary,amount: int) -> int:
+func heal(target: Dictionary,amount: int,drained_from: Dictionary={}) -> int:
  if not target_exists(target): return 0
  var actual=0
  if target.get('hero',false):
@@ -485,7 +485,10 @@ func heal(target: Dictionary,amount: int) -> int:
  else:
   var unit=find_unit(int(target.side),int(target.uid))
   actual=mini(maxi(0,amount),int(unit.max_health)-int(unit.health)); unit.health+=actual
- if actual>0: events.append({'kind':'heal','target':target.duplicate(),'amount':actual})
+ if actual>0:
+  var event={'kind':'heal','target':target.duplicate(),'amount':actual}
+  if not drained_from.is_empty():event.drained_from=drained_from.duplicate()
+  events.append(event)
  return actual
 
 func freeze_unit(side: int,uid: int) -> void:
@@ -543,10 +546,10 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  if not target.get('hero',false):
   defender=find_unit(int(target.side),int(target.uid)); retaliation=effective_attack(int(target.side),defender)
  var dealt=damage(target,effective_attack(side,attacker),cards[attacker.id].element,'poison' in attacker.keywords)
- if 'lifesteal' in attacker.keywords: heal({'side':side,'hero':true},dealt)
+ if 'lifesteal' in attacker.keywords: heal({'side':side,'hero':true},dealt,target)
  if defender:
   var returned=damage(attacker_target,retaliation,cards[defender.id].element,'poison' in defender.keywords)
-  if 'lifesteal' in defender.keywords: heal({'side':int(target.side),'hero':true},returned)
+  if 'lifesteal' in defender.keywords: heal({'side':int(target.side),'hero':true},returned,attacker_target)
  events.append({'kind':'attack','side':side,'uid':uid,'target':target.duplicate()})
  resolve_deaths()
  return success()
