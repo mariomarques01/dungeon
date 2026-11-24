@@ -19,10 +19,10 @@ func run() -> void:
  game.start_match()
  var player=game.rules.players[0]
  var rival=game.rules.players[1]
- player.hand=['scout','bolt']
+ player.hand=['ember_spark','bolt']
  player.mana=10
  var unit=game.rules.spawn(0,'wolf')
- rival.hand=['scout']
+ rival.hand=['ember_spark']
  rival.mana=1
  game.view.prepare()
  var enemy={'side':1,'hero':true}
@@ -86,7 +86,7 @@ func check_match_controls(game) -> void:
   game.start_match()
   check(game.rules.ai_level==level and game.rival_interval()==[4.5,3.0,2.0][level],'Selected level must set rival cadence')
   var rival=game.rules.players[1]
-  rival.hand=['scout']
+  rival.hand=['ember_spark']
   rival.mana=1
   game.advance_battle(game.rival_interval()-0.01)
   check(game.active_actions.is_empty(),'Rival acted before its interval')
@@ -103,7 +103,7 @@ func check_match_controls(game) -> void:
   game.activate_button('emote_%d'%i)
   check(game.emote_text==game.EMOTES[i] and game.emote_time==2 and not game.emotes_open,'Emote did not display or close selector')
  var player=game.rules.players[0]
- player.hand=['scout','scout']
+ player.hand=['ember_spark','ember_spark']
  player.mana=1
  player.cooldowns[1]=2.0
  game.view.prepare()

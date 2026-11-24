@@ -24,7 +24,7 @@ const { chromium } = require('playwright-core');
     await tapRect(() => window.__dungeonState.buttons.find(b => b.id === 'start').rect);
     await page.waitForFunction(() => window.__dungeonState?.screen === 'battle');
     await page.waitForTimeout(700);
-    await tapRect(() => window.__dungeonState.handViews.find(h => ['scout','skeleton','stoneguard'].includes(h.id)).rect);
+    await tapRect(() => window.__dungeonState.handViews.find(h => ['ember_spark','stoneguard'].includes(h.id)).rect);
     await tapRect(() => window.__dungeonState.drop);
     await page.waitForFunction(() => window.__dungeonState.players[0].board.length > 0);
     await page.waitForTimeout(1500);

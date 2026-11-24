@@ -29,7 +29,7 @@ const path=require('node:path');
   const points=await page.evaluate(()=>{
    const s=window.__dungeonState;
    const center=r=>({x:s.transform.x+(r.x+r.w/2)*s.transform.scale,y:s.transform.y+(r.y+r.h/2)*s.transform.scale});
-   return [center(s.handViews.find(h=>['scout','stoneguard'].includes(h.id)).rect),center(s.drop)];
+   return [center(s.handViews.find(h=>['ember_spark','stoneguard'].includes(h.id)).rect),center(s.drop)];
   });
   for(const p of points)await page.touchscreen.tap(p.x,p.y);
   await page.waitForFunction(()=>!window.__dungeonState.tutorial && window.__dungeonState.players[0].board.length===1);

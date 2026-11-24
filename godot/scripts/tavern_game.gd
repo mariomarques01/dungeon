@@ -205,7 +205,7 @@ func load_profile() -> void:
   profile.reduced_motion=reduced_motion
   profile.intro_seen=data.get('intro_seen',data.get('support_hint_seen',false))==true
   profile.support_hint_seen=data.get('support_hint_seen',false)==true
-  if data.get('deck',null) is Array and data.deck.all(func(id): return cards.has(id) and not cards[id].get('token',false)):profile.deck=data.deck
+  if data.get('deck',null) is Array:profile.deck=rules.migrate_deck(data.deck)
   for key in ['coins','xp','wins','losses']:profile[key]=maxi(0,int(data.get(key,0)))
  elif OS.has_feature('web'):
   var old=JSON.parse_string(str(JavaScriptBridge.eval("localStorage.getItem('dungeon_cards_v15') || '{}'")))
@@ -731,9 +731,10 @@ func request_power(target: Dictionary,side=0) -> void:
  if rules.done or panel=='pause':return
  var valid=rules.can_power(side,target)
  if not valid.ok:notify(valid.reason);return
- if power_locked(side,'power' if side==0 else 'token_guard') or target_locked(target):notify('Poder ou alvo em ação.');return
+ var id='power' if side==0 else Rules.RIVAL_POWER_CARD
+ if power_locked(side,id) or target_locked(target):notify('Poder ou alvo em ação.');return
  var destination=view.target_center(target) if side==0 else Vector2(logical_size.x/2,view.layout.enemy_row)
- schedule({'kind':'power','side':side,'id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'earth','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target},0.5,0.95)
+ schedule({'kind':'power','side':side,'id':id,'card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else cards[id].element,'origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target},0.5,0.95)
 
 func vibrate(pattern: Variant) -> void:
  if reduced_motion or not OS.has_feature('web'):return

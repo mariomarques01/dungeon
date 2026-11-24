@@ -51,7 +51,7 @@ const assert = require('node:assert/strict');
   const gesture = await page.evaluate(()=>{
     const s=window.__dungeonState,c=document.getElementById('canvas'),r=c.getBoundingClientRect(),t=s.transform;
     const point=p=>({x:r.left+(t.x+p.x*t.scale)*r.width/c.width,y:r.top+(t.y+p.y*t.scale)*r.height/c.height});
-    const v=s.handViews.find(v=>['scout','stoneguard','skeleton'].includes(v.id));
+    const v=s.handViews.find(v=>['ember_spark','stoneguard'].includes(v.id));
     return {from:point({x:v.rect.x+23,y:v.rect.y+65}),to:point({x:s.drop.x+s.drop.w/2,y:s.drop.y+s.drop.h/2})};
   });
   await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[gesture.from]});

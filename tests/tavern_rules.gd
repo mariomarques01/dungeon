@@ -14,10 +14,19 @@ func ready(side: int,id: String):
 func _initialize() -> void:
  cards=JSON.parse_string(FileAccess.get_file_as_string('res://tavern_assets/cards.json'))
  fresh()
- check(cards.values().filter(func(c):return not c.get('token',false)).size()==47,'47 cartas colecionáveis')
+ check(cards.values().filter(func(c):return not c.get('token',false)).size()==44,'44 cartas colecionáveis')
  check(rules.valid_deck(Rules.DEFAULT_DECK),'Baralho inicial de 30 cartas válido')
+ var retired=['scout','shieldbearer','orc','skeleton','token_guard']
+ check(retired.all(func(id):return not cards.has(id)),'Cartas e ficha aposentadas saíram do catálogo')
+ var saved=Rules.DEFAULT_DECK.duplicate()
+ saved[saved.find('stoneguard')]='scout'
+ saved[saved.find('healing')]='skeleton'
+ var migrated=rules.migrate_deck(saved)
+ check(rules.valid_deck(migrated) and migrated.count('ember_spark')==2 and migrated.count('stoneguard')>=1,'Migração preenche vagas sem ultrapassar o limite de cópias')
+ check(rules.migrate_deck(['wolf','scout'])==['wolf','ember_spark'],'Migração mantém o tamanho de um baralho incompleto')
+ check(cards[Rules.RIVAL_POWER_CARD].get('token',false) and cards[Rules.RIVAL_POWER_CARD].element=='earth','Poder rival invoca uma ficha elemental')
  check(rules.players[0].mana==1 and rules.players[0].hand.size()==4,'Primeiro turno tem 1 mana e quatro cartas')
- rules.players[0].hand=['scout'];var result=rules.play(0,0)
+ rules.players[0].hand=['ember_spark'];var result=rules.play(0,0)
  check(result.ok and rules.players[0].mana==0 and rules.players[0].hand.is_empty(),'Invocar consome mana e carta exatamente uma vez')
  var unit=rules.players[0].board[0]
  check(unit.attack==1 and unit.health==2 and unit.attacks==1 and unit.delay==0 and not unit.sleeping,'Criatura entra pronta e sem recarga')
@@ -33,10 +42,10 @@ func _initialize() -> void:
  fresh();a=ready(0,'golem');b=ready(1,'beetle');var before=b.health
  rules.attack(0,a.uid,{'side':1,'uid':b.uid})
  check(not b.shield and b.health==before and a.health==4,'Escudo Divino evita dano e ainda há contra-ataque')
- fresh();a=ready(0,'orc');b=ready(1,'stoneguard');var other=ready(1,'scout')
+ fresh();a=ready(0,'serpent');b=ready(1,'stoneguard');var other=ready(1,'ember_spark')
  check(not rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok and not rules.can_attack(0,a.uid,{'side':1,'uid':other.uid}).ok,'Provocar protege o herói e as outras criaturas')
  check(rules.can_attack(0,a.uid,{'side':1,'uid':b.uid}).ok,'Provocar permite atacar o protetor')
- fresh();a=rules.spawn(0,'panther');b=ready(1,'orc')
+ fresh();a=rules.spawn(0,'panther');b=ready(1,'serpent')
  check(rules.can_attack(0,a.uid,{'side':1,'uid':b.uid}).ok and rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Pantera entra pronta para atacar qualquer inimigo legal')
  fresh();a=rules.spawn(0,'gryphon')
  check(rules.can_attack(0,a.uid,{'side':1,'hero':true}).ok,'Grifo entra pronto para atacar o herói')
@@ -63,18 +72,18 @@ func _initialize() -> void:
  check(b.attacks==1 and not b.frozen_lock,'Criatura volta a atacar após descongelar')
  fresh();rules.players[0].mana=10;rules.players[0].hand=['blessing'];a=ready(0,'wolf');rules.play(0,0,{'side':0,'uid':a.uid})
  check(a.attack==5 and a.health==4 and a.max_health==4,'Fortalecimento aumenta ataque, vida atual e máxima')
- fresh();rules.players[0].mana=10;rules.players[0].hand=['meteor'];a=ready(0,'wolf');b=ready(1,'orc');other=ready(1,'beetle');rules.play(0,0)
+ fresh();rules.players[0].mana=10;rules.players[0].hand=['meteor'];a=ready(0,'wolf');b=ready(1,'serpent');other=ready(1,'beetle');rules.play(0,0)
  check(rules.find_unit(1,b.uid)==null and other.health==4 and not other.shield and a.health==2 and rules.players[1].health==30,'Dano em área atinge só criaturas inimigas e respeita escudos')
  fresh();a=ready(0,'necro');a.health=0;rules.resolve_deaths()
  check(rules.players[0].board.size()==2 and rules.players[0].board.all(func(u):return u.id=='token_skeleton'),'Último Suspiro invoca duas fichas após a morte')
  fresh();a=ready(0,'phoenix');rules.players[0].health=21;a.health=0;rules.resolve_deaths()
  check(rules.players[0].health==26,'Último Suspiro da Fênix restaura vida')
- fresh();rules.players[0].mana=10;rules.players[0].hand=['scout']
- for i in range(5):ready(0,'scout')
+ fresh();rules.players[0].mana=10;rules.players[0].hand=['ember_spark']
+ for i in range(5):ready(0,'ember_spark')
  result=rules.play(0,0)
  check(not result.ok and rules.players[0].board.size()==5 and rules.players[0].mana==10,'Limite de cinco criaturas não consome a carta rejeitada')
  fresh();rules.players[0].mana=10;rules.players[0].hand=['pack']
- for i in range(4):ready(0,'scout')
+ for i in range(4):ready(0,'ember_spark')
  rules.play(0,0)
  check(rules.players[0].board.size()==5,'Invocação múltipla respeita os espaços disponíveis')
  fresh();rules.players[0].deck=[];rules.draw(0,3)
@@ -124,14 +133,14 @@ func _initialize() -> void:
    check(rules.players.all(func(p):return p.mana>=0 and p.mana<=10 and p.board.size()<=5 and p.hand.size()<=5),'Recursos válidos na simulação %d' % match_index) if action_count%30==0 else false
   check(rules.done,'Duelo completo sem travamento %d' % match_index)
  fresh()
- rules.players[0].hand=['scout','fireball']
+ rules.players[0].hand=['ember_spark','fireball']
  check(not rules.equip_support(1,1).ok and rules.players[0].hand.size()==2,'Energia insuficiente preserva a mão')
  check(rules.equip_support(0,0).ok and rules.players[0].mana==0,'Equipar cobra energia uma vez')
  rules.players[0].mana=4
  check(rules.equip_support(1,0).ok and rules.players[0].hand.is_empty(),'Dois apoios independentes aceitam criatura e feitiço')
  rules.end_turn()
  check(rules.players[1].health==29 and rules.players[0].armor==2,'Ataque e defesa dos apoios antes da ação rival')
- rules.players[1].hand=['scout','fireball'];rules.players[1].mana=5
+ rules.players[1].hand=['ember_spark','fireball'];rules.players[1].mana=5
  ready(1,'wolf')
  rules.choose_rival_support()
  check(rules.players[1].supports.all(func(s):return s.id!='') and rules.players[1].mana==0,'A IA equipa os dois apoios com cartas e energia próprias')
@@ -147,7 +156,7 @@ func _initialize() -> void:
  rules.start(Rules.DEFAULT_DECK,[],37,true)
  for side in range(2):
   rules.players[side].mana=10
-  rules.players[side].hand=['scout','scout']
+  rules.players[side].hand=['ember_spark','ember_spark']
  check(rules.play(1,0).ok and rules.play(0,0).ok,'Ambos jogam sem alternar turnos')
  check(rules.players[0].hand.size()==2 and rules.can_play(0,1).ok,'A mão permanece e cópias recarregam separadamente')
  check(not rules.equip_support(0,0).ok and rules.equip_support(0,1).ok,'Apoio respeita e inicia recarga')
@@ -156,11 +165,11 @@ func _initialize() -> void:
  rules.advance_cooldowns(0.11)
  check(rules.can_play(0,0).ok and rules.players[1].board[0].attacks==1,'Carta e criatura prontas após cinco segundos')
  var player=rules.players[0]
- player.hand=['wolf','scout'];player.deck=['orc','dragon'];player.mana=1
+ player.hand=['wolf','ember_spark'];player.deck=['serpent','dragon'];player.mana=1
  player.cooldowns[1]=3.0
  check(not rules.exchange_card(0,1).ok and player.mana==1,'Recarga bloqueia troca sem cobrar energia')
- check(rules.exchange_card(0,0).ok and player.hand==['dragon','scout'] and player.deck==['wolf','orc'] and player.cooldowns[1]==3.0,'Troca preserva as posições e coloca a carta no fundo')
- check(not rules.exchange_card(0,0).ok and player.deck==['wolf','orc'] and player.mana==0,'Troca sem energia preserva o baralho')
+ check(rules.exchange_card(0,0).ok and player.hand==['dragon','ember_spark'] and player.deck==['wolf','serpent'] and player.cooldowns[1]==3.0,'Troca preserva as posições e coloca a carta no fundo')
+ check(not rules.exchange_card(0,0).ok and player.deck==['wolf','serpent'] and player.mana==0,'Troca sem energia preserva o baralho')
  fresh()
  var cast_preview={'kind':'card','index':0}
  var enemy_hero={'side':1,'hero':true}
@@ -192,7 +201,7 @@ func _initialize() -> void:
 
 func test_attack_readiness() -> void:
  rules.start(Rules.DEFAULT_DECK,[],42,true)
- var attacker=rules.spawn(0,'scout')
+ var attacker=rules.spawn(0,'ember_spark')
  var hero={'side':1,'hero':true}
  check(Rules.ENTRY_LOCK_SECONDS==0 and attacker.entry_lock==0 and attacker.delay==0,'Criatura começa sem bloqueio nem recarga')
  check(rules.attack(0,attacker.uid,hero).ok and attacker.delay==Rules.REUSE_SECONDS,'Ataque imediato ao herói inicia recarga')
@@ -201,11 +210,11 @@ func test_attack_readiness() -> void:
  rules.advance_cooldowns(0.11)
  check(rules.can_attack(0,attacker.uid,hero).ok,'Fim da recarga libera novo ataque')
  var familiar=rules.spawn(0,'familiar')
- var enemy=rules.spawn(1,'scout')
+ var enemy=rules.spawn(1,'ember_spark')
  var creature={'side':1,'uid':enemy.uid}
  check(familiar.attacks==2 and familiar.delay==0 and rules.attack(0,familiar.uid,creature).ok,'Fúria dos Ventos entra com dois ataques e pode atacar outra criatura imediatamente')
  check(familiar.attacks==1 and familiar.delay==0,'Primeiro ataque de Fúria dos Ventos preserva o segundo sem recarga')
- var second_enemy=rules.spawn(1,'scout')
+ var second_enemy=rules.spawn(1,'ember_spark')
  check(rules.attack(0,familiar.uid,{'side':1,'uid':second_enemy.uid}).ok and familiar.delay==Rules.REUSE_SECONDS,'Último ataque inicia a recarga')
  var recruit=rules.spawn(0,'stoneguard')
  rules.freeze_unit(0,recruit.uid)
@@ -214,7 +223,7 @@ func test_attack_readiness() -> void:
  check(recruit.delay==0 and recruit.attacks==1 and recruit.frozen==0,'Fim do congelamento libera ataque')
 
  rules.start(Rules.DEFAULT_DECK,[],42,true)
- var rival=rules.spawn(1,'scout')
+ var rival=rules.spawn(1,'ember_spark')
  var plan=rules.ai_attack()
  check(plan.get('uid',-1)==rival.uid and plan.get('target',{}).get('hero',false),'IA pode atacar o herói com uma criatura recém-invocada')
 
@@ -226,7 +235,8 @@ func test_ai_levels() -> void:
   var trap_count=deck.filter(func(id):return cards[id].kind=='trap').size()
   check(rules.valid_deck(deck) and trap_count==level*2,'Baralho válido e quantidade de armadilhas esperada no nível %d'%level)
   rules.start(Rules.DEFAULT_DECK,deck,42,true)
-  var ally=rules.spawn(0,'scout')
+  var ally=rules.spawn(0,Rules.RIVAL_POWER_CARD)
+  ally.health=2
   rules.spawn(1,'wolf')
   var target: Dictionary=rules.ai_attack().target
   check(target.get('hero',false) if level==2 else target.get('uid',-1)==ally.uid,'Agressividade muda o alvo no nível %d'%level)
@@ -248,11 +258,11 @@ func test_ai_levels() -> void:
 func test_next_card_and_costs() -> void:
  fresh()
  var player=rules.players[0]
- player.deck=['orc','wolf']
+ player.deck=['serpent','wolf']
  var previous: Array=player.deck.duplicate()
  check(rules.next_card(0)=='wolf' and player.deck==previous,'Prévia lê o topo sem alterar o baralho')
  rules.draw(0)
- check(player.hand.back()=='wolf' and rules.next_card(0)=='orc','Prévia acompanha a ordem de compra')
+ check(player.hand.back()=='wolf' and rules.next_card(0)=='serpent','Prévia acompanha a ordem de compra')
  player.deck.clear()
  check(rules.next_card(0)=='','Baralho vazio limpa a prévia')
  player.hand=['wolf']
@@ -267,7 +277,7 @@ func test_next_card_and_costs() -> void:
 func test_elements() -> void:
  var wheel=['fire','nature','earth','wind','water']
  check(cards.values().all(func(c):return c.element in wheel),'Cada carta e ficha usa um dos cinco elementos')
- check(cards.frost.element=='water' and cards.gryphon.element=='wind' and cards.orc.element=='earth' and cards.bolt.element=='wind','Cartas de gelo, tempestade, aço e raio foram migradas')
+ check(cards.frost.element=='water' and cards.gryphon.element=='wind' and cards.beetle.element=='earth' and cards.bolt.element=='wind','Cartas de gelo, tempestade, aço e raio foram migradas')
  fresh()
  var representatives=['drake','treant','stoneguard','gryphon','frostling']
  var targets=[]
@@ -298,11 +308,11 @@ func test_elements() -> void:
   check(preview==fixture[4] and unit.health==before-fixture[2] and hit.size()==1 and hit[0].amount==fixture[2] and hit[0].modifier==fixture[3] and hit[0].element=='water' and hit[0].fx=='ice','Prévia e dano de Geada coincidem com o ajuste '+str(fixture[3]))
 
  fresh()
- var guard=ready(1,'knight')
+ var guard=ready(1,'beetle')
  var guard_target={'side':1,'uid':guard.uid}
  var serpent=ready(0,'serpent')
  rules.events=[]
- check(rules.damage(guard_target,1,'wind',true)==0 and guard.shield and guard.health==5 and rules.events[-1].kind=='element_resist','Resistência total preserva escudo e impede veneno')
+ check(rules.damage(guard_target,1,'wind',true)==0 and guard.shield and guard.health==4 and rules.events[-1].kind=='element_resist','Resistência total preserva escudo e impede veneno')
  check(rules.damage(guard_target,0,'nature')==0 and guard.shield,'Vantagem mantém um golpe de base zero em zero')
  check(rules.health_preview(0,{'kind':'unit','uid':serpent.uid},guard_target)=='ESCUDO ▲','Prévia sinaliza vantagem mesmo com Escudo Divino')
  check(rules.damage(guard_target,1,'nature')==0 and not guard.shield,'Escudo absorve dano com vantagem')
@@ -331,9 +341,9 @@ func test_traps() -> void:
  deck[0]='trap_bulwark'
  check(rules.valid_deck(deck) and cards.values().filter(func(c):return c.kind=='trap').size()==6,'As seis armadilhas são colecionáveis e aceitas em baralhos')
  var player=rules.players[0]
- player.hand=['scout','trap_bulwark','trap_spikes'];player.mana=10
+ player.hand=['ember_spark','trap_bulwark','trap_spikes'];player.mana=10
  check(not rules.play(0,1).ok and player.mana==10,'Armadilha exige uma casa de apoio')
- check(rules.equip_support(0,0).ok and rules.equip_support(0,0).ok and player.supports[0].id=='scout' and player.supports[0].trap=='trap_bulwark','Apoio regular e armadilha ocupam a mesma casa')
+ check(rules.equip_support(0,0).ok and rules.equip_support(0,0).ok and player.supports[0].id=='ember_spark' and player.supports[0].trap=='trap_bulwark','Apoio regular e armadilha ocupam a mesma casa')
  check(not rules.equip_support(0,0).ok and player.mana==7 and player.hand==['trap_spikes'],'Armadilha ocupada bloqueia a segunda sem custo')
  rules.end_turn()
  check(player.supports[0].trap=='trap_bulwark' and rules.players[1].health==29,'Pulso do apoio não dispara nem remove sua armadilha')
@@ -341,7 +351,7 @@ func test_traps() -> void:
  var hero={'side':0,'hero':true}
  var result=rules.attack(1,attacker.uid,hero)
  check(result.events[0].kind=='trap_reveal' and player.health==30 and player.armor==0 and player.supports[0].trap=='','Baluarte revela antes do ataque, protege e é descartado')
- attacker=ready(1,'scout')
+ attacker=ready(1,'ember_spark')
  result=rules.attack(1,attacker.uid,hero)
  check(player.health==29 and not result.events.any(func(e):return e.kind=='trap_reveal'),'Armadilha disparada não se repete')
 
@@ -349,10 +359,10 @@ func test_traps() -> void:
  player=rules.players[0]
  player.mana=10;player.hand=['trap_spikes','trap_runes','trap_spring','trap_embers','trap_last_stand']
  var rival=rules.players[1]
- rival.mana=10;rival.hand=['scout','fireball','crystal']
+ rival.mana=10;rival.hand=['ember_spark','fireball','crystal']
  check(rules.equip_support(0,0).ok and player.hand.size()==5 and player.cooldowns.has(0),'Armar em tempo real inicia a recarga')
  var ally=ready(0,'wolf')
- attacker=ready(1,'scout')
+ attacker=ready(1,'ember_spark')
  result=rules.attack(1,attacker.uid,{'side':0,'uid':ally.uid})
  check(result.events[0].id=='trap_spikes' and ally.health==2 and rules.find_unit(1,attacker.uid)==null,'Espinhos também protegem criaturas e cancelam o ataque letal ao agressor')
  rules.equip_support(0,1)
@@ -407,10 +417,10 @@ func test_families() -> void:
  check(rules.effective_attack(0,wolf)==3,'Remoção dos aliados restaura o ataque base')
  fresh()
  var scout=ready(0,'stoneguard')
- var skeleton=ready(1,'skeleton')
+ var skeleton=ready(1,'token_skeleton')
  var necro=ready(1,'necro')
  rules.attack(0,scout.uid,{'side':1,'uid':skeleton.uid})
- check(scout.health==3-int(cards.skeleton.attack)-1,'Contra-ataque usa a sinergia de mortos-vivos')
+ check(scout.health==3-int(cards.token_skeleton.attack)-1,'Contra-ataque usa a sinergia de mortos-vivos')
  necro.health=0
  rules.resolve_deaths()
  check(rules.players[1].board.filter(func(u):return u.id=='token_skeleton' and rules.family_bonus(1,u)==1).size()==2,'Esqueletos de Último Suspiro ativam a família')

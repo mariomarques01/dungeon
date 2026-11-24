@@ -25,6 +25,7 @@ func run() -> void:
   push_error('Reduced motion left particles running');failures+=1
  game.reduced_motion=false
  check_summon_attack(game)
+ check_elemental_drag(game)
  var ids=game.cards.keys()
  for id in ids:
   print("FX CARD: ",id)
@@ -92,7 +93,7 @@ func run() -> void:
  if game.panel!='result' or game.rules.outcome!='win':push_error('Victory panel did not open');failures+=1
  for node in game.view.nodes.values():
   if node.z_index>=game.overlay.z_index:push_error('Card art overlaps result');failures+=1
- if game.audio_engine.action_clip('wolf','bite')!='bite_hit' or game.audio_engine.action_clip('golem','earth')!='stone_hit' or game.audio_engine.action_clip('orc','steel')!='steel_heavy':push_error('Wrong creature sound family');failures+=1
+ if game.audio_engine.action_clip('wolf','bite')!='bite_hit' or game.audio_engine.action_clip('golem','earth')!='stone_hit' or game.audio_engine.action_clip('beetle','steel')!='steel_heavy':push_error('Wrong creature sound family');failures+=1
  print('Victory layers and creature audio profiles checked')
  # Rapid hits merge by target. Health warnings must survive a simultaneous first hit.
  game.start_match()
@@ -244,7 +245,7 @@ func check_haptic_routes() -> void:
  game.audio_engine.set_enabled(false)
  game.start_match()
  var hit={'kind':'damage','amount':6,'element':'steel','target':{'side':1,'hero':true}}
- var summon={'kind':'summon','id':'scout'}
+ var summon={'kind':'summon','id':'ember_spark'}
  game.play_events([summon],'steel')
  game.play_events([hit],'steel')
  game.play_events([hit,summon],'steel')
@@ -258,10 +259,32 @@ func check_haptic_routes() -> void:
  game.queue_free()
 
 
+func check_elemental_drag(game) -> void:
+ game.start_match()
+ game.rules.players[0].mana=10
+ game.rules.players[0].hand=['frost']
+ var friendly=game.rules.spawn(0,'ember_spark')
+ var fire=game.rules.spawn(1,'firelord')
+ var wind=game.rules.spawn(1,'gryphon')
+ var water=game.rules.spawn(1,'frostling')
+ game.view.prepare()
+ game.drag={'kind':'card','index':0,'id':'frost'}
+ for fixture in [[fire,'▲'],[wind,'▼'],[water,'']]:
+  game.pointer=game.view.unit_views[fixture[0].uid].rect.get_center()
+  if game.view.drag_preview().get('marker','?')!=fixture[1]:
+   push_error('Dragged spell must display the applicable elemental marker');failures+=1
+ game.drag={'kind':'unit','uid':friendly.uid}
+ game.pointer=game.view.unit_views[water.uid].rect.get_center()
+ if game.view.drag_preview().get('marker','')!='▼':
+  push_error('Dragged attacker must display elemental disadvantage');failures+=1
+ game.drag={}
+
+
 func check_status_feedback(game) -> void:
  game.start_match()
  game.reduced_motion=false
  var attacker=game.rules.spawn(0,'phoenix')
+ attacker.health+=1 # Survive the guard's advantaged counterattack for the second hit.
  var guard=game.rules.spawn(1,'knight')
  var poisonous=game.rules.spawn(1,'serpent')
  var target={'side':1,'uid':guard.uid}

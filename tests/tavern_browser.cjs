@@ -7,7 +7,7 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  const page=await browser.newPage({viewport:{width:960,height:600}});const errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
  const url=new URL(process.env.DUNGEON_URL||'http://127.0.0.1:8766/godot/');url.searchParams.set('qa','1');url.searchParams.set('seed','69');
- const initial={deck:['scout','scout','stoneguard','stoneguard','skeleton','skeleton','panther','panther','meteor','meteor','vortex','vortex','pack','pack','bolt','bolt','fireball','fireball','frost','frost','blessing','blessing','missiles','missiles','gryphon','gryphon','thunderstorm','thunderstorm','wolf','wolf'],coins:50,xp:35,wins:1,losses:0};
+ const initial={deck:['ember_spark','ember_spark','stoneguard','stoneguard','serpent','serpent','panther','panther','meteor','meteor','vortex','vortex','pack','pack','bolt','bolt','fireball','fireball','frost','frost','blessing','blessing','missiles','missiles','gryphon','gryphon','thunderstorm','thunderstorm','wolf','wolf'],coins:50,xp:35,wins:1,losses:0};
  await page.addInitScript(profile=>{if(!localStorage.getItem('tavern_test_seed')){localStorage.setItem('dungeon_tavern_v3',JSON.stringify(profile));localStorage.setItem('dungeon_battle_speed','2');localStorage.setItem('dungeon_sound','on');localStorage.setItem('tavern_test_seed','1')}},initial);
  await page.clock.install();
  await page.goto(url.href,{waitUntil:'networkidle',timeout:120000});await page.waitForFunction(()=>window.__dungeonState,null,{timeout:60000});

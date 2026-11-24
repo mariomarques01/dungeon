@@ -15,7 +15,9 @@ var ai_level=DEFAULT_AI_LEVEL
 var realtime=false
 const MAX_HAND=5
 const DECK_SIZE=30
-const DEFAULT_DECK=['scout','scout','stoneguard','stoneguard','wolf','wolf','apprentice','apprentice','drake','drake','shieldbearer','shieldbearer','dryad','dryad','panther','panther','beetle','beetle','orc','orc','fireball','fireball','frost','frost','healing','healing','wisdom','wisdom','treant','dragon']
+const DEFAULT_DECK=['ember_spark','ember_spark','stoneguard','stoneguard','wolf','wolf','apprentice','apprentice','drake','drake','familiar','familiar','dryad','dryad','panther','panther','beetle','beetle','serpent','serpent','fireball','fireball','frost','frost','healing','healing','wisdom','wisdom','treant','dragon']
+const RIVAL_POWER_CARD='token_pebble'
+const RETIRED_CARDS={'scout':'ember_spark','shieldbearer':'familiar','orc':'serpent','skeleton':'ember_spark'}
 var cards: Dictionary
 var players: Array=[]
 var active=0
@@ -202,6 +204,21 @@ func valid_deck(deck: Array) -> bool:
   counts[id]=counts.get(id,0)+1
   if counts[id]>(1 if cards[id].get('legendary',false) else 2): return false
  return true
+
+func migrate_deck(saved: Array) -> Array:
+ var deck=saved.filter(func(id):return id is String and cards.has(id) and not cards[id].get('token',false))
+ var fallback=DEFAULT_DECK.duplicate()
+ for id in deck:fallback.erase(id)
+ # Retain valid copies first, then replace retired cards within the same deck size.
+ for id in saved:
+  if not RETIRED_CARDS.has(id) or deck.size()>=DECK_SIZE:continue
+  var replacement=RETIRED_CARDS[id]
+  if deck.count(replacement)>=2:
+   if fallback.is_empty():break
+   replacement=fallback[0]
+  deck.append(replacement)
+  fallback.erase(replacement)
+ return deck
 
 func next_card(side: int) -> String:
  var deck: Array=players[side].deck
@@ -596,7 +613,7 @@ func power(side: int,target: Dictionary={}) -> Dictionary:
  events=[]
  players[side].mana-=2; players[side].power_used=true;players[side].power_delay=REUSE_SECONDS
  if side==0: damage(target,1,'fire')
- else: spawn(side,'token_guard')
+ else: spawn(side,RIVAL_POWER_CARD)
  events.append({'kind':'power','side':side})
  resolve_deaths()
  return success()
