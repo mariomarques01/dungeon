@@ -638,7 +638,13 @@ func request_power(target: Dictionary,side=0) -> void:
  var destination=view.target_center(target) if side==0 else Vector2(logical_size.x/2,view.layout.enemy_row)
  schedule({'kind':'power','side':side,'id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'steel','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target},0.5,0.95)
 
+func vibrate(pattern: Variant) -> void:
+ if reduced_motion or not OS.has_feature('web'):return
+ JavaScriptBridge.eval("if (typeof navigator.vibrate === 'function') navigator.vibrate("+JSON.stringify(pattern)+");")
+
 func play_events(events: Array,element: String,before: Array=[],action: Dictionary={}) -> void:
+ var damage_peak=0
+ var summoned=false
  var played={}
  var causes={}
  for event in events:
@@ -646,6 +652,7 @@ func play_events(events: Array,element: String,before: Array=[],action: Dictiona
   var source=str(action.get('id',''))
   var event_element=str(event.get('element',element))
   if kind=='damage':
+   damage_peak=maxi(damage_peak,int(event.amount))
    if event.target.has('uid'):causes[int(event.target.uid)]=event_element
    if action.get('kind','')=='attack' and event.target.side==action.get('side',0) and not before.is_empty():
     var defender=action.get('target',{})
@@ -667,10 +674,17 @@ func play_events(events: Array,element: String,before: Array=[],action: Dictiona
    else:sound='death_soft'
    gain=-16
   elif kind=='summon':
+   summoned=true
    if not played.has('summon'):audio_engine.summon_card(event.id,cards[event.id].element);played.summon=true
   elif kind in ['mana','draw','debuff','destroy']:sound=audio_engine.clip_for(event_element);gain=-16
   if not sound.is_empty() and not played.has(sound):
    audio_engine.play(sound,gain,1.0,{'card':source,'event':kind,'element':event_element});played[sound]=true
+
+ if rules.done and rules.outcome=='win':return
+ if damage_peak>0:
+  var duration=clampi(12+damage_peak*4,16,45)
+  vibrate([20,30,duration] if summoned else duration)
+ elif summoned:vibrate(20)
 
 func rival_action() -> void:
  var plan=rules.ai_attack(target_locked)
@@ -689,7 +703,9 @@ func check_result() -> void:
   rewarded=true
   profile.coins+=50 if rules.outcome=='win' else 10 if rules.outcome=='draw' else 5
   profile.xp+=35 if rules.outcome=='win' else 12 if rules.outcome=='draw' else 8
-  if rules.outcome=='win':profile.wins+=1
+  if rules.outcome=='win':
+   profile.wins+=1
+   vibrate([45,45,85])
   if rules.outcome=='lose':profile.losses+=1
   save_profile()
  panel='result';active_actions.clear();selected_card=-1;selected_attacker=-1;drag={};press={};inspect_id='';view.pointer_trail=[];view.result_time=0;audio_engine.finish_music()

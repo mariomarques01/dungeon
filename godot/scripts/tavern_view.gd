@@ -2,6 +2,10 @@ extends RefCounted
 const GOLD=Color('eac67e')
 const PAPER=Color('f1dfb6')
 const INK=Color('30251e')
+const HEAVY_DAMAGE=5
+const CRITICAL_DAMAGE=8
+const HIT_FLASH_SECONDS=0.055
+const HIT_RECOIL_SECONDS=0.28
 const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
 var game
 var fx
@@ -30,6 +34,8 @@ var next_burst=0
 var impact_bursts: Array[CPUParticles2D]=[]
 var next_impact_burst=0
 var hit_until=[0.0,0.0]
+var hero_hit_atlas: Array[AtlasTexture]=[]
+var hero_hit_materials: Array[ShaderMaterial]=[]
 var river_until=0.0
 var river_x=0.5
 var crowd_until=0.0
@@ -112,6 +118,9 @@ func set_match_paused(paused: bool) -> void:
   else:reflow.play()
 
 func battle_delta(delta: float) -> float:
+ if game.reduced_motion:
+  freeze_left=0.0
+  return delta
  var held=minf(freeze_left,delta)
  freeze_left-=held
  return delta-held
@@ -123,6 +132,10 @@ func camera_offset() -> Vector2:
 func banner(message: String) -> void:
  if banners.is_empty():banner_left=1.3
  if message not in banners:banners.append(message)
+
+func impact_stretch(rect: Rect2,progress: float) -> Rect2:
+ # Start compressed, stretch on the rebound, then settle.
+ return stretch(rect,-0.18*cos(progress*TAU)*(1-progress))
 
 func stretch(rect: Rect2,amount: float) -> Rect2:
  var size=rect.size*Vector2(1.0-amount,1.0+amount)
@@ -151,6 +164,7 @@ var free_art: Array[TextureRect]=[]
 var used={}
 var hand_shader=Shader.new()
 var shader: Shader
+var hit_flash: ShaderMaterial
 var layout={}
 var hand_views=[]
 var unit_views={}
@@ -379,10 +393,23 @@ func animate_number(record: Dictionary) -> void:
  if record.has('tween'):record.tween.kill()
  var label: Label=record.sprite
  var font_size=22 if record.text.length()>8 else 34
+ var color: Color=record.color
+ if record.get('kind','')=='damage':
+  var amount: int=record.amount
+  if amount>=CRITICAL_DAMAGE:
+   font_size=51
+   color=Color('ffd369')
+  elif amount>=HEAVY_DAMAGE:
+   font_size=42
+   color=Color('ff936a')
+  elif amount>=3:
+   font_size=36
+  else:
+   font_size=29
  label.text=record.text
  label.add_theme_font_size_override('font_size',font_size)
- label.add_theme_color_override('font_color',record.color)
- label.add_theme_color_override('font_shadow_color',Color(0,0,0,0.65) if record.color.get_luminance()>0.25 else Color.TRANSPARENT)
+ label.add_theme_color_override('font_color',color)
+ label.add_theme_color_override('font_shadow_color',Color(0,0,0,0.65) if color.get_luminance()>0.25 else Color.TRANSPARENT)
  label.size=Vector2(280,0)
  label.position=record.position-Vector2(140,65-font_size+game.title_font.get_ascent(font_size))
  label.modulate.a=1.0
@@ -418,6 +445,7 @@ func acquire_effect(active: Array,category: StringName,record: Dictionary) -> vo
   game.art_layer.add_child(sprite)
  else:sprite=free.pop_back()
  sprite.record=record
+ sprite.material=hit_flash if record.get('hit',false) and not game.reduced_motion else null
  record.sprite=sprite
  active.append(record)
  sprite.visible=not game.reduced_motion
@@ -428,6 +456,8 @@ func advance_effects(active: Array,elapsed: float,lifetime: float) -> void:
   var record=active[i]
   var sprite: EffectSprite=record.sprite
   record.age+=elapsed
+  if sprite.material==hit_flash and (record.age>=HIT_FLASH_SECONDS or game.reduced_motion):
+   sprite.material=null
   if record.age>=lifetime:
    active.remove_at(i)
    sprite.hide()
@@ -470,6 +500,19 @@ func _init(owner) -> void:
  board=load('res://tavern_assets/board.png')
  portrait_board=load('res://tavern_assets/board_portrait.png') if ResourceLoader.exists('res://tavern_assets/board_portrait.png') else board
  creatures=load('res://tavern_assets/creatures.png'); spells=load('res://tavern_assets/spells.png'); frames=load('res://tavern_assets/frames.png')
+ var white_shader=Shader.new()
+ white_shader.code="shader_type canvas_item; void fragment(){ COLOR.rgb=vec3(1.0); }"
+ hit_flash=ShaderMaterial.new()
+ hit_flash.shader=white_shader
+ var portrait_flash_shader=Shader.new()
+ portrait_flash_shader.code="shader_type canvas_item; uniform vec4 uv_rect; void fragment(){ vec2 p=(UV-uv_rect.xy)/uv_rect.zw; COLOR=vec4(1.0,1.0,1.0,0.85*(1.0-smoothstep(0.72,1.0,length((p-vec2(0.5))*2.0)))); }"
+ for side in range(2):
+  var material=ShaderMaterial.new()
+  material.shader=portrait_flash_shader
+  hero_hit_materials.append(material)
+  var atlas=AtlasTexture.new()
+  atlas.atlas=ROYAL_ARENA
+  hero_hit_atlas.append(atlas)
  shader=Shader.new()
  shader.code='shader_type canvas_item; uniform bool ellipse=false; uniform vec4 uv_rect=vec4(0.0,0.0,1.0,1.0); void fragment(){ if(ellipse){vec2 p=(UV-uv_rect.xy)/uv_rect.zw;float d=length((p-vec2(0.5))*2.0);COLOR.a*=1.0-smoothstep(0.97,1.0,d);} }'
 
@@ -484,7 +527,7 @@ func slice(texture: Texture2D,index: int,columns: int,rows: int) -> AtlasTexture
   cache[key]=at
  return cache[key]
 
-func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint=Color.WHITE,z=0) -> void:
+func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint=Color.WHITE,z=0,flash: ShaderMaterial=null) -> void:
  used[key]=true
  if not nodes.has(key):
   var fresh: TextureRect
@@ -502,9 +545,9 @@ func art(key: String,texture: Texture2D,rect: Rect2,ellipse=false,angle=0.0,tint
  var node=nodes[key]
  node.texture=texture; node.position=rect.position; node.size=rect.size; node.pivot_offset=rect.size/2; node.rotation=angle; node.modulate=tint; node.z_index=z
  if not ellipse:
-  node.material=null
+  node.material=flash
   return
- if not node.material:
+ if not node.material or node.material.shader!=shader:
   node.material=ShaderMaterial.new()
   node.material.shader=shader
   node.material.set_shader_parameter('ellipse',true)
@@ -663,7 +706,7 @@ func prepare() -> void:
     var windup=sin(PI*clampf(attack_time/0.12,0,1))
     var advance=smoothstep(0.12,0.38,attack_time)*(1.0-smoothstep(0.38,0.80,attack_time))
     if game.reduced_motion:continue
-    rect=stretch(rect,advance*0.12-windup*0.10)
+    rect=stretch(rect,advance*0.20-windup*0.17)
     if fx.ranged(str(info.unit.id)):
      rect.position-=direction*(windup*6+advance*10)
     else:
@@ -675,7 +718,7 @@ func prepare() -> void:
    for effect in particles:
     if spawn.is_empty() and effect.kind=='summon' and effect.uid==uid:spawn=effect
     if int(effect.get('target',{}).get('uid',-1))!=uid:continue
-    if effect.kind=='damage' and effect.age<0.28:hit=effect
+    if effect.kind=='damage' and effect.age<HIT_RECOIL_SECONDS:hit=effect
     if effect.get('response_id','')==info.unit.id and effect.age<0.65:resonating=true
    if not spawn.is_empty() and not game.reduced_motion:
     var arrival=clampf(spawn.age/0.46,0,1)
@@ -685,15 +728,28 @@ func prepare() -> void:
     rect=stretch(rect,-sin(arrival*TAU)*0.13*(1-arrival))
    elif not attacking and not game.reduced_motion:
     rect=stretch(rect,0.013*sin(clock*2.1+uid*1.7))
-   if not hit.is_empty():
-    var recovery=clampf(hit.age/0.28,0,1)
+   var showing_hit=not hit.is_empty() and not game.reduced_motion
+   if showing_hit:
+    var recovery=clampf(hit.age/HIT_RECOIL_SECONDS,0,1)
     var recoil=clampf(hit.amount*2.0,4,16)*sin(recovery*TAU)*(1-recovery)
-    if not game.reduced_motion:rect.position.y+=recoil*(1 if info.side==0 else -1)
+    rect=impact_stretch(rect,recovery)
+    rect.position.y+=recoil*(1 if info.side==0 else -1)
    info.draw_rect=rect
    if resonating and not game.reduced_motion:
     var spirit=rect.grow(14);spirit.position.y-=20+sin(clock*7)*5
     art('spirit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),spirit,false,0,Color(element_color(game.cards[info.unit.id].element).lightened(0.5),0.35),0)
-   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,Color(1,0.6,0.5,opacity) if not hit.is_empty() and not game.reduced_motion else Color(1,1,1,opacity),1)
+   var tint=Color(1,0.6,0.5,opacity) if showing_hit else Color(1,1,1,opacity)
+   art('unit'+str(uid),slice(creatures,int(game.cards[info.unit.id].art),5,5),rect.grow(-3),false,0,tint,1,hit_flash if showing_hit and hit.age<HIT_FLASH_SECONDS else null)
+  if not game.reduced_motion:
+   for hero in hero_views:
+    var age=hero_hit_age(hero.side)
+    if age>=HIT_FLASH_SECONDS:continue
+    var atlas=hero_hit_atlas[hero.side]
+    atlas.region=hero_source(hero.rect)
+    var uv=Rect2(atlas.region.position/ROYAL_ARENA.get_size(),atlas.region.size/ROYAL_ARENA.get_size())
+    var material=hero_hit_materials[hero.side]
+    material.set_shader_parameter('uv_rect',Vector4(uv.position.x,uv.position.y,uv.size.x,uv.size.y))
+    art('hero_flash%d'%hero.side,atlas,hero_hit_rect(hero,age),false,0,Color.WHITE,0,material)
   if not game.drag.is_empty() and game.drag.kind=='card':
    var rect=held_card_rect()
    prepare_card('drag',game.drag.id,rect,0,50)
@@ -854,6 +910,7 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
   if before[side].health>=10 and health>0 and health<10:
    banner('SEU HERÓI EM PERIGO' if side==0 else 'HERÓI RIVAL EM PERIGO')
  var causes={}
+ var hit_units={}
  for event in events:
   var kind=event.kind
   if kind=='death' and not game.reduced_motion:
@@ -862,13 +919,16 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
   if kind=='damage':
    if not game.reduced_motion:
     sun_until=clock+0.28
-    if event.target.get('hero',false):hit_until[event.target.side]=clock+0.28
+    if event.target.get('hero',false):hit_until[event.target.side]=clock+HIT_RECOIL_SECONDS
+    else:hit_units[int(event.target.uid)]=true
    if not first_blood:
     first_blood=true
     banners.push_front('PRIMEIRO SANGUE')
     banner_left=1.3
    if not game.reduced_motion:
-    freeze_left=maxf(freeze_left,minf(0.055,0.018+event.amount*0.004))
+    if event.amount>=HEAVY_DAMAGE:
+     var hold=lerpf(0.060,0.090,inverse_lerp(HEAVY_DAMAGE,CRITICAL_DAMAGE,clampi(event.amount,HEAVY_DAMAGE,CRITICAL_DAMAGE)))
+     freeze_left=maxf(freeze_left,hold)
     shake_strength=maxf(shake_strength if shake_left>0 else 0,minf(8,1.4*event.amount))
     shake_left=0.17
   if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',action.get('element','dark'))
@@ -903,7 +963,7 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
     if int(unit.uid)==int(event.uid):
      var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.slot_sizes[event.side]/2,layout.slot_sizes[event.side])
      var cause=str(causes.get(int(event.uid),action.get('element','dark')))
-     acquire_effect(ghosts,&"remains",{'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause})
+     acquire_effect(ghosts,&"remains",{'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause,'hit':hit_units.has(int(event.uid))})
      acquire_effect(particles,&"particle",{'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
 
 func accumulate(event: Dictionary,at: Vector2,color: Color) -> void:
@@ -975,18 +1035,30 @@ func paint_terrain(c: CanvasItem) -> void:
  else:
   canvas.draw_texture_rect(portrait_board if game.portrait else board,bounds,false)
  if game.screen!='battle': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.53))
+func hero_hit_age(side: int) -> float:
+ return clampf(clock+HIT_RECOIL_SECONDS-hit_until[side],0,HIT_RECOIL_SECONDS)
+
+func hero_source(rect: Rect2) -> Rect2:
+ var scale_factor: Vector2=ROYAL_ARENA.get_size()/game.logical_size
+ return Rect2(rect.position*scale_factor,rect.size*scale_factor)
+
+func hero_hit_rect(hero: Dictionary,age: float) -> Rect2:
+ var rect: Rect2=hero.rect
+ var idle=1+0.008*(1+sin(clock*2+hero.side))
+ var dest=Rect2(rect.get_center()-rect.size*idle/2,rect.size*idle)
+ var progress=age/HIT_RECOIL_SECONDS
+ dest.position.x+=(1-progress)*sin(clock*90)*5
+ return impact_stretch(dest,progress)
+
 func paint_base(c: CanvasItem) -> void:
  canvas=c
  if game.screen=='battle':
   if not game.reduced_motion:
    fx.environment()
    for hero in hero_views:
-    var r: Rect2=hero.rect
-    var hit=maxf(0,hit_until[hero.side]-clock)/0.28
-    var idle=1+0.008*(1+sin(clock*2+hero.side))
-    var dest=Rect2(r.get_center()-r.size*idle/2,r.size*idle)
-    dest.position.x+=hit*sin(clock*90)*5
-    canvas.draw_texture_rect_region(ROYAL_ARENA,dest,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()),Color(1,1-hit*0.55,1-hit*0.55))
+    var age=hero_hit_age(hero.side)
+    var hit=1-age/HIT_RECOIL_SECONDS
+    canvas.draw_texture_rect_region(ROYAL_ARENA,hero_hit_rect(hero,age),hero_source(hero.rect),Color(1,1-hit*0.55,1-hit*0.55))
    if river_until>clock:
     var t=1-(river_until-clock)/0.55
     canvas.draw_set_transform_matrix(Transform2D(0,Vector2(1,0.12),0,Vector2(layout.w*river_x,layout.h*0.452)))
