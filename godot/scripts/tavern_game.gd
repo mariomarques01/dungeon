@@ -336,9 +336,10 @@ func rect_json(rect: Rect2) -> Dictionary:
 
 func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
- if view and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
-  if screen=='home':draw_texture_rect(view.HOME_PORTAL,Rect2(Vector2.ZERO,size),false,Color(0.29,0.31,0.42))
-  elif view.room.back.texture:draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
+ if not view:return
+ if screen=='home':view.paint_home_background(self)
+ elif view.room.back.texture and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
+  draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
 
 func notify(message: String) -> void:
  toast_text=message;toast_time=2.1
