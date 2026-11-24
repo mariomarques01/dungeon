@@ -6,6 +6,36 @@ const HEAVY_DAMAGE=5
 const CRITICAL_DAMAGE=8
 const HIT_FLASH_SECONDS=0.055
 const HIT_RECOIL_SECONDS=0.28
+const COLLECTION_LIBRARY=preload("res://tavern_assets/collection/library.jpg")
+# The upper arch and floor absorb extra height while the frame reaches both edges.
+const COLLECTION_STRETCH_BANDS=[Vector2(50,300),Vector2(740,1190)]
+const COLLECTION_CONTROLS=preload("res://tavern_assets/collection/controls.jpg")
+const COLLECTION_SPRITES={
+ 'heading':Rect2(22,13,597,196),
+ 'home':Rect2(643,83,297,91),
+ 'filter':Rect2(955,83,299,91),
+ 'add':Rect2(64,405,553,100),
+ 'remove':Rect2(662,404,555,101),
+ 'previous':Rect2(25,545,317,87),
+ 'reset_deck':Rect2(355,539,573,106),
+ 'next':Rect2(941,546,315,87),
+ 'instructions':Rect2(29,314,860,54),
+}
+const COLLECTION_BUTTON_EDGE=[
+ Vector2(0.07,0.02),Vector2(0.93,0.02),Vector2(0.98,0.13),Vector2(0.998,0.31),
+ Vector2(0.998,0.70),Vector2(0.98,0.89),Vector2(0.93,0.98),Vector2(0.07,0.98),
+ Vector2(0.02,0.89),Vector2(0.002,0.70),Vector2(0.002,0.31),Vector2(0.02,0.13),
+]
+# Outline of the crest on the supplied control sheet, in normalized coordinates.
+const COLLECTION_HEADING_EDGE=[
+ Vector2(0.01,0.42),Vector2(0.061,0.17),Vector2(0.106,0.16),Vector2(0.156,0.125),
+ Vector2(0.191,0.173),Vector2(0.385,0.16),Vector2(0.47,0.077),Vector2(0.5,0.009),
+ Vector2(0.554,0.111),Vector2(0.631,0.17),Vector2(0.816,0.174),Vector2(0.861,0.124),
+ Vector2(0.885,0.16),Vector2(0.943,0.17),Vector2(0.988,0.42),Vector2(0.952,0.75),
+ Vector2(0.9,0.881),Vector2(0.84,0.864),Vector2(0.625,0.88),Vector2(0.543,0.925),
+ Vector2(0.5,0.987),Vector2(0.45,0.925),Vector2(0.387,0.88),Vector2(0.184,0.856),
+ Vector2(0.102,0.879),Vector2(0.053,0.758),
+]
 const HOME_ART=preload("res://tavern_assets/menu/home.jpg")
 const HOME_PORTAL=preload("res://tavern_assets/menu/portal.jpg")
 const HOME_ASSETS=preload("res://tavern_assets/menu/menu_assets.jpg")
@@ -700,7 +730,7 @@ func held_card_rect() -> Rect2:
 func prepare() -> void:
  used={}; geometry()
  room.configure(game.logical_size,game.arena_theme,game.portrait,game.screen=='battle')
- room.visible=game.screen!='home'
+ room.visible=game.screen=='battle'
  if arena_size!=game.logical_size or arena_screen!=game.screen:
   arena_size=game.logical_size
   arena_screen=game.screen
@@ -892,25 +922,25 @@ func home_art_rect() -> Rect2:
  var display=source_size*maxf(0,factor)
  return Rect2(game.safe_origin+(usable-display)/2.0,display)
 
-func home_stretch(artwork: Rect2,scale_factor: float) -> float:
+func vertical_art_stretch(extra_height: float,bands: Array) -> float:
  var total=0.0
- for band in HOME_STRETCH_BANDS:total+=band.y-band.x
- return maxf(0,artwork.size.y-HOME_ART.get_height()*scale_factor)/total
+ for band in bands:total+=band.y-band.x
+ return maxf(0,extra_height)/total
 
-func home_art_y(y: float,scale_factor: float,stretch: float) -> float:
+func vertical_art_y(y: float,scale_factor: float,stretch: float,bands: Array) -> float:
  var result=y*scale_factor
- for band in HOME_STRETCH_BANDS:result+=clampf(y-band.x,0,band.y-band.x)*stretch
+ for band in bands:result+=clampf(y-band.x,0,band.y-band.x)*stretch
  return result
 
 func prepare_home() -> void:
  if not game.panel.is_empty():return
  var artwork=home_art_rect()
  var factor=artwork.size.x/HOME_ART.get_width()
- var stretch=home_stretch(artwork,factor)
+ var stretch=vertical_art_stretch(artwork.size.y-HOME_ART.get_height()*factor,HOME_STRETCH_BANDS)
  for item in HOME_BUTTONS:
   var source: Rect2=item[2]
-  var top=home_art_y(source.position.y,factor,stretch)
-  var bottom=home_art_y(source.end.y,factor,stretch)
+  var top=vertical_art_y(source.position.y,factor,stretch,HOME_STRETCH_BANDS)
+  var bottom=vertical_art_y(source.end.y,factor,stretch,HOME_STRETCH_BANDS)
   var rect=Rect2(artwork.position+Vector2(source.position.x*factor,top),Vector2(source.size.x*factor,bottom-top))
   button(item[0],game.board_transform.affine_inverse()*rect,item[1])
 
@@ -922,40 +952,79 @@ func paint_home_background(layer: CanvasItem) -> void:
   var fill=maxf(viewport.x/HOME_PORTAL.get_width(),viewport.y/HOME_PORTAL.get_height())
   var background=HOME_PORTAL.get_size()*fill
   layer.draw_texture_rect(HOME_PORTAL,Rect2((viewport-background)/2,background),false,Color(0.29,0.31,0.42))
- var factor=artwork.size.x/HOME_ART.get_width()
- var stretch=home_stretch(artwork,factor)
+ paint_vertical_art(layer,HOME_ART,artwork,HOME_STRETCH_BANDS)
+
+func paint_vertical_art(layer: CanvasItem,texture: Texture2D,artwork: Rect2,bands: Array) -> void:
+ var factor=artwork.size.x/texture.get_width()
+ var stretch=vertical_art_stretch(artwork.size.y-texture.get_height()*factor,bands)
  if is_zero_approx(stretch):
-  layer.draw_texture_rect(HOME_ART,artwork,false)
+  layer.draw_texture_rect(texture,artwork,false)
   return
  var edges=[0.0]
- for band in HOME_STRETCH_BANDS:edges.append_array([band.x,band.y])
- edges.append(float(HOME_ART.get_height()))
+ for band in bands:edges.append_array([band.x,band.y])
+ edges.append(float(texture.get_height()))
  for i in range(edges.size()-1):
-  var top=home_art_y(edges[i],factor,stretch)
-  var bottom=home_art_y(edges[i+1],factor,stretch)
-  var source=Rect2(0,edges[i],HOME_ART.get_width(),edges[i+1]-edges[i])
+  var top=vertical_art_y(edges[i],factor,stretch,bands)
+  var bottom=vertical_art_y(edges[i+1],factor,stretch,bands)
+  var source=Rect2(0,edges[i],texture.get_width(),edges[i+1]-edges[i])
   var destination=Rect2(artwork.position+Vector2(0,top),Vector2(artwork.size.x,bottom-top))
-  layer.draw_texture_rect_region(HOME_ART,destination,source,Color.WHITE,false,false)
+  layer.draw_texture_rect_region(texture,destination,source,Color.WHITE,false,false)
 
 func prepare_collection() -> void:
- var ids=game.collectible_ids()
+ var ids: Array=game.collectible_ids()
  var columns=4 if game.portrait else 6
  var page_size=columns*2
- var card_size=Vector2(155,232) if game.portrait else Vector2(150,225)
- var space=16.0
- var width=columns*(card_size.x+space)-space
- var top=layout.h/2-card_size.y-20
+ var last_page=maxi(0,ceili(float(ids.size())/page_size)-1)
+ game.collection_page=clampi(game.collection_page,0,last_page)
+ var w: float=layout.w
+ var h: float=layout.h
+ var wide=minf(w,1390.0)
+ var offset=(w-wide)/2
+ var header_height=minf(116.0,h*0.114)
+ var nav_width=minf(182.0,wide*0.194)
+ var nav_height=header_height*0.48
+ var nav_y=h*0.024+(header_height-nav_height)/2
+ var labels=['TODAS','CRIATURAS','FEITIÇOS','ARMADILHAS']
+ button('home',Rect2(offset+wide*0.042,nav_y,nav_width,nav_height),'VOLTAR')
+ button('filter',Rect2(offset+wide*0.958-nav_width,nav_y,nav_width,nav_height),labels[game.collection_filter])
+ var footer_y=h*0.906
+ var footer_height=minf(62.0,h*0.055)
+ button('previous',Rect2(offset+wide*0.041,footer_y,wide*0.223,footer_height),'ANTERIOR',game.collection_page>0)
+ button('next',Rect2(offset+wide*0.736,footer_y,wide*0.223,footer_height),'PRÓXIMA',game.collection_page<last_page)
+ button('reset_deck',Rect2(w/2-wide*0.21,footer_y-footer_height*0.08,wide*0.42,footer_height*1.16),'BARALHO INICIAL')
+
+ var gap=minf(16.0,wide*0.017)
+ var grid_top=h*(0.24 if game.portrait else 0.234)
+ var grid_bottom=h*0.866 if game.portrait else h*0.867
+ var row_gap=minf(21.0,h*0.016)
+ var action_height=minf(44.0,h*0.036)
+ var row_height=(grid_bottom-grid_top-row_gap)/2
+ var card_width=minf((wide*0.89-gap*(columns-1))/columns,(row_height-action_height-3)*HAND_FRAME.get_width()/HAND_FRAME.get_height())
+ var card_height=card_width*HAND_FRAME.get_height()/HAND_FRAME.get_width()
+ var left=(w-columns*card_width-(columns-1)*gap)/2
+ var extra=maxf(0,grid_bottom-grid_top-2*(card_height+action_height+3)-row_gap)
+ var top=grid_top+extra*(0.12 if game.portrait else 0.5)
+ if game.portrait:row_gap+=extra*0.72
  for slot in range(page_size):
   var index=game.collection_page*page_size+slot
-  if index>=ids.size(): break
-  var rect=Rect2(Vector2(layout.w/2-width/2+(slot%columns)*(card_size.x+space),top+(slot/columns)*(card_size.y+38)),card_size)
-  collection_views.append({'id':ids[index],'rect':rect})
-  prepare_card('collection'+str(slot),ids[index],rect)
- button('home',Rect2(35,30,170,50),'VOLTAR')
- button('filter',Rect2(layout.w-260,30,225,50),['TODAS','CRIATURAS','FEITIÇOS','ARMADILHAS'][game.collection_filter])
- button('previous',Rect2(50,layout.h-98,155,55),'ANTERIOR',game.collection_page>0)
- button('next',Rect2(layout.w-205,layout.h-98,155,55),'PRÓXIMA',(game.collection_page+1)*page_size<ids.size())
- button('reset_deck',Rect2(layout.w/2-150,layout.h-98,300,55),'BARALHO INICIAL')
+  if index>=ids.size():break
+  var x=left+(slot%columns)*(card_width+gap)
+  var y=top+(slot/columns)*(card_height+action_height+3+row_gap)
+  var rect=Rect2(x,y,card_width,card_height)
+  var action=Rect2(x+4,rect.end.y+3,card_width-8,action_height)
+  collection_views.append({'id':ids[index],'rect':rect,'action':action,'count':game.profile.deck.count(ids[index])})
+
+func paint_collection_background(layer: CanvasItem) -> void:
+ var size: Vector2=game.size
+ var native=COLLECTION_LIBRARY.get_size()
+ if game.portrait:
+  paint_vertical_art(layer,COLLECTION_LIBRARY,Rect2(Vector2.ZERO,size),COLLECTION_STRETCH_BANDS)
+ else:
+  var scale_factor=size.x/native.x
+  var shown=size.y/scale_factor
+  var source=Rect2(0,clampf(native.y*0.40-shown/2,0,maxf(0,native.y-shown)),native.x,minf(native.y,shown))
+  layer.draw_texture_rect_region(COLLECTION_LIBRARY,Rect2(Vector2.ZERO,size),source)
+  layer.draw_rect(Rect2(Vector2.ZERO,size),Color(0.05,0.025,0.06,0.40))
 
 func panel_rect() -> Rect2:
  if game.panel=='pause':return Rect2(Vector2(layout.w/2-240,layout.h/2-110),Vector2(480,220))
@@ -1116,15 +1185,12 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 
 func paint_terrain(c: CanvasItem) -> void:
  canvas=c
- if game.screen=='home':return
- if game.screen=='battle':
-  for side in range(2):
-   for column in range(SLOT_COLUMNS.size()):
-    var slot: Rect2=layout.slots[side][column]
-    canvas.draw_rect(slot,Color(0.07,0.06,0.10,0.17))
-    canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
- else:
-  canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.015,0.02,0.05,0.42))
+ if game.screen!='battle':return
+ for side in range(2):
+  for column in range(SLOT_COLUMNS.size()):
+   var slot: Rect2=layout.slots[side][column]
+   canvas.draw_rect(slot,Color(0.07,0.06,0.10,0.17))
+   canvas.draw_rect(slot.grow(-3),Color(0.95,0.83,0.69,0.32),false,2,true)
 
 func hero_hit_age(side: int) -> float:
  return clampf(clock+HIT_RECOIL_SECONDS-hit_until[side],0,HIT_RECOIL_SECONDS)
@@ -1164,7 +1230,6 @@ func paint_base(c: CanvasItem) -> void:
      shifted.position.y-=4*absf(sin((crowd_until-clock)*18))
      canvas.draw_texture_rect_region(ROYAL_ARENA,shifted,Rect2(r.position/game.logical_size*ROYAL_ARENA.get_size(),r.size/game.logical_size*ROYAL_ARENA.get_size()))
  if not game.inspect_id.is_empty(): canvas.draw_style_box(style(Color(0.02,0.025,0.04,0.95),Color('9e815a'),18),inspect_rect().grow(20))
- if game.screen=='collection': canvas.draw_rect(Rect2(Vector2.ZERO,game.logical_size),Color(0.025,0.02,0.05,0.69))
  if game.screen=='battle':
   for uid in unit_views:
    var info=unit_views[uid];var rect: Rect2=info.get('draw_rect',info.rect)
@@ -1610,16 +1675,75 @@ func arrow(a: Vector2,b: Vector2,color: Color) -> void:
  var direction=(b-a).normalized();var normal=direction.orthogonal()
  canvas.draw_colored_polygon(PackedVector2Array([b,b-direction*24+normal*13,b-direction*24-normal*13]),color)
 
+func collection_sprite(key: String,rect: Rect2,tint=Color.WHITE) -> void:
+ var source: Rect2=COLLECTION_SPRITES[key]
+ var edge=COLLECTION_HEADING_EDGE if key=='heading' else COLLECTION_BUTTON_EDGE
+ var points=PackedVector2Array()
+ var uvs=PackedVector2Array()
+ var texture_size=COLLECTION_CONTROLS.get_size()
+ for point in edge:
+  points.append(rect.position+point*rect.size)
+  uvs.append((source.position+point*source.size)/texture_size)
+ canvas.draw_polygon(points,PackedColorArray([tint]),uvs,COLLECTION_CONTROLS)
+
+func collection_card(info: Dictionary) -> void:
+ var rect: Rect2=info.rect
+ var size=rect.size
+ var card=game.cards[info.id]
+ var minion=card.kind=='minion'
+ var picture=slice(creatures if minion else spells,int(card.art),5 if minion else 4,5 if minion else 4)
+ draw_card_picture(picture,Rect2(rect.position+size*Vector2(0.068,0.055),size*Vector2(0.864,0.58)))
+ canvas.draw_texture_rect(HAND_FRAME,rect,false)
+ var label=Rect2(rect.position+size*Vector2(0.085,0.545),size*Vector2(0.83,0.091))
+ canvas.draw_style_box(style(Color('e8b75b'),Color('ffdb81'),6,1),label)
+ var font_size=maxi(9,int(size.x*0.096))
+ while font_size>8 and game.title_font.get_string_size(card.name,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x>label.size.x-4:
+  font_size-=1
+ text(card.name,Rect2(label.position+Vector2(2,1),label.size-Vector2(4,1)),font_size,INK,true,true)
+ text(str(int(card.cost)),Rect2(rect.position+size*Vector2(0.018,0.029),size*Vector2(0.207,0.15)),int(size.x*0.19),Color.WHITE,true,true)
+ var description=Rect2(rect.position+size*Vector2(0.135,0.674),size*Vector2(0.73,0.22 if minion else 0.24))
+ canvas.draw_style_box(style(Color('f0cc8a'),Color.TRANSPARENT,5,0),description.grow(2))
+ wrapped(card.text,description,maxi(9,int(size.x*0.079)),INK,true)
+ if minion:
+  var stat_size=size.x*0.19
+  badge(rect.position+size*Vector2(0.14,0.906),str(int(card.attack)),Color('935416'),stat_size/2)
+  badge(rect.position+size*Vector2(0.86,0.906),str(int(card.health)),Color('982a37'),stat_size/2)
+ if info.count>0:
+  var copies=Rect2(rect.position+size*Vector2(0.81,0.06),size*Vector2(0.13,0.088))
+  canvas.draw_style_box(style(Color('153354'),Color('bd9b50'),5,1),copies)
+  text(str(info.count),copies,maxi(9,int(size.x*0.087)),Color.WHITE,true,true)
+
 func paint_collection() -> void:
- text('Seu grimório',Rect2(layout.w/2-230,35,460,50),35,PAPER,true,true)
- text('%d / 30 cartas · até 2 cópias · lendárias únicas' % game.profile.deck.size(),Rect2(50,100,layout.w-100,35),19,GOLD,true)
- text('Segure para ler · toque para adicionar · use REMOVER para retirar',Rect2(50,133,layout.w-100,25),16,PAPER,true)
+ var w: float=layout.w
+ var h: float=layout.h
+ var header_height=minf(116.0,h*0.114)
+ var heading_width=minf(460.0,w*0.49)
+ collection_sprite('heading',Rect2((w-heading_width)/2,h*0.024,heading_width,header_height))
+ var banner_width=minf(620.0,w*0.83)
+ var banner=Rect2((w-banner_width)/2,h*0.136,banner_width,minf(41.0,h*0.038))
+ canvas.draw_style_box(style(Color('2b180f'),Color('da9a39'),16,2),banner)
+ var summary='%d / 30 cartas · até 2 cópias · lendárias únicas'%game.profile.deck.size()
+ text(summary,Rect2(banner.position+Vector2(0,banner.size.y*0.13),banner.size),clampi(int(banner.size.y*0.57),14,23),Color('f9d781'),true,true)
+ var guidance=Rect2(banner.position+Vector2(0,banner.size.y+4),Vector2(banner.size.x,minf(36.0,h*0.030)))
+ collection_sprite('instructions',guidance)
  for item in collection_views:
-  paint_card(item.id,item.rect)
-  var count=game.profile.deck.count(item.id)
-  text(('− REMOVER ×'+str(count)) if count>0 else 'TOQUE PARA ADICIONAR',Rect2(item.rect.position+Vector2(-5,item.rect.size.y+4),Vector2(item.rect.size.x+10,26)),14,Color('a9e0b3') if count else PAPER,true)
+  collection_card(item)
+  collection_sprite('remove' if item.count>0 else 'add',item.action)
+
+func paint_collection_button(info: Dictionary) -> void:
+ var rect: Rect2=info.rect
+ var tint=Color.WHITE if info.enabled else Color(0.68,0.65,0.65,0.82)
+ collection_sprite(info.id,rect,tint)
+ if info.id=='filter' and game.collection_filter!=0:
+  var label=Rect2(rect.position+rect.size*Vector2(0.32,0.19),rect.size*Vector2(0.63,0.58))
+  canvas.draw_rect(label,Color('342117'))
+  var font_size=mini(int(label.size.x*0.14),int(label.size.y*0.76))
+  text(info.label,Rect2(label.position+Vector2(0,(label.size.y-font_size)/2),label.size),font_size,PAPER,true,true)
 
 func paint_button(info: Dictionary) -> void:
+ if game.screen=='collection' and COLLECTION_SPRITES.has(info.id):
+  paint_collection_button(info)
+  return
  var rect: Rect2=info.rect
  var enabled=info.enabled
  var primary=info.primary

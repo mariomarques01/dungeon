@@ -328,7 +328,7 @@ func _process(delta: float) -> void:
   var buttons=[]
   for item in view.buttons:buttons.append({'id':item.id,'rect':rect_json(item.rect),'enabled':item.enabled})
   var latest={} if active_actions.is_empty() else active_actions.back()
-  var snap={'environment':{'theme':profile.arena_theme,'portrait':portrait,'offset':[view.room.offset.x,view.room.offset.y],'light':[view.room.room_light.r,view.room.room_light.g,view.room.room_light.b]},'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect)}),'inspect':inspect_id}
+  var snap={'environment':{'theme':profile.arena_theme,'portrait':portrait,'offset':[view.room.offset.x,view.room.offset.y],'light':[view.room.room_light.r,view.room.room_light.g,view.room.room_light.b]},'difficulty':difficulty,'nextCard':rules.next_card(0) if screen=='battle' else '','emote':emote_text if emote_time>0 else '','tutorial':tutorial_visible,'screen':screen,'panel':panel,'busy':not active_actions.is_empty(),'actions':active_actions,'drag':drag,'preview':view.drag_preview(),'selected':selected_card,'logical':{'x':logical_size.x,'y':logical_size.y},'transform':{'scale':board_transform.x.x,'x':board_transform.origin.x,'y':board_transform.origin.y},'players':rules.players,'active':rules.active,'turn':rules.turn,'done':rules.done,'outcome':rules.outcome,'handViews':hand,'unitViews':units,'heroes':[rect_json(view.layout.player_hero),rect_json(view.layout.enemy_hero)],'drop':rect_json(view.layout.player_drop),'buttons':buttons,'profile':profile,'sound':sound_on,'speed':speed,'musicPlaying':audio_engine.music.playing and not audio_engine.music.stream_paused,'animation':latest,'animationTime':latest.get('age',0),'effectHistory':view.effect_history,'deathProfiles':view.ghosts.map(func(g):return {'id':g.id,'element':g.element}),'scenery':view.scenery.map(func(effect):return {'element':effect.element,'age':effect.age}),'modalRect':rect_json(view.panel_rect()),'overlayZ':overlay.z_index,'audioHistory':audio_engine.history,'toast':toast_text if toast_time>0 else '','collection':view.collection_views.map(func(item):return {'id':item.id,'rect':rect_json(item.rect),'action':rect_json(item.action),'count':item.count}),'inspect':inspect_id}
   JavaScriptBridge.eval('window.__dungeonState='+JSON.stringify(snap))
 
 func rect_json(rect: Rect2) -> Dictionary:
@@ -338,6 +338,7 @@ func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),Color('17121b'))
  if not view:return
  if screen=='home':view.paint_home_background(self)
+ elif screen=='collection':view.paint_collection_background(self)
  elif view.room.back.texture and (safe_origin!=Vector2.ZERO or safe_margin!=Vector2.ZERO):
   draw_texture_rect(view.room.back.texture,Rect2(Vector2.ZERO,size),false)
 
@@ -440,7 +441,9 @@ func pointer_down() -> void:
  if not panel.is_empty():return
  if screen=='collection':
   for item in view.collection_views:
-   if Rect2(item.rect.position+Vector2(0,item.rect.size.y+2),Vector2(item.rect.size.x,32)).has_point(pointer):press={'kind':'collection_remove','id':item.id,'time':clock};return
+   if item.action.has_point(pointer):
+    press={'kind':'collection_remove' if item.count>0 else 'collection_add','id':item.id,'time':clock}
+    return
    if item.rect.has_point(pointer):press={'kind':'collection','id':item.id,'time':clock};return
   return
  if screen!='battle' or rules.done:return
@@ -514,7 +517,7 @@ func pointer_up() -> void:
  if held.is_empty():return
  match held.kind:
   'button':activate_button(held.id)
-  'collection':cycle_card(held.id)
+  'collection','collection_add':cycle_card(held.id)
   'collection_remove':
    if held.id in profile.deck:profile.deck.erase(held.id);save_profile()
   'card':selected_attacker=-1;selected_card=int(held.index);notify('Arraste para jogar, ou toque no campo/alvo.')
