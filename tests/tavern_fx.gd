@@ -1,4 +1,10 @@
 extends SceneTree
+
+class HapticTavern extends "res://scripts/tavern_game.gd":
+ var patterns=[]
+ func vibrate(pattern: Variant) -> void:
+  patterns.append(pattern)
+
 var failures=0
 func _initialize() -> void:call_deferred('run')
 func run() -> void:
@@ -101,13 +107,17 @@ func run() -> void:
  game.view.ingest([advantaged],snapshot)
  if game.view.floats.size()!=2 or game.view.floats[1].text!='−3 ▲':
   push_error('Elemental and neutral numbers must retain distinct markers');failures+=1
- if game.view.battle_delta(0.005)!=0 or game.view.battle_delta(0.2)<=0:
-  push_error('Hit-stop must hold briefly and release');failures+=1
+ if not is_equal_approx(game.view.battle_delta(0.04),0.04):
+  push_error('Light hits must not trigger hit-stop, even when their number is combined');failures+=1
+ check_hit_feedback(game)
+ game.start_match()
+ game.view.ingest([hit],game.rules.players.duplicate(true))
  var sprite=game.view.floats[0].sprite
  game.view.tick(2)
  game.view.ingest([hit],game.rules.players.duplicate(true))
  if game.view.floats[0].sprite!=sprite:push_error('Floating number was not reused');failures+=1
  game.activate_button('motion')
+ hit.amount=9
  game.view.ingest([hit],game.rules.players.duplicate(true))
  if game.view.battle_delta(0.02)!=0.02 or game.view.camera_offset()!=Vector2.ZERO:
   push_error('Reduced motion still triggers hit-stop or shake');failures+=1
@@ -115,6 +125,7 @@ func run() -> void:
  game.start_match()
  if not game.view.banners.is_empty() or game.view.first_blood:
   push_error('Rematch inherited event banners');failures+=1
+ check_haptic_routes()
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 
@@ -171,3 +182,71 @@ func check_summon_attack(game) -> void:
  game.advance_actions(0.39)
  if game.rules.players[1].health!=30-unit.attack or unit.delay!=game.rules.REUSE_SECONDS or game.view.effect_history[-1].kind!='attack':
   push_error('Immediate hero attack must deal damage and start cooldown at impact');failures+=1
+
+
+func check_hit_feedback(game) -> void:
+ game.start_match()
+ var attacker=game.rules.spawn(0,'golem')
+ var unit=game.rules.spawn(1,'dragon')
+ var target={'side':1,'uid':unit.uid}
+ game.view.prepare()
+ var attacker_width: float=game.view.unit_views[attacker.uid].draw_rect.size.x
+ var target_height: float=game.view.unit_views[unit.uid].draw_rect.size.y
+ game.request_attack(attacker.uid,target)
+ game.advance_actions(0.06)
+ game.view.prepare()
+ if game.view.unit_views[attacker.uid].draw_rect.size.x<=attacker_width:
+  push_error('Attack anticipation must squash the sprite');failures+=1
+ game.advance_actions(0.25)
+ game.view.prepare()
+ if game.view.unit_views[attacker.uid].draw_rect.size.x>=attacker_width:
+  push_error('Attack lunge must stretch the sprite');failures+=1
+ var before=game.rules.players.duplicate(true)
+ var hit={'kind':'damage','amount':5,'element':'steel','target':target}
+ game.view.ingest([hit],before)
+ game.view.prepare()
+ var portrait: TextureRect=game.view.nodes['unit'+str(unit.uid)]
+ var label: Label=game.view.floats[0].sprite
+ if portrait.material!=game.view.hit_flash or game.view.unit_views[unit.uid].draw_rect.size.y>=target_height:
+  push_error('A hit must flash white and compress the target');failures+=1
+ if label.get_theme_font_size('font_size')!=42 or label.get_theme_color('font_color')!=Color('ff936a'):
+  push_error('Heavy damage must use the larger orange number');failures+=1
+ if not is_equal_approx(game.view.freeze_left,0.06) or not is_zero_approx(game.view.battle_delta(0.06)):
+  push_error('Heavy hits must freeze the battle for 60 ms');failures+=1
+ hit.amount=8
+ game.view.ingest([hit],before)
+ if not is_equal_approx(game.view.freeze_left,0.09) or not is_equal_approx(game.view.battle_delta(0.10),0.01):
+  push_error('Critical hits must freeze the battle for at most 90 ms');failures+=1
+ if label.get_theme_font_size('font_size')!=51 or label.get_theme_color('font_color')!=Color('ffd369'):
+  push_error('Critical damage must use the larger gold number');failures+=1
+ game.view.tick(0.08)
+ game.view.prepare()
+ if portrait.material!=null:
+  push_error('The hit sprite must release its white material');failures+=1
+ game.reduced_motion=true
+ game.view.ingest([hit],before)
+ game.view.prepare()
+ if portrait.material!=null or not is_zero_approx(game.view.freeze_left):
+  push_error('Reduced motion must suppress the flash and hit-stop');failures+=1
+ game.reduced_motion=false
+
+
+func check_haptic_routes() -> void:
+ var game=HapticTavern.new()
+ game.size=Vector2(1280,800)
+ root.add_child(game)
+ game.audio_engine.set_enabled(false)
+ game.start_match()
+ var hit={'kind':'damage','amount':6,'element':'steel','target':{'side':1,'hero':true}}
+ var summon={'kind':'summon','id':'scout'}
+ game.play_events([summon],'steel')
+ game.play_events([hit],'steel')
+ game.play_events([hit,summon],'steel')
+ game.rules.players[1].health=0
+ game.rules.check_end()
+ game.play_events([hit],'steel')
+ game.check_result()
+ game.check_result()
+ if game.patterns!=[20,36,[20,30,36],[45,45,85]]:
+  push_error('Haptics must distinguish summon, damage and victory without duplicate pulses');failures+=1
+ game.queue_free()
