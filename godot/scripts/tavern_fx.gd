@@ -1,4 +1,12 @@
 extends RefCounted
+
+const STATUS_COLORS={
+ &"shield":Color('ffe49a'),
+ &"taunt":Color('ffac76'),
+ &"frozen":Color('aeedff'),
+ &"poison":Color('b5e86c'),
+ &"lifesteal":Color('ffa3c0'),
+}
 # Resolution-independent, antialiased effects. No additional texture downloads.
 var view_ref: WeakRef
 var v:
@@ -345,16 +353,10 @@ func event(p: Dictionary) -> void:
   'armor','blocked':
    shield(at,1.3+sin(t*PI)*0.15,Color('ffe3a0'),fade)
   'shield_break':
-   var corners=[Vector2(-38,-36),Vector2(0,-49),Vector2(38,-36),Vector2(30,13),Vector2(0,48),Vector2(-30,13)]
-   for i in range(corners.size()):
-    var edge: Vector2=corners[i]
-    var next: Vector2=corners[(i+1)%corners.size()]
-    var drift=(edge+next).normalized()*54*t+Vector2.DOWN*30*t*t
-    var fragment=PackedVector2Array([at+drift,at+edge+drift,at+next+drift])
-    c.draw_colored_polygon(fragment,Color(1,0.78,0.36,0.32*fade))
-    c.draw_line(fragment[1],fragment[2],Color(1,0.91,0.64,fade),3,true)
+   shield_crack(at,p.bubble_radius,p.age)
   'heal','buff':
    ring(at,55,Color('b8ffd0') if kind=='heal' else Color('ffe197'),fade,p.age)
+   if p.has('drain_origin'):life_thread(p.drain_origin,at,p.age)
   'freeze':
    for i in range(7):shard(at+Vector2(-52+i*17,35),-PI/2,50+i%3*15,Color('b1edff'),fade)
   'debuff':roots(at,1-t*0.25,fade)
@@ -366,14 +368,159 @@ func event(p: Dictionary) -> void:
     shard(point,i*1.4,18*(1-t),color,fade)
   'draw','mana':
    shard(at-Vector2(0,t*65),-PI/2,24,Color('92dfff'),fade)
-func status(unit: Dictionary,rect: Rect2) -> void:
+func frozen(unit: Dictionary) -> bool:
+ return unit.frozen>0 or unit.get('frozen_lock',false)
+
+func unit_statuses(unit: Dictionary) -> Array[StringName]:
+ var icons: Array[StringName]=[]
+ if unit.shield:icons.append(&"shield")
+ if 'taunt' in unit.keywords:icons.append(&"taunt")
+ if frozen(unit):icons.append(&"frozen")
+ if 'poison' in unit.keywords:icons.append(&"poison")
+ if 'lifesteal' in unit.keywords:icons.append(&"lifesteal")
+ return icons
+
+func status(unit: Dictionary,rect: Rect2,ice_growth: float) -> void:
  c=v.canvas
- var at=rect.get_center()
- if unit.frozen>0 or unit.get('frozen_lock',false):
-  for i in range(4):shard(at+Vector2(-35+i*23,35),-PI/2,35+i%2*15,Color('a9eaff'),0.55)
- if 'poison' in unit.keywords:
-  for i in range(3):glow(at+Vector2(sin(i*2+v.clock)*rect.size.x*0.45,30+cos(i*3+v.clock*2)*8),3,Color('9fe342'),0.5)
- if unit.shield:ring(at,rect.size.x*0.6,Color('ffe8a2'),0.3+sin(v.clock*2)*0.1,v.clock*0.3)
+ var icons=unit_statuses(unit)
+ if icons.is_empty():return
+ var motion=not v.game.reduced_motion
+ if unit.shield:
+  divine_bubble(rect.get_center(),rect.size/2+Vector2.ONE*7,1.0)
+ if 'taunt' in unit.keywords:
+  var intensity=0.55+0.14*sin(v.clock*4) if motion else 0.55
+  var at=rect.get_center()
+  glow(at,rect.size.x*0.44,STATUS_COLORS[&"taunt"],intensity*0.33)
+  c.draw_rect(rect.grow(5),Color(STATUS_COLORS[&"taunt"],intensity),false,2,true)
+ if frozen(unit):grow_ice(rect,ice_growth if motion else 1.0)
+ if motion and 'poison' in unit.keywords:poison_drops(rect,int(unit.uid))
+ # The icons stay visible in reduced motion and follow the creature's pose.
+ var radius=clampf(rect.size.x/(icons.size()*2.25),5.0,12.0)
+ var at=rect.position+Vector2(rect.size.x/2-(icons.size()-1)*radius*1.1,rect.size.y*0.31)
+ for icon in icons:
+  status_icon(at,radius,icon)
+  at.x+=radius*2.2
+
+func status_icon(at: Vector2,radius: float,icon: StringName) -> void:
+ var ink=STATUS_COLORS[icon]
+ c.draw_circle(at,radius,Color('26202d'),true,-1,true)
+ c.draw_arc(at,radius,0,TAU,20,ink,1.4,true)
+ c.draw_set_transform(at,0,Vector2.ONE*radius/10)
+ match icon:
+  &"shield":
+   c.draw_colored_polygon(PackedVector2Array([Vector2(-5,-5),Vector2(5,-5),Vector2(4,2),Vector2(0,6),Vector2(-4,2)]),ink)
+  &"taunt":
+   c.draw_polyline(PackedVector2Array([Vector2(-6,3),Vector2(0,-4),Vector2(6,3)]),ink,2,true)
+   c.draw_line(Vector2(0,-4),Vector2(0,6),ink,2,true)
+  &"frozen":
+   for i in range(3):
+    var ray=Vector2.from_angle(i*PI/3)*6
+    c.draw_line(-ray,ray,ink,2,true)
+  &"poison":
+   c.draw_colored_polygon(PackedVector2Array([Vector2(0,-6),Vector2(5,1),Vector2(4,5),Vector2(0,7),Vector2(-4,5),Vector2(-5,1)]),ink)
+  &"lifesteal":
+   c.draw_circle(Vector2(-2.6,-1.5),3.3,ink,true,-1,true)
+   c.draw_circle(Vector2(2.6,-1.5),3.3,ink,true,-1,true)
+   c.draw_colored_polygon(PackedVector2Array([Vector2(-5.4,0),Vector2(5.4,0),Vector2(0,6)]),ink)
+ c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+func divine_bubble(at: Vector2,radii: Vector2,alpha: float) -> void:
+ var color: Color=STATUS_COLORS[&"shield"]
+ var outline=PackedVector2Array()
+ for i in range(40):outline.append(at+Vector2.from_angle(i*TAU/40)*radii)
+ c.draw_colored_polygon(outline,Color(color,0.09*alpha))
+ outline.append(outline[0])
+ c.draw_polyline(outline,Color(color,0.78*alpha),2,true)
+ var shine=PackedVector2Array()
+ for i in range(9):shine.append(at+Vector2.from_angle(-2.75+i*0.11)*radii*0.9)
+ c.draw_polyline(shine,Color('fff4cf',0.86*alpha),3,true)
+
+func shield_crack(at: Vector2,radii: Vector2,age: float) -> void:
+ var t=clampf(age/0.58,0,1)
+ if t>=1:return
+ if t<0.27:
+  divine_bubble(at,radii,1-t)
+  var crack=PackedVector2Array()
+  for point in [Vector2(-0.86,-0.53),Vector2(-0.35,-0.38),Vector2(-0.46,-0.06),Vector2(0.08,0.08),Vector2(0.23,0.54),Vector2(0.60,0.8)]:
+   crack.append(at+point*radii)
+  c.draw_polyline(crack,Color('4b3327'),4,true)
+  c.draw_polyline(crack,Color('fff5ce'),1.5,true)
+  c.draw_line(crack[3],at+radii*Vector2(0.63,-0.35),Color('fff5ce'),2,true)
+  return
+ var drift=smoothstep(0.27,1.0,t)
+ for i in range(8):
+  var angle=i*TAU/8
+  var middle=Vector2.from_angle(angle+0.28)
+  var offset=middle*drift*45+Vector2.DOWN*drift*drift*22
+  var end_a=at+offset+Vector2.from_angle(angle)*radii
+  var end_b=at+offset+Vector2.from_angle(angle+0.56)*radii
+  var tip=at+offset+middle*radii*0.67
+  var alpha=1-drift
+  c.draw_colored_polygon(PackedVector2Array([end_a,tip,end_b]),Color(1,0.84,0.48,alpha*0.33))
+  c.draw_polyline(PackedVector2Array([end_a,tip,end_b]),Color(1,0.94,0.70,alpha),2,true)
+
+func grow_ice(rect: Rect2,amount: float) -> void:
+ var color: Color=STATUS_COLORS[&"frozen"]
+ var ice=Rect2(rect.position+Vector2(0,rect.size.y*(1-amount)*0.92),Vector2(rect.size.x,rect.size.y*(0.08+0.92*amount)))
+ c.draw_rect(ice,Color(color,0.14))
+ var bottom=rect.position.y+rect.size.y*0.84
+ for i in range(5):
+  var at=Vector2(rect.position.x+rect.size.x*(0.12+i*0.19),bottom)
+  shard(at,-PI/2+(i-2)*0.09,rect.size.y*(0.19+i%3*0.065)*amount,color,0.8)
+
+func poison_drops(rect: Rect2,uid: int) -> void:
+ for i in range(3):
+  var phase=fposmod(v.clock*1.14+i/3.0+uid*0.17,1.0)
+  var side=1 if i==1 else -1
+  var at=rect.get_center()+Vector2(rect.size.x*(0.5+0.08*phase)*side,rect.size.y*(phase*0.70-0.33))
+  var alpha=sin(phase*PI)
+  var tint=Color(STATUS_COLORS[&"poison"],alpha)
+  c.draw_colored_polygon(PackedVector2Array([at+Vector2(0,-8),at+Vector2(3,1),at+Vector2(-3,1)]),tint)
+  c.draw_circle(at,3,tint,true,-1,true)
+
+func armor_plates(at: Vector2,armor: int) -> void:
+ c=v.canvas
+ var count=mini(armor,6)
+ for i in range(count):
+  var offset=i-(count-1)/2.0
+  var center=at+Vector2(offset*14,-30+absf(offset)*2)
+  var plate=PackedVector2Array([center+Vector2(-8,-6),center+Vector2(8,-6),center+Vector2(6,4),center+Vector2(0,8),center+Vector2(-6,4),center+Vector2(-8,-6)])
+  c.draw_colored_polygon(plate.slice(0,5),Color('5c7992'))
+  c.draw_polyline(plate,Color('e3edf2'),1.5,true)
+  c.draw_circle(center,1.5,Color('d0ac67'))
+
+func taunt_pull(from: Vector2,via: Vector2,to: Vector2) -> void:
+ c=v.canvas
+ var line=PackedVector2Array()
+ for i in range(21):
+  var time=i/20.0
+  line.append(from.lerp(via,time).lerp(via.lerp(to,time),time))
+ var ink: Color=STATUS_COLORS[&"taunt"]
+ c.draw_polyline(line,Color(ink,0.24),9,true)
+ c.draw_polyline(line,ink,3,true)
+ var shift=0.0 if v.game.reduced_motion else fposmod(v.clock*22,5.0)
+ for index in [5,10,15]:
+  var step=index+int(shift)
+  var direction=(line[step+1]-line[step]).normalized()
+  var at=line[step]
+  var back=at-direction*10
+  c.draw_polyline(PackedVector2Array([back+direction.orthogonal()*5,at,back-direction.orthogonal()*5]),ink,3,true)
+
+func life_thread(origin: Vector2,destination: Vector2,age: float) -> void:
+ var progress=clampf(age/0.80,0,1)
+ if progress>=1:return
+ var bend=(destination-origin).normalized().orthogonal()*38
+ var head=clampf(progress*1.7,0,1)
+ var tail=smoothstep(0.32,1.0,progress)
+ var alpha=1-smoothstep(0.67,1.0,progress)
+ var points=PackedVector2Array()
+ for i in range(17):
+  var t=lerpf(tail,head,i/16.0)
+  points.append(origin.lerp(destination,t)+bend*sin(t*PI))
+ if head-tail>0.01:
+  c.draw_polyline(points,Color(0.85,0.24,0.48,alpha*0.45),12,true)
+  c.draw_polyline(points,Color(1,0.72,0.82,alpha),3,true)
+ glow(points[-1],10,STATUS_COLORS[&"lifesteal"],alpha)
 
 func environment() -> void:
  c=v.canvas

@@ -126,6 +126,7 @@ func run() -> void:
  if not game.view.banners.is_empty() or game.view.first_blood:
   push_error('Rematch inherited event banners');failures+=1
  check_haptic_routes()
+ check_status_feedback(game)
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 
@@ -250,3 +251,63 @@ func check_haptic_routes() -> void:
  if game.patterns!=[20,36,[20,30,36],[45,45,85]]:
   push_error('Haptics must distinguish summon, damage and victory without duplicate pulses');failures+=1
  game.queue_free()
+
+
+func check_status_feedback(game) -> void:
+ game.start_match()
+ game.reduced_motion=false
+ var attacker=game.rules.spawn(0,'phoenix')
+ var guard=game.rules.spawn(1,'knight')
+ var poisonous=game.rules.spawn(1,'serpent')
+ var target={'side':1,'uid':guard.uid}
+ var hero={'side':1,'hero':true}
+ var selection={'kind':'unit','uid':attacker.uid}
+ game.view.prepare()
+ if game.view.taunt_pull_target(selection,hero)!=target or not game.view.taunt_pull_target(selection,target).is_empty():
+  push_error('Taunt preview must point only a blocked attack toward a legal guard');failures+=1
+ if game.view.fx.unit_statuses(guard)!=[&"shield",&"taunt"] or game.view.fx.unit_statuses(poisonous)!=[&"poison"]:
+  push_error('Unit badges must reflect active battle statuses');failures+=1
+ game.rules.players[0].health=20
+ var before=game.rules.players.duplicate(true)
+ game.rules.attack(0,attacker.uid,target)
+ game.view.ingest(game.rules.events,before)
+ if game.rules.players[0].health!=20 or game.rules.events.any(func(e):return e.has('drained_from')):
+  push_error('A shielded attack must not create a life drain');failures+=1
+ var cracks=game.view.particles.filter(func(p):return p.kind=='shield_break')
+ if cracks.size()!=1 or cracks[0].bubble_radius.x<=0 or game.view.fx.unit_statuses(guard)!=[&"taunt"]:
+  push_error('Shield break must preserve the bubble shape and remove the persistent badge');failures+=1
+ game.rules.advance_cooldowns(game.rules.REUSE_SECONDS)
+ game.rules.events=[]
+ game.rules.freeze_unit(1,guard.uid)
+ game.view.ingest(game.rules.events,game.rules.players.duplicate(true))
+ game.view.prepare()
+ var portrait: TextureRect=game.view.nodes['unit'+str(guard.uid)]
+ var initial_growth: float=game.view.unit_views[guard.uid].ice_growth
+ game.view.tick(0.12)
+ game.view.prepare()
+ if portrait.material!=game.view.frozen_portrait or initial_growth>=game.view.unit_views[guard.uid].ice_growth:
+  push_error('Frozen creature must grow ice and use the desaturated sprite');failures+=1
+ game.reduced_motion=true
+ if game.view.fx.unit_statuses(guard)!=[&"taunt",&"frozen"] or game.view.fx.unit_statuses(attacker)!=[&"lifesteal"]:
+  push_error('Frozen and lifesteal badges must persist with reduced motion');failures+=1
+ game.reduced_motion=false
+ game.rules.advance_cooldowns(game.rules.REUSE_SECONDS)
+ game.view.prepare()
+ if portrait.material!=null or &"frozen" in game.view.fx.unit_statuses(guard):
+  push_error('Thaw must remove the status and restore the portrait');failures+=1
+ before=game.rules.players.duplicate(true)
+ game.rules.attack(0,attacker.uid,target)
+ game.view.ingest(game.rules.events,before)
+ var drains=game.view.particles.filter(func(p):return p.has('drain_origin'))
+ if drains.size()!=1 or drains[0].drain_origin!=game.view.target_center(target) or game.rules.players[0].health<=20:
+  push_error('Life thread must connect the drained target to the hero when health is restored');failures+=1
+ # A defender's life steal must drain the attacker, using the defending hero.
+ game.start_match()
+ var rival=game.rules.spawn(1,'phoenix')
+ var challenger=game.rules.spawn(0,'golem')
+ game.rules.players[1].health=20
+ game.view.prepare()
+ game.rules.attack(0,challenger.uid,{'side':1,'uid':rival.uid})
+ var restored=game.rules.events.filter(func(e):return e.kind=='heal' and e.has('drained_from'))
+ if restored.size()!=1 or restored[0].target.side!=1 or restored[0].drained_from.uid!=challenger.uid:
+  push_error('Retaliation must send life steal to the defending hero');failures+=1
