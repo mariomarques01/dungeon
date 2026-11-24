@@ -1,6 +1,7 @@
 extends RefCounted
 const MAX_BOARD=5
-const ELEMENT_ADVANTAGE={'fire':'ice','ice':'storm','storm':'steel'}
+const ELEMENT_ADVANTAGE={'fire':'nature','nature':'earth','earth':'wind','wind':'water','water':'fire'}
+const ELEMENT_ALIASES={'ice':'water','storm':'wind','steel':'earth','lightning':'wind','arcane':'wind','dark':'earth','bite':'nature','heal':'nature','shield':'earth'}
 const FAMILY_ATTACK_BONUS=1
 const REUSE_SECONDS=5.0
 const ENTRY_LOCK_SECONDS=0.0
@@ -71,7 +72,7 @@ func trigger_traps(side: int,trigger: String,context: Dictionary={}) -> void:
     players[side].armor+=amount
     events.append({'kind':'armor','side':side,'target':hero,'amount':amount})
    'heal':heal(hero,amount)
-   'damage_attacker':damage(context.attacker,amount,card.element)
+   'damage_attacker':card_damage(context.attacker,amount,card)
 
 func exchange_card(side: int,index: int) -> Dictionary:
  var player=players[side]
@@ -165,7 +166,7 @@ func resolve_supports(side: int) -> void:
    players[side].armor+=amount
    events.append({'kind':'armor','side':side,'target':target,'amount':amount})
   else:
-   damage(target,amount,cards[support.id].element)
+   card_damage(target,amount,cards[support.id])
 
 func start(deck: Array, enemy_deck: Array=[], random_seed = -1, live=false) -> Array:
  realtime=live
@@ -212,7 +213,7 @@ func draw(side: int, count=1) -> void:
   var p=players[side]
   if p.deck.is_empty():
    p.fatigue+=1
-   damage({'side':side,'hero':true},int(p.fatigue),'fatigue')
+   damage({'side':side,'hero':true},int(p.fatigue),'earth',false,'fatigue')
    events.append({'kind':'fatigue','side':side,'amount':p.fatigue})
   else:
    var id=p.deck.pop_back()
@@ -337,12 +338,12 @@ func cast(side: int,c: Dictionary,target: Dictionary) -> void:
  var power=spellpower(side)
  var amount=int(c.amount)
  match c.effect:
-  'damage': damage(target,amount+power,c.element)
+  'damage': card_damage(target,amount+power,c)
   'heal': heal(target,amount)
-  'frost': damage(target,amount+power,'ice'); freeze_unit(int(target.side),int(target.uid))
+  'frost': card_damage(target,amount+power,c); freeze_unit(int(target.side),int(target.uid))
   'aoe','blizzard':
    for unit in players[1-side].board.duplicate():
-    damage({'side':1-side,'uid':unit.uid},amount+power,c.element)
+    card_damage({'side':1-side,'uid':unit.uid},amount+power,c)
     if c.effect=='blizzard': freeze_unit(1-side,int(unit.uid))
   'armor':
    players[side].armor+=amount; events.append({'kind':'armor','side':side,'amount':amount})
@@ -351,7 +352,7 @@ func cast(side: int,c: Dictionary,target: Dictionary) -> void:
     if done:break
     var targets=enemy_targets(side)
     if targets.is_empty(): break
-    damage(targets[random.randi_range(0,targets.size()-1)],1,'arcane')
+    card_damage(targets[random.randi_range(0,targets.size()-1)],1,c)
     resolve_deaths()
   'draw': draw(side,amount)
   'weaken':
@@ -383,15 +384,21 @@ func family_bonus(side: int,unit: Dictionary) -> int:
 func effective_attack(side: int,unit: Dictionary) -> int:
  return int(unit.attack)+family_bonus(side,unit)
 
+static func canonical_element(element: String) -> String:
+ return ELEMENT_ALIASES.get(element,element)
+
+static func effect_style(card: Dictionary) -> String:
+ return card.get('fx',card.element)
+
 func elemental_modifier(target: Dictionary,element: String) -> int:
  if target.get('hero',false):return 0
  var unit=find_unit(int(target.side),int(target.uid))
  if not unit:return 0
- var defense=cards[unit.id].element
- var source='storm' if element=='lightning' else element
- if defense=='lightning':defense='storm'
- if ELEMENT_ADVANTAGE.get(source,'')==defense:return 1
- if ELEMENT_ADVANTAGE.get(defense,'')==source:return -1
+ var defense=canonical_element(cards[unit.id].element)
+ var source=canonical_element(element)
+ if not ELEMENT_ADVANTAGE.has(source) or not ELEMENT_ADVANTAGE.has(defense):return 0
+ if ELEMENT_ADVANTAGE[source]==defense:return 1
+ if ELEMENT_ADVANTAGE[defense]==source:return -1
  return 0
 
 func elemental_marker(modifier: int) -> String:
@@ -438,14 +445,17 @@ func health_preview(side: int,selection: Dictionary,target: Dictionary) -> Strin
  if healing:return '+'+str(mini(amount,(30 if hero else int(victim.max_health))-int(victim.health)))
  var modifier=elemental_modifier(target,element) if amount>0 else 0
  amount=maxi(0,amount+modifier)
- if not hero and victim.shield and amount>0:return 'ESCUDO'
+ if not hero and victim.shield and amount>0:return 'ESCUDO'+elemental_marker(modifier)
  if hero and victim.armor>0:
   var blocked=mini(amount,victim.armor)
   var lost=mini(amount-blocked,victim.health)
   return '−%d ARM'%blocked if lost==0 else '−%d ARM · −%d PV'%[blocked,lost]
  return '−'+str(victim.health if poison and not hero and amount>0 else mini(amount,victim.health))+elemental_marker(modifier)
 
-func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
+func card_damage(target: Dictionary,amount: int,card: Dictionary,poison=false) -> int:
+ return damage(target,amount,card.element,poison,effect_style(card))
+
+func damage(target: Dictionary,amount: int,element='earth',poison=false,fx='') -> int:
  if not target_exists(target): return 0
  amount=maxi(0,amount)
  var modifier=elemental_modifier(target,element) if amount>0 else 0
@@ -468,9 +478,12 @@ func damage(target: Dictionary,amount: int,element='steel',poison=false) -> int:
   unit.health-=amount
   if poison and actual>0: unit.health=0
  if actual>0:
-  events.append({'kind':'damage','target':target.duplicate(),'amount':actual,'element':element,'modifier':modifier})
+  var event={'kind':'damage','target':target.duplicate(),'amount':actual,'element':canonical_element(element),'modifier':modifier}
+  var visual=fx if not fx.is_empty() else element
+  if visual!=event.element:event.fx=visual
+  events.append(event)
  elif modifier<0 and amount==0:
-  events.append({'kind':'element_resist','target':target.duplicate(),'amount':0,'element':element,'modifier':modifier})
+  events.append({'kind':'element_resist','target':target.duplicate(),'amount':0,'element':canonical_element(element),'modifier':modifier})
  if target.get('hero',false) and actual>0 and players[side].health>0:
   trigger_traps(side,'low_health',{'before':previous_health,'after':players[side].health})
  return actual
@@ -545,10 +558,10 @@ func attack(side: int,uid: int,target: Dictionary) -> Dictionary:
  var defender=null
  if not target.get('hero',false):
   defender=find_unit(int(target.side),int(target.uid)); retaliation=effective_attack(int(target.side),defender)
- var dealt=damage(target,effective_attack(side,attacker),cards[attacker.id].element,'poison' in attacker.keywords)
+ var dealt=card_damage(target,effective_attack(side,attacker),cards[attacker.id],'poison' in attacker.keywords)
  if 'lifesteal' in attacker.keywords: heal({'side':side,'hero':true},dealt,target)
  if defender:
-  var returned=damage(attacker_target,retaliation,cards[defender.id].element,'poison' in defender.keywords)
+  var returned=card_damage(attacker_target,retaliation,cards[defender.id],'poison' in defender.keywords)
   if 'lifesteal' in defender.keywords: heal({'side':int(target.side),'hero':true},returned,attacker_target)
  events.append({'kind':'attack','side':side,'uid':uid,'target':target.duplicate()})
  resolve_deaths()

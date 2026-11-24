@@ -7,14 +7,10 @@ const THEMES=[
 ]
 const ELEMENT_LIGHT={
  'fire':Color(1.42,1.15,0.83),
- 'ice':Color(0.63,0.84,1.12),
- 'storm':Color(0.75,0.78,1.28),
- 'lightning':Color(1.22,1.28,1.50),
- 'dark':Color(0.53,0.45,0.74),
+ 'water':Color(0.63,0.84,1.12),
+ 'wind':Color(0.85,0.88,1.28),
  'nature':Color(0.84,1.21,0.80),
- 'heal':Color(1.10,1.28,0.98),
  'earth':Color(0.82,0.68,0.50),
- 'shield':Color(1.29,1.16,0.92),
 }
 
 var back: Sprite2D

@@ -651,6 +651,7 @@ func schedule(action: Dictionary,impact: float,duration: float) -> void:
  action.impact=impact
  action.duration=duration
  action.resolved=false
+ if cards.has(action.id):action.fx=Rules.effect_style(cards[action.id])
  active_actions.append(action)
  view.begin(action)
  if action.kind!='attack':audio_engine.charge(action.element)
@@ -732,7 +733,7 @@ func request_power(target: Dictionary,side=0) -> void:
  if not valid.ok:notify(valid.reason);return
  if power_locked(side,'power' if side==0 else 'token_guard') or target_locked(target):notify('Poder ou alvo em ação.');return
  var destination=view.target_center(target) if side==0 else Vector2(logical_size.x/2,view.layout.enemy_row)
- schedule({'kind':'power','side':side,'id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'steel','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target},0.5,0.95)
+ schedule({'kind':'power','side':side,'id':'power' if side==0 else 'token_guard','card_kind':'spell' if side==0 else 'minion','element':'fire' if side==0 else 'earth','origin':view.layout.power.get_center() if side==0 else view.layout.enemy_hero.get_center(),'destination':destination,'target':target},0.5,0.95)
 
 func vibrate(pattern: Variant) -> void:
  if reduced_motion or not OS.has_feature('web'):return
@@ -743,10 +744,11 @@ func play_events(events: Array,element: String,before: Array=[],action: Dictiona
  var summoned=false
  var played={}
  var causes={}
+ var action_fx: String=action.get('fx',element)
  for event in events:
   var kind=str(event.kind);var sound='';var gain=-11.0
   var source=str(action.get('id',''))
-  var event_element=str(event.get('element',element))
+  var event_element=str(event.get('fx',event.get('element',action_fx)))
   if kind=='damage':
    damage_peak=maxi(damage_peak,int(event.amount))
    if event.target.has('uid'):causes[int(event.target.uid)]=event_element
@@ -762,16 +764,16 @@ func play_events(events: Array,element: String,before: Array=[],action: Dictiona
   elif kind=='buff':sound='steel_light' if source=='rune_blade' else 'heal';gain=-13
   elif kind=='freeze':sound='freeze';gain=-12
   elif kind=='death':
-   event_element=str(causes.get(int(event.uid),element))
+   event_element=str(causes.get(int(event.uid),action_fx))
    source=str(event.id)
    if event_element=='ice':sound='ward_break'
    elif event_element in ['fire','dark','arcane','storm','lightning']:sound=audio_engine.clip_for(event_element)
-   elif source in ['golem','stoneguard','treant','beetle']:sound=audio_engine.action_clip(source,str(cards[source].element))
+   elif source in ['golem','stoneguard','treant','beetle']:sound=audio_engine.action_clip(source,Rules.effect_style(cards[source]))
    else:sound='death_soft'
    gain=-16
   elif kind=='summon':
    summoned=true
-   if not played.has('summon'):audio_engine.summon_card(event.id,cards[event.id].element);played.summon=true
+   if not played.has('summon'):audio_engine.summon_card(event.id,Rules.effect_style(cards[event.id]));played.summon=true
   elif kind in ['mana','draw','debuff','destroy']:sound=audio_engine.clip_for(event_element);gain=-16
   if not sound.is_empty() and not played.has(sound):
    audio_engine.play(sound,gain,1.0,{'card':source,'event':kind,'element':event_element});played[sound]=true
