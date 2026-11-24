@@ -17,6 +17,8 @@ const HOME_BUTTONS=[
  ['shop','Loja',Rect2(254,920,453,82)],
  ['settings','Configurações',Rect2(255,1011,451,83)],
 ]
+# Only the sky, the gap above the menu and the floor absorb extra height.
+const HOME_STRETCH_BANDS=[Vector2(32,98),Vector2(436,481),Vector2(1101,1239)]
 const HOME_PANELS={'rewards':'Recompensas','missions':'Missões','shop':'Loja'}
 const ArenaRoom=preload("res://scripts/tavern_environment.gd")
 const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
@@ -882,18 +884,58 @@ func prepare_card(key: String,id: String,rect: Rect2,angle=0.0,z=0,tint=Color.WH
 
 func home_art_rect() -> Rect2:
  var source_size=HOME_ART.get_size()
- var factor=minf(game.logical_size.x/source_size.x,game.logical_size.y/source_size.y)
- var display=source_size*factor
- return Rect2((game.logical_size-display)/2.0,display)
+ var viewport: Vector2=game.size
+ if viewport.y>=viewport.x*source_size.y/source_size.x:
+  return Rect2(Vector2.ZERO,viewport)
+ var usable: Vector2=viewport-game.safe_origin-game.safe_margin
+ var factor=minf(usable.x/source_size.x,usable.y/source_size.y)
+ var display=source_size*maxf(0,factor)
+ return Rect2(game.safe_origin+(usable-display)/2.0,display)
+
+func home_stretch(artwork: Rect2,scale_factor: float) -> float:
+ var total=0.0
+ for band in HOME_STRETCH_BANDS:total+=band.y-band.x
+ return maxf(0,artwork.size.y-HOME_ART.get_height()*scale_factor)/total
+
+func home_art_y(y: float,scale_factor: float,stretch: float) -> float:
+ var result=y*scale_factor
+ for band in HOME_STRETCH_BANDS:result+=clampf(y-band.x,0,band.y-band.x)*stretch
+ return result
 
 func prepare_home() -> void:
  if not game.panel.is_empty():return
  var artwork=home_art_rect()
  var factor=artwork.size.x/HOME_ART.get_width()
+ var stretch=home_stretch(artwork,factor)
  for item in HOME_BUTTONS:
   var source: Rect2=item[2]
-  var rect=Rect2(artwork.position+source.position*factor,source.size*factor)
-  button(item[0],rect,item[1])
+  var top=home_art_y(source.position.y,factor,stretch)
+  var bottom=home_art_y(source.end.y,factor,stretch)
+  var rect=Rect2(artwork.position+Vector2(source.position.x*factor,top),Vector2(source.size.x*factor,bottom-top))
+  button(item[0],game.board_transform.affine_inverse()*rect,item[1])
+
+func paint_home_background(layer: CanvasItem) -> void:
+ var artwork=home_art_rect()
+ if artwork.size.x<=0 or artwork.size.y<=0:return
+ var viewport: Vector2=game.size
+ if artwork.size!=viewport:
+  var fill=maxf(viewport.x/HOME_PORTAL.get_width(),viewport.y/HOME_PORTAL.get_height())
+  var background=HOME_PORTAL.get_size()*fill
+  layer.draw_texture_rect(HOME_PORTAL,Rect2((viewport-background)/2,background),false,Color(0.29,0.31,0.42))
+ var factor=artwork.size.x/HOME_ART.get_width()
+ var stretch=home_stretch(artwork,factor)
+ if is_zero_approx(stretch):
+  layer.draw_texture_rect(HOME_ART,artwork,false)
+  return
+ var edges=[0.0]
+ for band in HOME_STRETCH_BANDS:edges.append_array([band.x,band.y])
+ edges.append(float(HOME_ART.get_height()))
+ for i in range(edges.size()-1):
+  var top=home_art_y(edges[i],factor,stretch)
+  var bottom=home_art_y(edges[i+1],factor,stretch)
+  var source=Rect2(0,edges[i],HOME_ART.get_width(),edges[i+1]-edges[i])
+  var destination=Rect2(artwork.position+Vector2(0,top),Vector2(artwork.size.x,bottom-top))
+  layer.draw_texture_rect_region(HOME_ART,destination,source,Color.WHITE,false,false)
 
 func prepare_collection() -> void:
  var ids=game.collectible_ids()
@@ -1074,14 +1116,8 @@ func wrapped(value: String,rect: Rect2,size: int,color: Color,center=false) -> v
 
 func paint_terrain(c: CanvasItem) -> void:
  canvas=c
- if game.screen=='home':
-  var artwork=home_art_rect()
-  if artwork.size!=game.logical_size:
-   var factor=maxf(game.logical_size.x/HOME_PORTAL.get_width(),game.logical_size.y/HOME_PORTAL.get_height())
-   var background=HOME_PORTAL.get_size()*factor
-   canvas.draw_texture_rect(HOME_PORTAL,Rect2((game.logical_size-background)/2,background),false,Color(0.29,0.31,0.42))
-  canvas.draw_texture_rect(HOME_ART,artwork,false)
- elif game.screen=='battle':
+ if game.screen=='home':return
+ if game.screen=='battle':
   for side in range(2):
    for column in range(SLOT_COLUMNS.size()):
     var slot: Rect2=layout.slots[side][column]
