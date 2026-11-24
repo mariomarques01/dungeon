@@ -57,12 +57,20 @@ const out=process.env.SCREENSHOT_DIR||path.resolve('artifacts/tavern');fs.mkdirS
  assert.equal(s.turn,before.turn);
  assert(!s.buttons.some(b=>b.id==='end'));await advanceUntil(s=>s.players[0].board.some(u=>u.uid===own.uid&&u.attacks>0)&&s.players[1].board.length>0);s=await state();assert.equal(s.players[0].max_mana,10);assert(s.players[0].mana>0);assert(s.players[1].board.length>0);own=s.players[0].board.find(u=>u.uid===own.uid);assert.equal(own.attacks,1);
  const enemy=s.players[1].board.find(u=>u.keywords.includes('taunt'))||s.players[1].board[0];view=s.unitViews.find(u=>u.uid===own.uid);before=JSON.parse(JSON.stringify(s));
+ const wheel={fire:'nature',nature:'earth',earth:'wind',wind:'water',water:'fire'};
+ const attackElement=cards[own.id].element, defenseElement=cards[enemy.id].element;
+ const modifier=wheel[attackElement]===defenseElement?1:wheel[defenseElement]===attackElement?-1:0;
+ const adjustedDamage=Math.max(0,own.attack+modifier);
+ const marker=modifier>0?' ▲':modifier<0?' ▼':'';
+ const expectedPreview=(enemy.shield&&adjustedDamage>0?'ESCUDO':'−'+Math.min(adjustedDamage,enemy.health))+marker;
  await drag(center(view.rect),targetPoint(s,{side:1,uid:enemy.uid}),'attack-arrow',during=>{
    assert.equal(during.preview.target.uid,enemy.uid);
-   assert.equal(during.preview.text,enemy.shield?'ESCUDO':'−'+Math.min(own.attack,enemy.health));
+   assert.equal(during.preview.text,expectedPreview);
    assert.deepEqual(during.players[1].board.find(u=>u.uid===enemy.uid).health,enemy.health);
  });s=await state();assert.deepEqual(s.preview,{});
- const remaining=s.players[0].board.find(u=>u.uid===own.uid);assert(!remaining||remaining.attacks===0);const damaged=s.players[1].board.find(u=>u.uid===enemy.uid);assert(enemy.shield?damaged&&!damaged.shield:!damaged||damaged.health===enemy.health-own.attack);await shot('combat');
+ const remaining=s.players[0].board.find(u=>u.uid===own.uid);assert(!remaining||remaining.attacks===0);const damaged=s.players[1].board.find(u=>u.uid===enemy.uid);if(adjustedDamage===0){assert(damaged);assert.equal(damaged.health,enemy.health);assert.equal(damaged.shield,enemy.shield)}
+ else assert(enemy.shield?damaged&&!damaged.shield:!damaged||damaged.health===enemy.health-adjustedDamage);
+ await shot('combat');
  // Equip both supports through the same drop and tap gestures as the player.
  for(const [slot,x] of [0.253,0.747].entries()){
    await advanceUntil(s=>s.done||s.handViews.some(h=>!s.players[0].cooldowns[h.index]&&cards[h.id].cost<=s.players[0].mana));

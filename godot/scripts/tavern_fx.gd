@@ -78,7 +78,7 @@ func aura(id: String,rect: Rect2,strength=1.0,phase=0.0) -> void:
  c=v.canvas
  var card=v.game.cards.get(id,{})
  if card.is_empty():return
- var element=str(card.element);var color=v.element_color(element)
+ var element=str(card.get('fx',card.element));var color=v.element_color(card.element)
  var center=rect.get_center();var top=rect.position.y
  var time=v.clock+phase
  # Effects extend beyond the frame, leaving the name/rules panel readable.
@@ -140,7 +140,7 @@ func trail() -> void:
 func action(a: Dictionary,time: float) -> void:
  c=v.canvas
  if a.is_empty():return
- var element=str(a.get('element','arcane'));var id=str(a.get('id',''))
+ var element=str(a.get('fx',a.get('element','wind')));var id=str(a.get('id',''))
  var color=v.element_color(element);var origin: Vector2=a.origin;var dest: Vector2=a.destination
  var card=v.game.cards.get(id,{})
  if a.kind=='power':
@@ -306,7 +306,7 @@ func impact_shape(at: Vector2,element: String,t: float,alpha=1.0,id='') -> void:
 func event(p: Dictionary) -> void:
  c=v.canvas
  var t=clampf(p.age/1.15,0,1);var fade=1-t;var at: Vector2=p.position
- var kind=str(p.kind);var element=str(p.get('element','arcane'));var color=v.element_color(element)
+ var kind=str(p.kind);var element=str(p.get('fx',p.get('element','wind')));var color=v.element_color(element)
  if kind=='summon' and v.unit_views.has(int(p.uid)):at=v.unit_views[int(p.uid)].rect.get_center()
  match kind:
   'support':
@@ -526,7 +526,7 @@ func environment() -> void:
  c=v.canvas
  for effect in v.scenery:
   var t=float(effect.age)/2.4;var fade=1-t
-  var element=str(effect.element);var color=v.element_color(element)
+  var element=str(effect.get('fx',effect.element));var color=v.element_color(effect.element)
   var at: Vector2=effect.position
   c.draw_rect(Rect2(Vector2.ZERO,v.game.logical_size),Color(color,fade*0.045))
   # Reflections and elemental remnants on the board, underneath all cards.

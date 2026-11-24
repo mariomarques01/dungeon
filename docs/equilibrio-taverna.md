@@ -4,11 +4,15 @@
 
 | Ataque | Defesa | Ajuste |
 | --- | --- | --- |
-| Fogo | Gelo | +1 |
-| Gelo | Tempestade | +1 |
-| Tempestade ou raio | Aço | +1 |
+| Fogo | Natureza | +1 |
+| Natureza | Terra | +1 |
+| Terra | Vento | +1 |
+| Vento | Água | +1 |
+| Água | Fogo | +1 |
 
 Cada confronto invertido dá −1. Os outros pares, os ataques a heróis e o dano de fadiga são neutros. O ajuste vale para qualquer efeito de dano com elemento, inclusive feitiços, efeitos em área e cada lado de um combate. Ele incide antes do escudo e do veneno. Um golpe de base zero continua em zero, e a resistência pode reduzir um golpe a zero sem romper o escudo. A inspeção da carta mostra os confrontos do elemento. A prévia e os números de dano mostram ▲ para vantagem e ▼ para fraqueza. A prévia preserva o segredo de armadilhas e estima o golpe direto.
+
+Em `cards.json`, os elementos são `fire`, `water`, `earth`, `wind` e `nature`. Gelo virou Água. Tempestade, raio e arcano viraram Vento. Aço, sombra e escudo viraram Terra. Mordida e cura viraram Natureza. O campo `fx` preserva o estilo de animação e áudio das cartas migradas.
 
 O ajuste de um ponto interfere mais nas trocas entre criaturas pequenas. A neutralidade dos heróis mantém os valores de dano direto e de ataque dos apoios.
 

@@ -51,7 +51,9 @@ const HOME_BUTTONS=[
 const HOME_STRETCH_BANDS=[Vector2(32,98),Vector2(436,481),Vector2(1101,1239)]
 const HOME_PANELS={'rewards':'Recompensas','missions':'Missões','shop':'Loja'}
 const ArenaRoom=preload("res://scripts/tavern_environment.gd")
-const ELEMENT_NAMES={'fire':'Fogo','ice':'Gelo','storm':'Tempestade','steel':'Aço'}
+const Rules=preload("res://scripts/tavern_rules.gd")
+const ELEMENT_NAMES={'fire':'Fogo','water':'Água','earth':'Terra','wind':'Vento','nature':'Natureza'}
+const ELEMENT_COLORS={'fire':Color('ff8748'),'water':Color('63cbff'),'earth':Color('e7ab60'),'wind':Color('a1afff'),'nature':Color('91d85b')}
 var game
 var fx
 var effect_history=[]
@@ -875,7 +877,7 @@ func prepare() -> void:
 func draw_remains(g: Dictionary) -> void:
  var t=clampf(float(g.age)/1.4,0,1)
  var base=slice(creatures,int(game.cards[g.id].art),5,5)
- var element=str(g.get('element','dark'))
+ var element=str(g.get('fx',g.get('element','earth')))
  for part in range(9):
   var cache_key=str(game.cards[g.id].art)+':'+str(part)
   if not fragment_cache.has(cache_key):
@@ -1042,18 +1044,21 @@ func target_center(target: Dictionary) -> Vector2:
 
 func begin(action: Dictionary) -> void:
  if not game.reduced_motion and action.get('card_kind','')=='spell':
-  room.illuminate(action.get('element','arcane'))
- effect_history.append({'phase':'cast','id':action.get('id','power'),'kind':action.kind,'element':action.get('element','arcane')})
+  room.illuminate(action.get('element','wind'))
+ effect_history.append({'phase':'cast','id':action.get('id','power'),'kind':action.kind,'element':action.get('element','wind')})
  if effect_history.size()>60:effect_history.pop_front()
 
 func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
  if not game.reduced_motion and action.get('kind','')=='card':
   river_until=clock+0.55
   river_x=clampf(action.destination.x/layout.w,0.1,0.9) if action.has('destination') else 0.5
+ var action_element: String=action.get('element','wind')
+ var action_style: String=action.get('fx',action_element)
  var elemental=events.filter(func(event):return event.kind in ['damage','freeze','armor','heal','destroy'])
  if not elemental.is_empty():
-  var element=str(action.get('element',elemental[0].get('element','arcane')))
-  scenery.append({'element':element,'age':0.0,'position':target_center(elemental[0].get('target',{}))})
+  var element=str(action.get('element',elemental[0].get('element','wind')))
+  var visual=str(action.get('fx',elemental[0].get('fx',element)))
+  scenery.append({'element':element,'fx':visual,'age':0.0,'position':target_center(elemental[0].get('target',{}))})
   if scenery.size()>4:scenery.pop_front()
  var defeated=events.filter(func(event):return event.kind=='death' and event.side!=action.get('side',-1))
  if defeated.size()>=2 and action.has('side'):
@@ -1064,6 +1069,7 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
   if before[side].health>=10 and health>0 and health<10:
    banner('SEU HERÓI EM PERIGO' if side==0 else 'HERÓI RIVAL EM PERIGO')
  var causes={}
+ var death_styles={}
  var hit_units={}
  for event in events:
   var kind=event.kind
@@ -1085,7 +1091,11 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
      freeze_left=maxf(freeze_left,hold)
     shake_strength=maxf(shake_strength if shake_left>0 else 0,minf(8,1.4*event.amount))
     shake_left=0.17
-  if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):causes[int(event.target.uid)]=event.get('element',action.get('element','dark'))
+  var element: String=event.get('element',action_element)
+  var visual: String=event.get('fx',element if event.has('element') else action_style)
+  if kind in ['damage','destroy'] and event.get('target',{}).has('uid'):
+   causes[int(event.target.uid)]=element
+   death_styles[int(event.target.uid)]=visual
   if kind in ['damage','heal','buff','debuff','blocked','shield_break','freeze','destroy','armor','draw','mana']:
    var at=target_center(event.get('target',{'side':event.get('side',0),'hero':true}))
    var color=Color('ffe29b') if kind in ['armor','blocked','shield_break'] else Color('ff615d') if kind=='damage' else Color('8cffbe') if kind in ['heal','buff'] else Color('96dfff')
@@ -1093,8 +1103,9 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
     accumulate(event,at,color)
    elif not event.get('target',{}).has('uid'):
     var label='+'+str(event.get('amount',0))+' ARMADURA' if kind=='armor' else 'DESTRUÍDO' if kind=='destroy' else '+ ENERGIA' if kind=='mana' else 'COMPRA' if kind=='draw' else '+'+str(event.get('amount',0)) if kind=='buff' else 'ESCUDO ROMPIDO' if kind=='shield_break' else 'GELO' if kind=='freeze' else '−'+str(event.get('amount',0)) if kind=='debuff' else 'BLOQUEOU '+str(event.get('amount',0))
-    add_number({'position':at,'text':label,'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')})
-   var particle={'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':event.get('element',action.get('element','arcane')),'id':action.get('id','')}
+    add_number({'position':at,'text':label,'color':color,'age':0.0,'element':element,'id':action.get('id','')})
+   var particle={'kind':kind,'amount':event.get('amount',0),'position':at,'target':event.get('target',{}).duplicate(),'color':color,'age':0.0,'element':element,'id':action.get('id','')}
+   particle.fx=visual
    if kind=='shield_break':
     var bubble=Rect2(at-Vector2(50,60),Vector2(100,120))
     var uid=int(event.target.get('uid',-1))
@@ -1103,7 +1114,6 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
     particle.bubble_radius=bubble.size/2+Vector2.ONE*7
    if event.has('drained_from'):particle.drain_origin=target_center(event.drained_from)
    acquire_effect(particles,&"particle",particle)
-   var element: String=particles[-1].element
    if kind in ['armor','blocked','heal','buff'] or (kind=='damage' and element=='fire'):
     impact_burst(at,element_color(element) if kind=='damage' else color)
    if kind in ['damage','blocked','shield_break'] and event.get('target',{}).has('uid'):
@@ -1117,16 +1127,17 @@ func ingest(events: Array,before: Array,action: Dictionary={}) -> void:
    if effect_history.size()>60:effect_history.pop_front()
   elif kind=='support':
    var slot_rect: Rect2=layout.supports[event.slot] if event.side==0 else layout.enemy_supports[event.slot]
-   acquire_effect(particles,&"particle",{'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'defense':event.defense,'id':event.id})
+   acquire_effect(particles,&"particle",{'kind':kind,'age':0.0,'origin':slot_rect.get_center(),'position':target_center(event.target),'element':event.element,'fx':Rules.effect_style(game.cards[event.id]),'defense':event.defense,'id':event.id})
   elif kind=='summon':
-   acquire_effect(particles,&"particle",{'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'id':event.id})
+   acquire_effect(particles,&"particle",{'kind':'summon','uid':event.uid,'side':event.side,'position':Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row),'color':Color('b9a0ff'),'age':0.0,'element':game.cards[event.id].element,'fx':Rules.effect_style(game.cards[event.id]),'id':event.id})
   elif kind=='death':
    for unit in before[int(event.side)].board:
     if int(unit.uid)==int(event.uid):
      var rect=unit_views[event.uid].get('draw_rect',unit_views[event.uid].rect) if unit_views.has(event.uid) else Rect2(Vector2(layout.w/2,layout.player_row if int(event.side)==0 else layout.enemy_row)-layout.slot_sizes[event.side]/2,layout.slot_sizes[event.side])
-     var cause=str(causes.get(int(event.uid),action.get('element','dark')))
-     acquire_effect(ghosts,&"remains",{'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause,'hit':hit_units.has(int(event.uid))})
-     acquire_effect(particles,&"particle",{'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'age':0.0})
+     var cause=str(causes.get(int(event.uid),action_element))
+     var death_fx=str(death_styles.get(int(event.uid),action_style))
+     acquire_effect(ghosts,&"remains",{'uid':event.uid,'id':event.id,'rect':rect,'age':0.0,'element':cause,'fx':death_fx,'hit':hit_units.has(int(event.uid))})
+     acquire_effect(particles,&"particle",{'kind':'death','position':rect.get_center(),'color':element_color(cause),'element':cause,'fx':death_fx,'age':0.0})
 
 func accumulate(event: Dictionary,at: Vector2,color: Color) -> void:
  var modifier=int(event.get('modifier',0))
@@ -1254,11 +1265,12 @@ func paint_overlay(c: CanvasItem) -> void:
  if not game.inspect_id.is_empty():
   var card_rect=inspect_rect()
   paint_card(game.inspect_id,card_rect)
-  var hint=element_hint(game.cards[game.inspect_id].element)
+  var element: String=game.cards[game.inspect_id].element
+  var hint=element_hint(element)
   if hint!='':
    var strip=Rect2(card_rect.position+Vector2(0,card_rect.size.y-26),Vector2(card_rect.size.x,24))
    canvas.draw_style_box(style(Color('312238'),GOLD,5,1),strip)
-   text(hint,strip,15,PAPER,true)
+   text(hint,strip,15,element_color(element),true)
   text('Toque fora para fechar',Rect2(card_rect.position+Vector2(-15,card_rect.size.y+15),Vector2(card_rect.size.x+30,25)),15,PAPER,true)
  if game.screen=='battle' and game.panel.is_empty() and not game.tutorial_visible and game.toast_time<=0 and not banners.is_empty():
   var strip=Rect2(layout.w/2-190,layout.h*0.443,380,42)
@@ -1290,14 +1302,9 @@ func paint_card(id: String,rect: Rect2,angle=0.0,tint=Color.WHITE) -> void:
  canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func element_hint(element: String) -> String:
- var source='storm' if element=='lightning' else element
- if not ELEMENT_NAMES.has(source):return ''
- var advantage: Dictionary=game.rules.ELEMENT_ADVANTAGE
- var hint='Raio' if element=='lightning' else ELEMENT_NAMES[source]
- if advantage.has(source):hint+='  ▲ '+ELEMENT_NAMES[advantage[source]]
- var weakness=advantage.find_key(source)
- if weakness!=null:hint+='  ▼ '+ELEMENT_NAMES[weakness]
- return hint
+ if not ELEMENT_NAMES.has(element):return ''
+ var wheel=Rules.ELEMENT_ADVANTAGE
+ return '%s  ▲ %s  ▼ %s'%[ELEMENT_NAMES[element],ELEMENT_NAMES[wheel[element]],ELEMENT_NAMES[wheel.find_key(element)]]
 
 func armed_trap_rect(slot: Rect2) -> Rect2:
  var size=slot.size*Vector2(0.42,0.56)
@@ -1664,7 +1671,7 @@ func paint_targets(selection: Dictionary) -> void:
    canvas.draw_arc(center,67 if game.portrait else 72,0,TAU,48,Color(1,0.87,0.45,0.65 if game.reduced_motion else 0.65+sin(clock*7)*0.2),4)
 
 func element_color(element: String) -> Color:
- return {'fire':Color('ff8a40'),'ice':Color('7edcff'),'lightning':Color('91bdff'),'storm':Color('c49aff'),'nature':Color('85db71'),'heal':Color('8be6ae'),'dark':Color('a085e8'),'shield':Color('ffe39b'),'bite':Color('ffb79c'),'steel':Color('ffdd8f'),'earth':Color('c4a16d')}.get(element,Color('b28bff'))
+ return ELEMENT_COLORS.get(Rules.canonical_element(element),Color('b28bff'))
 
 func arrow(a: Vector2,b: Vector2,color: Color) -> void:
  var last=a

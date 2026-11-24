@@ -63,7 +63,9 @@ func run() -> void:
   game.request_play(0,{'side':1,'uid':victim.uid})
   await finish_animation(game)
   var remains=game.view.ghosts.filter(func(g):return g.uid==victim.uid)
-  if remains.is_empty() or remains[0].element!=game.cards[spell].element:push_error('Wrong death element: '+spell);failures+=1
+  var card=game.cards[spell]
+  if remains.is_empty() or remains[0].element!=card.element or remains[0].fx!=card.get('fx',card.element):
+   push_error('Wrong death element or visual style: '+spell);failures+=1
  print('Fire, ice, lightning and shadow death profiles checked')
  # A multi-kill banner depends on actual enemy deaths in one resolution.
  for count in [1,2,3]:
@@ -128,6 +130,8 @@ func run() -> void:
  check_haptic_routes()
  check_status_feedback(game)
  check_environment(game)
+ if game.view.element_hint('wind')!='Vento  ▲ Água  ▼ Terra' or game.view.element_color('water')==game.view.element_color('wind'):
+  push_error('Inspect must show the canonical element, matchup names and color');failures+=1
  print('FX RESULT: ',ids.size(),' card timelines completed; ',failures,' failures')
  game.queue_free();await process_frame;quit(1 if failures else 0)
 
@@ -339,10 +343,10 @@ func check_environment(game) -> void:
  game.view.tick(0.12)
  if room.room_light.r<=1 or not room.motes.emitting or not room.smoke[0].emitting:
   push_error('A fire cast must brighten the scenery while ambient emitters are active');failures+=1
- game.view.begin({'kind':'card','card_kind':'spell','element':'dark'})
+ game.view.begin({'kind':'card','card_kind':'spell','element':'earth'})
  game.view.tick(0.2)
  if room.room_light.r>=1:
-  push_error('A dark cast must dim the scenery');failures+=1
+  push_error('An earth cast must dim the scenery');failures+=1
  game.reduced_motion=true
  game.view.tick(0.01)
  if room.offset!=Vector2.ZERO or room.room_light!=Color.WHITE or room.motes.emitting or room.smoke[0].emitting:

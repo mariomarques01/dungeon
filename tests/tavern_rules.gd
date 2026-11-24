@@ -265,32 +265,65 @@ func test_next_card_and_costs() -> void:
  check(rules.play(0,0).ok and player.mana==0,'Barreira custa exatamente 1')
 
 func test_elements() -> void:
+ var wheel=['fire','nature','earth','wind','water']
+ check(cards.values().all(func(c):return c.element in wheel),'Cada carta e ficha usa um dos cinco elementos')
+ check(cards.frost.element=='water' and cards.gryphon.element=='wind' and cards.orc.element=='earth' and cards.bolt.element=='wind','Cartas de gelo, tempestade, aço e raio foram migradas')
  fresh()
- var ice=ready(1,'frostling')
- var storm=ready(1,'gryphon')
- var steel=ready(1,'orc')
- var targets=[{'side':1,'uid':ice.uid},{'side':1,'uid':storm.uid},{'side':1,'uid':steel.uid}]
- check(rules.elemental_modifier(targets[0],'fire')==1 and rules.elemental_modifier(targets[1],'ice')==1 and rules.elemental_modifier(targets[2],'lightning')==1,'Fogo vence gelo, gelo vence tempestade e raio vence aço')
- check(rules.elemental_modifier(targets[1],'steel')==-1 and rules.elemental_modifier(targets[0],'storm')==-1 and rules.elemental_modifier(targets[2],'fire')==0,'O inverso perde 1 e pares sem relação são neutros')
+ var representatives=['drake','treant','stoneguard','gryphon','frostling']
+ var targets=[]
+ for id in representatives:targets.append({'side':1,'uid':ready(1,id).uid})
+ for source in range(wheel.size()):
+  var complete=true
+  for target in range(wheel.size()):
+   var difference=posmod(target-source,wheel.size())
+   var expected=1 if difference==1 else -1 if difference==4 else 0
+   complete=complete and rules.elemental_modifier(targets[target],wheel[source])==expected
+  check(complete,'A roda valida todos os confrontos de '+wheel[source])
+ check(rules.elemental_modifier(targets[4],'lightning')==1 and rules.elemental_modifier(targets[3],'steel')==1,'Chamadas com identificadores antigos usam o elemento canônico')
+
+ fresh()
  rules.players[0].mana=10
- rules.players[0].hand=['frost']
- var fire=ready(1,'drake')
+ rules.players[0].hand=['frost','frost']
+ var fire=ready(1,'firelord')
+ var wind=ready(1,'gryphon')
  var fire_target={'side':1,'uid':fire.uid}
- var preview=rules.health_preview(0,{'kind':'card','index':0},fire_target)
- var cast=rules.play(0,0,fire_target)
- check(preview=='−1 ▼' and fire.health==2 and cast.events.any(func(e):return e.kind=='damage' and e.modifier==-1),'Prévia, evento e dano de feitiço registram a fraqueza')
+ var wind_target={'side':1,'uid':wind.uid}
+ for fixture in [[fire,fire_target,3,1,'−3 ▲'],[wind,wind_target,1,-1,'−1 ▼']]:
+  var unit=fixture[0]
+  var target=fixture[1]
+  var before=int(unit.health)
+  var preview=rules.health_preview(0,{'kind':'card','index':0},target)
+  var cast=rules.play(0,0,target)
+  var hit=cast.events.filter(func(e):return e.kind=='damage')
+  check(preview==fixture[4] and unit.health==before-fixture[2] and hit.size()==1 and hit[0].amount==fixture[2] and hit[0].modifier==fixture[3] and hit[0].element=='water' and hit[0].fx=='ice','Prévia e dano de Geada coincidem com o ajuste '+str(fixture[3]))
+
+ fresh()
+ var guard=ready(1,'knight')
+ var guard_target={'side':1,'uid':guard.uid}
+ var serpent=ready(0,'serpent')
  rules.events=[]
- storm.shield=true
- check(rules.damage(targets[1],1,'steel',true)==0 and storm.shield and storm.health==4 and rules.events[-1].kind=='element_resist','Resistência total preserva escudo e impede veneno')
- check(rules.damage(targets[1],0,'ice')==0 and storm.shield,'Vantagem mantém um golpe de base zero em zero')
- check(rules.damage(targets[1],1,'ice')==0 and not storm.shield,'Escudo absorve dano com vantagem')
- check(rules.damage({'side':1,'hero':true},2,'lightning')==2,'Heróis são neutros')
+ check(rules.damage(guard_target,1,'wind',true)==0 and guard.shield and guard.health==5 and rules.events[-1].kind=='element_resist','Resistência total preserva escudo e impede veneno')
+ check(rules.damage(guard_target,0,'nature')==0 and guard.shield,'Vantagem mantém um golpe de base zero em zero')
+ check(rules.health_preview(0,{'kind':'unit','uid':serpent.uid},guard_target)=='ESCUDO ▲','Prévia sinaliza vantagem mesmo com Escudo Divino')
+ check(rules.damage(guard_target,1,'nature')==0 and not guard.shield,'Escudo absorve dano com vantagem')
+ check(rules.damage({'side':1,'hero':true},2,'wind')==2,'Heróis são neutros')
+
  fresh()
  var attacker=ready(0,'drake')
- ice=ready(1,'frostling')
- var fight=rules.attack(0,attacker.uid,{'side':1,'uid':ice.uid})
+ var defender=ready(1,'treant')
+ var fight=rules.attack(0,attacker.uid,{'side':1,'uid':defender.uid})
  var hits=fight.events.filter(func(e):return e.kind=='damage')
- check(ice.health==1 and attacker.health==1 and hits.map(func(e):return e.modifier)==[1,-1],'Ataque e contra-ataque aplicam o elemento separadamente')
+ check(defender.health==3 and attacker.health==1 and hits.map(func(e):return e.modifier)==[1,-1],'Ataque e contra-ataque aplicam a roda separadamente')
+
+ fresh()
+ rules.players[0].mana=10
+ rules.players[0].hand=['meteor']
+ var water=ready(1,'frostling')
+ var nature=ready(1,'treant')
+ var earth=ready(1,'golem')
+ var area=rules.play(0,0)
+ var area_hits=area.events.filter(func(e):return e.kind=='damage')
+ check(water.health==2 and nature.health==2 and earth.health==3 and area_hits.map(func(e):return e.modifier)==[-1,1,0],'Dano em área aplica a roda individualmente a cada alvo')
 
 func test_traps() -> void:
  fresh()
